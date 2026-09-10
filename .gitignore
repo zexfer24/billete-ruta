@@ -14,3 +14,7 @@ next-env.d.ts
 
 uploads/
 uploads-test/
+
+# Registros de los procesos locales
+dev.log
+worker.log

@@ -1,7 +1,0 @@
-$ dotenv -e .env -- tsx watch src/worker/index.ts
-[10/09/2026 15:11] Worker de TicketRuta iniciado. Barridos cada 5 min, entrega cada minuto.
-(node:18512) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
-(Use `node --trace-deprecation ...` to show where the warning was created)
-[10/09/2026 15:11] Entrega: 3 enviados, 0 con error
-[10/09/2026 15:11] Barrido: 0 sin pago liberadas, 1 recordatorios, 0 pagos en sitio liberados, 0 confirmaciones, 0 avisos vencidos, 0 manifiestos cerrados
-[10/09/2026 15:12] Entrega: 1 enviados, 0 con error
