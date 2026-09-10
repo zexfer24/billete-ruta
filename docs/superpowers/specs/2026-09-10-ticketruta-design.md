@@ -1,316 +1,331 @@
-# TicketRuta — Especificación de diseño
+# TicketRuta — Especificación de diseño (revisión 2)
 
 Fecha: 2026-09-10
-Estado: aprobado por el operador (diseño en chat), pendiente de revisión de este documento.
+Revisión 2: incorpora los requisitos de terminal con múltiples agencias, cuentas de pasajero por cédula, vehículos, choferes, movimientos de embarque y desembarque, tasa de salida y abonos parciales.
+Estado: aprobado por el operador. Objetivo inmediato: MVP ejecutable en localhost.
 
 ## 1. Propósito
 
-Sistema de reservas y emisión de tickets para un operador de transporte terrestre interurbano, estatal o regulado. Sustituye el registro en papel y el cobro informal por un flujo automatizado: formulario web → pago dentro del flujo → validación por finanzas → ticket digital con QR por WhatsApp → recordatorios → control de abordaje. Toda la información queda en una base de datos auditable.
+TicketRuta digitaliza la operación de un **terminal de pasajeros terrestre** regulado por el Estado. El terminal aloja varias **agencias de viaje** (operadores) que venden pasajes en sus propias rutas con sus propios vehículos y choferes. El sistema sustituye el registro en papel y el cobro informal por un flujo con identidad verificada, pago con comprobante, ticket digital con QR, control de embarque y desembarque, y estadística en tiempo real para el terminal.
 
-Fuente de requisitos: los cuatro PDF en `Documentación/` (ver glosario en `CLAUDE.md`).
+Fuente de requisitos: los cuatro PDF en `Documentación/` más los requisitos por rol entregados por el operador el 2026-09-10.
 
-## 2. Alcance de esta entrega
+## 2. Los tres actores
 
-Incluido (fases 2 a 5 de la documentación):
+| Actor | Quién es | Qué hace |
+|---|---|---|
+| **Pasajero** | Ciudadano con cédula | Crea cuenta con su cédula, reserva asientos, paga o abona, sube sus documentos, recibe su ticket |
+| **Operador** | Personal de una agencia de viajes | Confirma pagos, gestiona sus vehículos, choferes, salidas y pasajeros, ve su recaudación por ruta |
+| **Admin** | Administrador del terminal | Ve la recaudación por tasa de salida en tiempo real, los recorridos, la base de datos de usuarios y los movimientos de todas las agencias |
 
-- Formulario público de reserva multi-paso con pasajeros dinámicos (1 a 6).
-- Pagos digitales con comprobante obligatorio y pago físico con reserva condicional.
-- Validación de comprobantes por finanzas y emisión automática del ticket PDF con QR.
-- Mensajería WhatsApp (Meta Cloud API): solicitud recibida, ticket, recordatorio 24 h, reconfirmación para pago en sitio, confirmación 2 h, liberación de cupo, notificación a lista de espera, rechazo de pago.
-- Liberación automática de cupos de pago en sitio no reconfirmados 12 h antes, con lista de espera.
-- Panel operativo con roles Admin, Finanzas y Operaciones.
-- Manifiesto por salida, cierre de manifiesto y abordaje con escáner QR.
-- Reportes de demanda por ruta, día y hora, exportables a CSV.
-- Bitácora de auditoría inmutable.
-- Despliegue en VPS con Docker Compose.
+Un operador solo ve y modifica datos de **su** agencia. El admin ve todo el terminal. El aislamiento por agencia es una regla de seguridad, no una conveniencia de interfaz: toda consulta del panel de operador filtra por `agencyId` de la sesión.
 
-Excluido: integración ManyChat/Instagram (solo se comparte el enlace público), reembolsos automáticos, selección de asiento numerado, app nativa, pasarela de pago con cobro automático.
+## 3. Requisitos por actor
 
-## 3. Decisiones tomadas con el operador
+### 3.1 Pasajero
+
+- **Cédula obligatoria para acceder al sistema.** Es el identificador de la cuenta. Sin cuenta no se reserva.
+- Datos complementarios exigidos para reservar un asiento: **número de teléfono** y **año de nacimiento**.
+- Datos exigidos para concretar la venta: **foto de la cédula** (obligatoria) y **permisos de viaje** (opcional; se usa para menores de edad o casos especiales).
+- Puede reservar para acompañantes; de cada acompañante se pide nombre completo, cédula y año de nacimiento.
+- Puede **abonar parcialmente** una reserva y completar el pago después. El ticket se emite solo cuando el saldo llega a cero.
+
+### 3.2 Operador
+
+- **Total recaudado por cada una de sus rutas**, en ventana de 24 horas y con horas presentadas en formato de 24 horas.
+- **Módulo de confirmación de pagos**: ve el comprobante que subió el pasajero, el monto abonado y el saldo, y aprueba o rechaza.
+- **Datos de sus pasajeros**: quién compró el ticket, serial del ticket, y si el pago está pendiente, abonado o confirmado.
+- **Datos de sus vehículos**: placa, modelo, marca y número de asientos.
+- **Datos de sus choferes**: nombre, cédula, total de embarques y total de desembarques.
+- **Lista de movimiento de sus choferes**: hora de embarque, tiempo de recorrido y hora de desembarque.
+
+### 3.3 Admin
+
+- **Total recaudado por la tasa de salida en tiempo real**, ventana de 24 horas, horas en formato de 24 horas.
+- **Total de recorridos del terminal.**
+- **Total de usuarios nuevos** del terminal en el periodo.
+- **Total de usuarios recurrentes** (cuentas con dos o más viajes pagados).
+- **Base de datos de usuarios**, con información sensible. Todo acceso queda auditado.
+- **Lista de movimientos de las agencias**: horas de embarque y desembarque, ruta, duración, nombre del chofer y cantidad de pasajeros.
+
+## 4. Tasa de salida
+
+El terminal cobra una **tasa de salida por pasajero**, independiente de la tarifa de la agencia. El total que paga el pasajero es `tarifa × pasajeros + tasa × pasajeros`. El sistema guarda ambos montos por separado en cada reserva, porque la tarifa es ingreso de la agencia y la tasa es ingreso del terminal. El admin configura el monto vigente de la tasa; los cambios no afectan reservas ya creadas.
+
+## 5. Decisiones técnicas
 
 | Tema | Decisión |
 |---|---|
-| Enfoque | App web full-code, monolito Next.js con worker de jobs |
-| WhatsApp | Meta Cloud API directa, detrás de una interfaz `WhatsAppProvider` |
-| Hosting | VPS propio con Docker Compose y Caddy |
-| Inventario | Cupo total por salida, sin asiento numerado |
-| Roles | Admin, Finanzas, Operaciones; autenticación propia con email y contraseña |
-| Precios | Precio base en USD por ruta; tasas USD→VES y USD→COP configurables; la reserva guarda la tasa usada |
-| Liberación de cupo | Solo reservas `PAGO_EN_SITIO` sin reconfirmar 12 h antes de la salida. Las pagadas nunca se liberan automáticamente |
-| Zona horaria | `America/Caracas` para presentación y programación; almacenamiento en UTC |
+| Enfoque | Monolito Next.js 15 con proceso worker aparte |
+| Base de datos | PostgreSQL 16 con Prisma, en contenedor Docker para desarrollo local |
+| Entrega inmediata | **MVP en localhost** con `pnpm dev` y `pnpm worker:dev` |
+| WhatsApp | Interfaz `WhatsAppProvider`. En el MVP solo la implementación falsa, con una bandeja de mensajes visible en el panel. La Meta Cloud API queda documentada y fuera del MVP |
+| Inventario | Cupo por salida, tomado del número de asientos del vehículo asignado. Sin asiento numerado |
+| Precios | Tarifa base en USD por ruta, tasa de salida en USD, tasas de cambio USD→VES y USD→COP configurables. La reserva guarda la tasa usada |
+| Pagos | Digitales con comprobante obligatorio, o en sitio. Se admiten abonos parciales |
+| Liberación de cupo | Reserva sin ningún pago a las 2 h de creada. Reserva de pago en sitio no reconfirmada 12 h antes de la salida |
+| Zona horaria | `America/Caracas` para presentación y programación; almacenamiento en UTC. Horas siempre en formato de 24 horas |
+| Auth | Dos ámbitos separados: cuentas de pasajero (cédula + contraseña) y usuarios de panel (email + contraseña, rol `ADMIN` u `OPERADOR`) |
 
-## 4. Stack
+## 6. Stack
 
-- Next.js 15 (App Router, TypeScript estricto), React 19.
-- PostgreSQL 16 con Prisma como ORM y migraciones.
-- pg-boss para la cola de trabajos y programación, almacenada en el mismo PostgreSQL.
-- Tailwind CSS para la interfaz.
-- `pdf-lib` y `qrcode` para el ticket.
-- `zod` para validación de entradas en formularios, API y webhooks.
-- `argon2` para contraseñas; sesiones en base de datos con cookie firmada `httpOnly`.
-- Vitest (unitarios e integración), Playwright (end-to-end).
-- Docker Compose: `app`, `worker`, `db`, `caddy`. Volúmenes: `pgdata`, `uploads`.
-
-Estructura de carpetas:
+Next.js 15 (App Router, TypeScript estricto), React 19, Prisma 6, PostgreSQL 16, pg-boss 10, Tailwind CSS, zod, argon2, pdf-lib, qrcode, Vitest, Playwright, pnpm 11, Node 22 o superior.
 
 ```
 src/
-  app/                 rutas Next.js (público y panel)
+  app/
+    (publico)/           portada, registro, login de pasajero
+    mi/                  área del pasajero: reservar, mis reservas, documentos
+    panel/               panel de operador y de admin
+    api/                 rutas de API y webhook
   modules/
-    catalog/           rutas, salidas, tasas, métodos de pago
-    booking/           reservas, cupos, lista de espera, máquina de estados
-    payments/          comprobantes y validación
-    tickets/           PDF, QR firmado, verificación
-    messaging/         WhatsAppProvider, plantillas, webhook entrante
-    scheduler/         jobs pg-boss y barridos programados
-    auth/              usuarios, roles, sesiones
-    audit/             bitácora
-  lib/                 prisma, config, utilidades compartidas
-  worker/              punto de entrada del proceso worker
-prisma/                schema y migraciones
-tests/                 unit/, integration/, e2e/
-docker/                Dockerfiles, Caddyfile, docker-compose.yml
+    accounts/            cuentas de pasajero, documentos
+    agencies/            agencias, vehículos, choferes
+    catalog/             rutas, salidas, tasas de cambio, tasa de salida, métodos de pago
+    booking/             reservas, cupos, estados, lista de espera
+    payments/            abonos, comprobantes, validación
+    tickets/             PDF, QR firmado, verificación
+    trips/               embarque, desembarque, movimientos
+    messaging/           proveedor WhatsApp, plantillas, cola
+    scheduler/           ventanas de tiempo de los barridos
+    auth/                sesiones y permisos de ambos ámbitos
+    reports/             consultas agregadas de operador y admin
+    audit/               bitácora
+  lib/                   prisma, env, decimal, tiempo, identidad, almacenamiento
+  worker/                proceso de jobs
+prisma/                  esquema y migraciones
+tests/                   unit/, integration/, e2e/
+docker/                  compose de PostgreSQL para desarrollo y test
 ```
 
-Cada módulo expone un archivo `index.ts` con su API pública; los demás módulos importan solo desde ahí.
+Cada módulo expone su API pública desde `index.ts`. Ningún módulo importa archivos internos de otro.
 
-## 5. Modelo de datos
+## 7. Modelo de datos
 
 Enumeraciones:
 
-- `ReservationStatus`: `PENDIENTE_VALIDACION`, `PAGO_EN_SITIO`, `PAGADA`, `RECHAZADA`, `LIBERADA`, `CANCELADA`, `ABORDADA`, `NO_SHOW`.
-- `DepartureStatus`: `PROGRAMADA`, `MANIFIESTO_CERRADO`, `SALIDA`, `CANCELADA`.
-- `PaymentKind`: `DIGITAL`, `FISICO`.
-- `Currency`: `USD`, `VES`, `COP`, `USDT`.
-- `ProofStatus`: `PENDIENTE`, `APROBADO`, `RECHAZADO`.
-- `MessageStatus`: `ENCOLADO`, `ENVIADO`, `ENTREGADO`, `LEIDO`, `FALLIDO`.
-- `WaitlistStatus`: `EN_ESPERA`, `NOTIFICADO`, `CONVERTIDO`, `EXPIRADO`.
-- `UserRole`: `ADMIN`, `FINANZAS`, `OPERACIONES`.
-- `AttendanceResponse`: `CONFIRMA`, `INCONVENIENTE`.
+- `ReservationStatus`: `PENDIENTE_PAGO`, `EN_VALIDACION`, `ABONADA`, `PAGADA`, `PAGO_EN_SITIO`, `LIBERADA`, `CANCELADA`, `ABORDADA`, `NO_SHOW`
+- `DepartureStatus`: `PROGRAMADA`, `MANIFIESTO_CERRADO`, `EN_RUTA`, `FINALIZADA`, `CANCELADA`
+- `PaymentKind`: `DIGITAL`, `FISICO`
+- `Currency`: `USD`, `VES`, `COP`, `USDT`
+- `ProofStatus`: `PENDIENTE`, `APROBADO`, `RECHAZADO`
+- `DocumentType`: `CEDULA`, `PERMISO_VIAJE`
+- `MessageStatus`: `ENCOLADO`, `ENVIADO`, `ENTREGADO`, `LEIDO`, `FALLIDO`
+- `WaitlistStatus`: `EN_ESPERA`, `NOTIFICADO`, `CONVERTIDO`, `EXPIRADO`
+- `PanelRole`: `ADMIN`, `OPERADOR`
+- `AttendanceResponse`: `CONFIRMA`, `INCONVENIENTE`
+- `ActorType`: `PASAJERO`, `PANEL`, `SISTEMA`
 
-Entidades (campos principales; todas con `id` UUID, `createdAt`, `updatedAt`):
+Entidades. Todas con `id` UUID, `createdAt` y `updatedAt`.
 
-- **Route**: `name`, `origin`, `destination`, `priceUsd` (decimal), `meetingPoint`, `travelTips` (texto), `active`.
-- **Departure**: `routeId`, `departsAt` (timestamptz), `capacity` (int), `unitLabel` (placa o número de unidad), `status`, `manifestClosedAt`, `manifestClosedByUserId`.
-- **PaymentMethod**: `name`, `kind`, `currency`, `details` (JSON con los datos de cobro que se muestran al pasajero: correo Zelle, número de Pago Móvil, wallet, etc.), `active`, `sortOrder`.
-- **ExchangeRate**: `currency` (`VES` o `COP`), `rateFromUsd` (decimal), `effectiveFrom`, `createdByUserId`. La tasa vigente es la de mayor `effectiveFrom` menor o igual al momento actual.
-- **Reservation**: `code` (único), `departureId`, `status`, `holderName`, `holderIdNumber`, `holderPhone` (E.164), `passengerCount`, `policiesAcceptedAt`, `paymentMethodId`, `totalUsd`, `currency`, `amountInCurrency`, `exchangeRateUsed` (decimal, 1 para USD/USDT), `reconfirmedAt`, `attendanceResponse`, `attendanceRespondedAt`, `boardedAt`, `cancelledAt`, `cancellationReason`, `manualContactRequired` (bool), `publicToken` (para la página de estado).
-- **Passenger**: `reservationId`, `fullName`, `idNumber`, `isHolder`, `boardedAt`, `boardedByUserId`.
-- **PaymentProof**: `reservationId`, `paymentMethodId`, `reference`, `imagePath`, `amount`, `currency`, `status`, `reviewedByUserId`, `reviewedAt`, `rejectionReason`. Una reserva puede tener varios comprobantes si finanzas rechaza y el pasajero vuelve a cargar desde la página de estado.
-- **CashPayment**: `reservationId`, `amount`, `currency`, `collectedByUserId`, `collectedAt`. Registro del cobro físico en taquilla o al abordar.
-- **Ticket**: `reservationId` (único), `pdfPath`, `qrPayload`, `issuedAt`, `sentAt`.
-- **WaitlistEntry**: `departureId`, `name`, `phone`, `passengerCount`, `status`, `notifiedAt`, `claimToken`, `claimExpiresAt`, `convertedReservationId`.
-- **OutboundMessage**: `reservationId?`, `waitlistEntryId?`, `phone`, `templateKey`, `payload` (JSON), `status`, `providerMessageId`, `attempts`, `lastError`, `scheduledFor`, `sentAt`. Índice único parcial sobre (`reservationId`, `templateKey`) para las plantillas que deben enviarse una sola vez por reserva (recordatorio 24 h, reconfirmación, confirmación 2 h).
-- **InboundEvent**: `providerEventId` (único), `phone`, `type`, `rawPayload`, `receivedAt`, `processedAt`, `processingError`. Garantiza idempotencia del webhook.
-- **User**: `email` (único), `passwordHash`, `name`, `role`, `active`.
-- **Session**: `userId`, `tokenHash`, `expiresAt`, `lastSeenAt`.
-- **AuditLog**: `actorType` (`USUARIO`, `SISTEMA`, `PUBLICO`), `actorUserId?`, `entityType`, `entityId`, `action`, `before` (JSON), `after` (JSON), `ipAddress?`. Solo inserción; ningún código del sistema actualiza ni borra filas de esta tabla y el rol de base de datos de la app no tiene permisos `UPDATE`/`DELETE` sobre ella.
+**Identidad y agencias**
 
-Regla de borrado: reservas, pasajeros, comprobantes y mensajes nunca se borran físicamente. Los cambios de estado quedan en `AuditLog`.
+- `PassengerAccount`: `idNumber` único y normalizado, `fullName`, `phone`, `birthYear` (entero), `passwordHash`, `lastLoginAt`, `active`. La cédula es la credencial de acceso.
+- `PassengerDocument`: `accountId`, `type`, `filePath`, `originalName`, `uploadedAt`, `verifiedAt`, `verifiedByPanelUserId`.
+- `Agency`: `name`, `taxId` (RIF) único, `contactPhone`, `contactEmail`, `active`.
+- `PanelUser`: `email` único, `passwordHash`, `name`, `role`, `agencyId` nulo solo para `ADMIN`, `active`. Un `OPERADOR` siempre tiene agencia.
+- `PanelSession`: `panelUserId`, `tokenHash` único, `expiresAt`, `lastSeenAt`.
+- `PassengerSession`: `accountId`, `tokenHash` único, `expiresAt`, `lastSeenAt`.
 
-## 6. Máquina de estados de la reserva
+**Flota**
+
+- `Vehicle`: `agencyId`, `plate`, `brand`, `model`, `seatCount`, `active`. Único `(agencyId, plate)`.
+- `Driver`: `agencyId`, `fullName`, `idNumber`, `phone`, `active`. Único `(agencyId, idNumber)`.
+
+**Catálogo**
+
+- `Route`: `agencyId`, `name`, `origin`, `destination`, `fareUsd` decimal(10,2), `meetingPoint`, `estimatedMinutes`, `travelTips`, `active`.
+- `Departure`: `routeId`, `vehicleId`, `driverId`, `departsAt` timestamptz, `capacity`, `status`, `manifestClosedAt`, `manifestClosedByPanelUserId`. Único `(vehicleId, departsAt)`. Índice `(departsAt, status)`.
+- `PaymentMethod`: `agencyId` nulo para métodos del terminal, `name`, `kind`, `currency`, `details` JSON con los datos de cobro, `active`, `sortOrder`.
+- `ExchangeRate`: `currency`, `rateFromUsd` decimal(18,6), `effectiveFrom`, `createdByPanelUserId`.
+- `DepartureTax`: `amountUsd` decimal(10,2), `effectiveFrom`, `createdByPanelUserId`. La vigente es la de mayor `effectiveFrom` no futura.
+
+**Venta**
+
+- `Reservation`: `code` único (es el **serial del ticket**), `publicToken` único, `accountId`, `departureId`, `status`, `passengerCount`, `policiesAcceptedAt`, `fareUsd` (tarifa unitaria congelada), `fareTotalUsd`, `taxPerPassengerUsd`, `taxTotalUsd`, `totalUsd`, `paidUsd` (suma de pagos aprobados), `currency`, `exchangeRateUsed`, `amountInCurrency`, `paymentMethodId`, `reconfirmedAt`, `attendanceResponse`, `attendanceRespondedAt`, `boardedAt`, `cancelledAt`, `cancellationReason`, `manualContactRequired`, `expiresAt` (para la liberación por falta de pago). Índice `(departureId, status)`.
+- `Passenger`: `reservationId`, `fullName`, `idNumber`, `birthYear`, `isHolder`, `boardedAt`, `boardedByPanelUserId`.
+- `PaymentProof`: `reservationId`, `paymentMethodId`, `reference`, `imagePath`, `amount`, `currency`, `amountUsd` (convertido al declarar), `status`, `reviewedByPanelUserId`, `reviewedAt`, `rejectionReason`. Una reserva puede acumular varios comprobantes aprobados: eso son los abonos.
+- `CashPayment`: `reservationId`, `amount`, `currency`, `amountUsd`, `collectedByPanelUserId`, `collectedAt`.
+- `Ticket`: `reservationId` único, `pdfPath`, `qrPayload`, `issuedAt`, `sentAt`.
+- `WaitlistEntry`: `departureId`, `accountId`, `passengerCount`, `status`, `notifiedAt`, `claimToken` único, `claimExpiresAt`, `convertedReservationId`.
+
+**Operación de viaje**
+
+- `TripLog`: `departureId` único, `driverId`, `vehicleId`, `boardingStartedAt`, `departedAt`, `arrivedAt`, `passengerCount`, `notes`. `departedAt` es la **hora de embarque** que ve el operador; `arrivedAt` es la **hora de desembarque**; la duración se calcula como su diferencia y no se almacena.
+
+**Infraestructura**
+
+- `OutboundMessage`: `reservationId`, `waitlistEntryId`, `phone`, `templateKey`, `payload` JSON, `status`, `providerMessageId`, `attempts`, `lastError`, `scheduledFor`, `sentAt`. Índice único parcial sobre `(reservationId, templateKey)` para las plantillas programadas.
+- `InboundEvent`: `providerEventId` único, `phone`, `type`, `rawPayload`, `receivedAt`, `processedAt`, `processingError`.
+- `AuditLog`: `actorType`, `actorPanelUserId`, `actorAccountId`, `entityType`, `entityId`, `action`, `before` JSON, `after` JSON, `ipAddress`. Solo inserción, garantizado por un disparador de base de datos.
+
+Regla de borrado: reservas, pasajeros, comprobantes, mensajes y auditoría nunca se borran físicamente.
+
+## 8. Máquina de estados de la reserva
 
 ```
-crear (pago digital)  → PENDIENTE_VALIDACION
-crear (pago físico)   → PAGO_EN_SITIO
+crear con método digital        → PENDIENTE_PAGO  (expiresAt = ahora + 2 h)
+crear con método físico         → PAGO_EN_SITIO
 
-PENDIENTE_VALIDACION → PAGADA        finanzas aprueba comprobante → emite ticket
-PENDIENTE_VALIDACION → RECHAZADA     finanzas rechaza; el pasajero puede recargar comprobante,
-                                     lo que vuelve a PENDIENTE_VALIDACION mientras haya cupo
-PAGO_EN_SITIO        → PAGADA        operaciones/finanzas registra CashPayment → emite ticket
-PAGO_EN_SITIO        → LIBERADA      job de 12 h sin reconfirmedAt
-PAGADA | PAGO_EN_SITIO | PENDIENTE_VALIDACION → CANCELADA   acción manual del panel con motivo
-PAGADA | PAGO_EN_SITIO → ABORDADA    operaciones registra abordaje de al menos el titular
-PAGADA | PAGO_EN_SITIO → NO_SHOW     al marcar la salida como SALIDA sin abordaje registrado
+PENDIENTE_PAGO → EN_VALIDACION   el pasajero sube un comprobante
+EN_VALIDACION  → ABONADA         el operador aprueba y queda saldo pendiente
+EN_VALIDACION  → PAGADA          el operador aprueba y el saldo llega a cero
+EN_VALIDACION  → PENDIENTE_PAGO  el operador rechaza y no hay abonos previos
+EN_VALIDACION  → ABONADA         el operador rechaza y sí hay abonos previos
+ABONADA        → EN_VALIDACION   el pasajero sube otro comprobante
+ABONADA        → PAGADA          un cobro en sitio completa el saldo
+PAGO_EN_SITIO  → PAGADA          el operador registra el cobro completo
+PAGO_EN_SITIO  → LIBERADA        no reconfirmó 12 h antes de la salida
+PENDIENTE_PAGO → LIBERADA        expiró sin ningún pago
+PENDIENTE_PAGO | EN_VALIDACION | ABONADA | PAGO_EN_SITIO | PAGADA → CANCELADA
+PAGADA | PAGO_EN_SITIO → ABORDADA
+PAGADA → NO_SHOW                 la salida partió sin que abordara
 ```
 
-Estados que ocupan cupo: `PENDIENTE_VALIDACION`, `PAGO_EN_SITIO`, `PAGADA`, `ABORDADA`. Los demás liberan cupo. Toda transición pasa por una única función `transition(reservationId, to, context)` en `booking` que valida la transición, escribe `AuditLog` y dispara los efectos (emitir ticket, encolar mensajes, procesar lista de espera).
+Ocupan cupo: `PENDIENTE_PAGO`, `EN_VALIDACION`, `ABONADA`, `PAGADA`, `PAGO_EN_SITIO`, `ABORDADA`. Liberan cupo: `LIBERADA`, `CANCELADA`, `NO_SHOW`.
 
-## 7. Cupos y concurrencia
+El ticket se emite **solo** al entrar en `PAGADA`. Toda transición pasa por una función única que valida, escribe auditoría y devuelve los efectos que el llamador debe ejecutar fuera de la transacción.
+
+## 9. Cupos y concurrencia
 
 `disponible = Departure.capacity − Σ passengerCount de reservas en estados que ocupan cupo`.
 
-La creación de reserva y toda transición que vuelva a ocupar cupo se ejecutan en una transacción que hace `SELECT ... FOR UPDATE` sobre la fila de `Departure`, recalcula el disponible y aborta si el grupo no cabe. Esto impide la sobreventa con solicitudes simultáneas. No hay bloqueo temporal de cupos durante el llenado del formulario; el cupo se verifica al enviar.
+La creación de reserva y toda transición que vuelva a ocupar cupo se ejecutan en una transacción que bloquea la fila de `Departure` con `SELECT ... FOR UPDATE`, recalcula el disponible y aborta si el grupo no cabe. No hay bloqueo temporal durante el llenado del formulario.
 
-## 8. Código de reserva
+## 10. Serial del ticket
 
-Formato: `TR-MMDD-{N}PAX-{XXXX}`. Ejemplo: `TR-0815-4PAX-K7Q2`.
+Formato `TR-MMDD-{N}PAX-{XXXX}`, por ejemplo `TR-0815-4PAX-K7Q2`. `MMDD` es la fecha de salida en hora de Caracas, `N` la cantidad de pasajeros, y el sufijo cuatro caracteres del alfabeto `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` generados con `crypto.randomInt`. Este código es el serial que ve el operador y el que viaja dentro del QR.
 
-- `MMDD`: mes y día de la salida en `America/Caracas`.
-- `N`: cantidad de pasajeros.
-- `XXXX`: 4 caracteres del alfabeto `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (sin 0, O, 1, I), generados con `crypto.randomInt`.
+## 11. Montos
 
-Restricción única en base de datos; ante colisión se reintenta hasta 5 veces.
-
-## 9. Precios y tasas
-
-`totalUsd = Route.priceUsd × passengerCount`. Si el método de pago está en `VES` o `COP`, se toma la tasa vigente al momento del envío del formulario y se guarda `exchangeRateUsed` y `amountInCurrency = totalUsd × tasa`, redondeado a 2 decimales. Para `USD` y `USDT` la tasa es 1. El formulario muestra el monto en la moneda del método elegido y también el total en USD. Cambios posteriores de tasa no afectan reservas ya creadas.
-
-## 10. Formulario público de reserva
-
-Ruta `/reservar`. Cuatro pasos en una sola página con estado en cliente y validación `zod` en cliente y servidor.
-
-1. **Viaje**: ruta, fecha, salida. Solo se listan salidas `PROGRAMADA` con `departsAt` futuro y disponible ≥ 1. Se muestra el disponible.
-2. **Pasajeros**: cantidad (1 a 6, limitada al disponible); por cada pasajero nombre completo y cédula; el primero es el titular y además pide teléfono WhatsApp con código de país. Cédula: 5 a 12 caracteres alfanuméricos con prefijo opcional `V`, `E`, `P`, `J` o `CC`; se normaliza a mayúsculas sin puntos ni guiones.
-3. **Políticas**: texto de cancelación y manejo de datos, casilla obligatoria.
-4. **Pago**: selector de método. Si es `DIGITAL`: se muestran los `details` del método, el monto en su moneda, y se exige imagen (JPEG, PNG o WebP, máximo 5 MB) y referencia (4 a 40 caracteres). Si es `FISICO`: se muestra el monto y el aviso de que la reserva es condicional y deberá reconfirmarse por WhatsApp.
-
-Al enviar: `POST /api/reservas` recibe `multipart/form-data`, valida, guarda la imagen en `uploads/comprobantes/{reservationId}/{uuid}.{ext}` y ejecuta la transacción de la sección 7. Respuesta: código y enlace a `/reserva/{publicToken}`. Se encola el mensaje `solicitud_recibida` o `reserva_condicional` según el caso.
-
-Página de estado `/reserva/{publicToken}`: muestra ruta, salida, estado, pasajeros (solo nombres), y permite recargar comprobante si el estado es `RECHAZADA`. No expone cédulas completas (solo últimos 3 caracteres).
-
-Protección: límite de 10 envíos por IP cada 10 minutos en `/api/reservas`; verificación del tipo real de imagen por firma de bytes.
-
-## 11. Panel operativo
-
-Ruta base `/panel`. Login con email y contraseña. Sesión de 12 horas renovable. Middleware verifica sesión y rol por sección.
-
-- **Finanzas** (`FINANZAS`, `ADMIN`): cola de comprobantes `PENDIENTE` ordenada por antigüedad, con imagen ampliable, monto declarado, monto esperado, método y referencia. Acciones: aprobar (→ `PAGADA`) o rechazar con motivo (→ `RECHAZADA`, encola `pago_rechazado`). Registro de cobro físico para reservas `PAGO_EN_SITIO` (→ `PAGADA`).
-- **Operaciones** (`OPERACIONES`, `ADMIN`): lista de salidas próximas; manifiesto por salida con todos los pasajeros y estado de cada reserva; cerrar manifiesto (→ `MANIFIESTO_CERRADO`, impide nuevas reservas y guarda quién cerró); marcar salida (→ `SALIDA`, marca `NO_SHOW` a las reservas activas sin abordaje). Pantalla `/panel/abordaje/{departureId}` optimizada para móvil: escáner QR con la cámara (`BarcodeDetector` con respaldo de librería) y campo para escribir el código; muestra el grupo completo con casillas por pasajero y botón de "abordar grupo".
-- **Admin** (`ADMIN`): CRUD de rutas, salidas (con duplicado rápido de una salida a varias fechas), métodos de pago, tasas de cambio (historial), usuarios del panel; reportes: ocupación por salida, demanda por ruta y día de la semana, demanda por franja horaria, ingresos validados por método y moneda, todo con filtro de fechas y exportación CSV; vista de mensajes fallidos y reservas con `manualContactRequired`.
-
-Toda acción del panel escribe en `AuditLog` con el usuario actor.
-
-## 12. Ticket
-
-Se genera al pasar a `PAGADA`. PDF A5 con logo, código de reserva, ruta, fecha y hora de salida, punto de encuentro, lista de pasajeros (nombre y cédula), método de pago, y QR. Se guarda en `uploads/tickets/{reservationId}.pdf` y se envía por WhatsApp como documento con la plantilla `ticket_emitido`.
-
-Contenido del QR: `{code}.{firma}` donde `firma` son los primeros 16 caracteres en base32 de `HMAC-SHA256(TICKET_SECRET, code)`. La verificación en abordaje recalcula la firma; un QR con firma inválida se rechaza sin consultar la base de datos. Reemitir un ticket (por ejemplo tras corregir un nombre) regenera el PDF con el mismo QR.
-
-## 13. Mensajería WhatsApp
-
-Interfaz:
-
-```ts
-interface WhatsAppProvider {
-  sendTemplate(to: string, template: TemplateKey, params: Record<string, string>, buttons?: ButtonSpec[]): Promise<{ providerMessageId: string }>;
-  sendDocument(to: string, filePath: string, filename: string, caption?: string): Promise<{ providerMessageId: string }>;
-  verifyWebhookSignature(rawBody: Buffer, signatureHeader: string): boolean;
-  parseWebhook(body: unknown): InboundEvent[];
-}
+```
+fareTotalUsd      = fareUsd × passengerCount
+taxTotalUsd       = taxPerPassengerUsd × passengerCount
+totalUsd          = fareTotalUsd + taxTotalUsd
+amountInCurrency  = redondeo2(totalUsd × tasa)
 ```
 
-Implementaciones: `MetaCloudProvider` (Graph API, versión configurable, envío de plantillas aprobadas y subida de medios) y `FakeProvider` (guarda en memoria, usado en tests y en desarrollo local sin credenciales).
+Para `USD` y `USDT` la tasa es 1. Para `VES` y `COP` se toma la tasa vigente al crear la reserva y se congela en `exchangeRateUsed`. Cada comprobante o cobro guarda además su `amountUsd`, convertido con la tasa de la reserva, para que `paidUsd` sea siempre comparable con `totalUsd`.
 
-Plantillas (todas deben existir aprobadas en Meta con esos nombres; los textos se documentan en `docs/whatsapp-templates.md`):
+Saldo pendiente = `totalUsd − paidUsd`. Un pago que excede el saldo se acepta y deja la reserva `PAGADA`; el excedente se registra en la auditoría para devolución manual.
 
-| Clave | Cuándo | Botones |
+## 12. Flujo del pasajero
+
+1. **Registro** en `/registro`: cédula, nombre completo, teléfono, año de nacimiento y contraseña. La cédula se normaliza y debe ser única.
+2. **Acceso** en `/ingresar` con cédula y contraseña. Sin sesión, `/mi/*` redirige aquí.
+3. **Reservar** en `/mi/reservar`: elegir ruta y salida entre las que tienen cupo, elegir cantidad de 1 a 6, completar nombre, cédula y año de nacimiento de cada acompañante, aceptar políticas.
+4. **Documentos**: antes de poder pagar, la cuenta debe tener foto de cédula cargada. Si algún pasajero del grupo tiene menos de 18 años según su año de nacimiento, el sistema exige además un permiso de viaje.
+5. **Pago**: elegir método. Digital muestra los datos de cobro y exige monto, referencia e imagen del comprobante; se admite un monto menor al total como abono. Físico crea la reserva condicional.
+6. **Mis reservas** en `/mi/reservas`: estado, saldo, botón para abonar de nuevo, y descarga del ticket cuando está pagada.
+
+## 13. Panel
+
+Ruta base `/panel`, con login propio en `/panel/ingresar`.
+
+**Operador** (`/panel/...`, todo filtrado por su agencia):
+
+- `pagos`: comprobantes pendientes con imagen ampliable, monto declarado, saldo de la reserva, y botones de aprobar y rechazar con motivo. Registro de cobros en sitio.
+- `pasajeros`: tabla con titular, serial del ticket, ruta, salida, cantidad, total, abonado, saldo y estado de pago. Filtros por salida y por estado.
+- `vehiculos`: alta y edición con placa, marca, modelo y número de asientos.
+- `choferes`: alta y edición con nombre, cédula y teléfono, más el total de embarques y desembarques de cada uno.
+- `movimientos`: lista de viajes de sus choferes con hora de embarque, duración del recorrido y hora de desembarque.
+- `salidas`: crear salidas asignando vehículo y chofer, ver ocupación, cerrar manifiesto, iniciar embarque, registrar salida y registrar llegada.
+- `abordaje/[departureId]`: pantalla móvil con lectura de código o QR y casillas por pasajero.
+- `recaudacion`: total recaudado por ruta en las últimas 24 horas, y por rango de fechas.
+
+**Admin** (`/panel/admin/...`):
+
+- `tablero`: tasa de salida recaudada en las últimas 24 horas actualizada en vivo, recorridos del terminal, usuarios nuevos y usuarios recurrentes.
+- `movimientos`: lista de movimientos de todas las agencias con agencia, ruta, chofer, hora de embarque, duración, hora de desembarque y cantidad de pasajeros.
+- `usuarios`: base de datos de cuentas de pasajero con cédula, nombre, teléfono, año de nacimiento, viajes realizados y última actividad. Cada consulta queda auditada.
+- `agencias`: alta de agencias y de sus usuarios de panel.
+- `tasas`: tasa de salida vigente y su historial, más las tasas de cambio.
+- `mensajes`: bandeja de mensajes salientes con su estado, que en el MVP hace las veces de WhatsApp.
+
+Todas las horas se muestran en formato de 24 horas y en hora de Caracas, con la etiqueta correspondiente.
+
+## 14. Embarque y desembarque
+
+Cada salida tiene a lo sumo un `TripLog`. El operador registra tres momentos desde la pantalla de la salida:
+
+1. **Iniciar embarque**: crea el `TripLog` con `boardingStartedAt` y pasa la salida a `MANIFIESTO_CERRADO`. Desde ese momento no se aceptan reservas nuevas.
+2. **Registrar salida**: escribe `departedAt`, pasa la salida a `EN_RUTA`, marca `NO_SHOW` a las reservas `PAGADA` sin abordaje y `CANCELADA` a las `PAGO_EN_SITIO` que nunca pagaron, y congela `passengerCount` con los pasajeros efectivamente abordados.
+3. **Registrar llegada**: escribe `arrivedAt` y pasa la salida a `FINALIZADA`.
+
+La duración del recorrido es `arrivedAt − departedAt`, calculada al consultar. El total de embarques de un chofer es el número de `TripLog` con `departedAt`; el total de desembarques, con `arrivedAt`.
+
+## 15. Reportes
+
+| Reporte | Quién | Definición |
 |---|---|---|
-| `solicitud_recibida` | reserva digital creada | — |
-| `reserva_condicional` | reserva de pago físico creada | — |
-| `ticket_emitido` | transición a `PAGADA` (mensaje + documento) | — |
-| `pago_rechazado` | transición a `RECHAZADA` | URL a página de estado |
-| `recordatorio_24h` | 24 h antes, reservas `PAGADA` | — |
-| `reconfirmacion_pago_sitio` | 24 h antes, reservas `PAGO_EN_SITIO` | `RECONFIRMAR:{code}` |
-| `confirmacion_2h` | 2 h antes, reservas `PAGADA` o `PAGO_EN_SITIO` reconfirmadas | `ASISTE:{code}`, `INCONVENIENTE:{code}` |
-| `reserva_liberada` | transición a `LIBERADA` | — |
-| `cupo_disponible_lista_espera` | cupo liberado, primer elegible en lista | URL con `claimToken` |
+| Recaudación por ruta | Operador | Suma de `PaymentProof` aprobados y `CashPayment` en `amountUsd`, agrupada por ruta, para pagos registrados en la ventana |
+| Tasa de salida recaudada | Admin | Suma de `taxTotalUsd` de reservas que alcanzaron `PAGADA` en la ventana |
+| Recorridos del terminal | Admin | `TripLog` con `arrivedAt` no nulo en la ventana |
+| Usuarios nuevos | Admin | `PassengerAccount` creadas en la ventana |
+| Usuarios recurrentes | Admin | Cuentas con dos o más reservas en estado `PAGADA` o `ABORDADA` |
+| Movimientos de agencias | Admin | `TripLog` con agencia, ruta, chofer, horas, duración y pasajeros |
+| Demanda por ruta y horario | Ambos | Reservas ocupantes agrupadas por ruta, día de la semana y franja horaria |
 
-Envío: todo mensaje se inserta como `OutboundMessage` en estado `ENCOLADO` y un job `send-message` lo entrega con hasta 5 intentos y espera exponencial (1, 4, 16, 64, 256 minutos). Tras el último fallo el mensaje pasa a `FALLIDO` y la reserva a `manualContactRequired = true`.
+La ventana por defecto es de 24 horas. Todos los reportes aceptan un rango de fechas y se exportan a CSV.
 
-Webhook `POST /api/whatsapp/webhook` (y `GET` para la verificación de Meta): valida `X-Hub-Signature-256`, guarda cada evento en `InboundEvent` (idempotente por `providerEventId`), y procesa:
+## 16. Mensajería
 
-- Respuesta de botón `RECONFIRMAR:{code}` → `reconfirmedAt = now` si la reserva está en `PAGO_EN_SITIO`.
-- `ASISTE:{code}` / `INCONVENIENTE:{code}` → `attendanceResponse`. `INCONVENIENTE` no cambia el estado; marca la reserva para seguimiento en el panel.
-- Estados de entrega (`sent`, `delivered`, `read`, `failed`) → actualizan `OutboundMessage.status`.
-- Cualquier texto libre → se registra y no se responde automáticamente.
+Interfaz `WhatsAppProvider` con `sendTemplate`, `sendDocument`, `verifyWebhookSignature` y `parseWebhook`. El MVP usa `FakeWhatsAppProvider`, que registra los envíos en `OutboundMessage` y los muestra en la bandeja del panel. La implementación de Meta Cloud API se documenta en `docs/whatsapp-templates.md` y se añade después del MVP.
 
-## 14. Jobs programados
+Plantillas: `solicitud_recibida`, `reserva_condicional`, `abono_registrado`, `ticket_emitido`, `pago_rechazado`, `recordatorio_24h`, `reconfirmacion_pago_sitio`, `confirmacion_2h`, `reserva_liberada`, `cupo_disponible_lista_espera`.
 
-Proceso `worker` con pg-boss. Un job periódico `sweep` corre cada 5 minutos y encola trabajos idempotentes; la unicidad se garantiza con el índice parcial de `OutboundMessage` y con los estados.
+## 17. Jobs programados
+
+Proceso `worker` con pg-boss sobre la misma base de datos. Un barrido cada 5 minutos y una entrega de mensajes cada minuto.
 
 | Job | Regla |
 |---|---|
-| `sweep-24h` | Salidas con `departsAt` entre ahora+23h55m y ahora+24h05m: encola `recordatorio_24h` a `PAGADA` y `reconfirmacion_pago_sitio` a `PAGO_EN_SITIO`. Si el barrido se saltó una ventana (worker caído), toma también las salidas entre ahora+12h y ahora+24h que aún no tengan el mensaje. |
-| `sweep-12h-release` | Salidas con `departsAt` ≤ ahora+12h: toda reserva `PAGO_EN_SITIO` sin `reconfirmedAt` pasa a `LIBERADA`, se encola `reserva_liberada` y se procesa la lista de espera. |
-| `sweep-2h` | Salidas entre ahora+1h55m y ahora+2h05m (con recuperación hasta ahora+30m): encola `confirmacion_2h` a `PAGADA` y a `PAGO_EN_SITIO` con `reconfirmedAt`. |
-| `waitlist-expire` | Entradas `NOTIFICADO` con `claimExpiresAt` pasado → `EXPIRADO` y se notifica al siguiente elegible. |
-| `departure-autoclose` | Salidas `PROGRAMADA` con `departsAt` pasado → `MANIFIESTO_CERRADO` (respaldo si operaciones no cerró). |
-| `retention` | Mensual. Reservas de salidas con más de `DATA_RETENTION_MONTHS` (por defecto 24) meses: reemplaza `fullName` e `idNumber` de pasajeros y titular por un hash irreversible, borra imágenes de comprobantes y PDFs. Los agregados para reportes se conservan. |
+| `sweep-expire-unpaid` | Reservas `PENDIENTE_PAGO` con `expiresAt` vencido → `LIBERADA` y se procesa la lista de espera |
+| `sweep-24h` | Salidas entre 12 h y 24 h 5 min en el futuro: `recordatorio_24h` a las pagadas y abonadas, `reconfirmacion_pago_sitio` a las de pago en sitio |
+| `sweep-12h-release` | Salidas a 12 h o menos: reservas `PAGO_EN_SITIO` sin `reconfirmedAt` → `LIBERADA` |
+| `sweep-2h` | Salidas entre 30 min y 2 h 5 min: `confirmacion_2h` |
+| `waitlist-expire` | Entradas notificadas con `claimExpiresAt` vencido → `EXPIRADO`, se notifica al siguiente |
+| `departure-autoclose` | Salidas `PROGRAMADA` ya pasadas → `MANIFIESTO_CERRADO` |
+| `deliver-messages` | Entrega mensajes `ENCOLADO` vencidos con hasta 5 intentos y espera de 1, 4, 16, 64 y 256 minutos |
 
-Reservas creadas con menos de 24 h de antelación reciben de inmediato el mensaje que corresponda a la ventana en la que caen; con menos de 12 h, una reserva de pago físico no es posible (el formulario solo ofrece métodos digitales).
+## 18. Privacidad y auditoría
 
-## 15. Lista de espera
+La base de datos de usuarios es información sensible. Reglas:
 
-Cuando una salida no tiene disponible suficiente, el formulario ofrece anotarse en lista de espera con nombre, teléfono y cantidad de pasajeros (sin datos de acompañantes ni pago). Al liberarse cupo, `processWaitlist(departureId)` recorre las entradas `EN_ESPERA` por orden de creación, notifica a la primera cuyo `passengerCount` cabe, la marca `NOTIFICADO` con `claimToken` válido por 2 horas. La página `/lista-espera/{claimToken}` precarga ruta, salida y cantidad, y lleva al formulario completo desde el paso de pasajeros; al completar la reserva la entrada pasa a `CONVERTIDO`. Si expira, `waitlist-expire` pasa al siguiente. Si la salida está a menos de 3 horas, no se notifica a nadie.
+- Solo el rol `ADMIN` accede a `/panel/admin/usuarios`, y cada consulta escribe una entrada de auditoría con el usuario que la hizo y el filtro aplicado.
+- El operador ve de sus pasajeros solo lo necesario para operar: nombre, cédula, serial y estado de pago. No ve la foto de la cédula salvo en la pantalla de abordaje de esa salida concreta.
+- Las cédulas se muestran enmascaradas fuera del manifiesto y del módulo de usuarios del admin.
+- Los archivos subidos se sirven solo por rutas autenticadas que verifican la propiedad o el rol.
+- Los reportes son agregados por defecto.
+- La retención con seudonimización queda documentada como trabajo posterior al MVP.
 
-## 16. Autenticación y autorización
+## 19. Manejo de errores
 
-Usuarios creados por Admin (el primero se crea con un comando `pnpm seed:admin` leyendo variables de entorno). Contraseñas con `argon2id`. Sesión: token aleatorio de 32 bytes, se guarda su hash SHA-256 en `Session`, cookie `httpOnly`, `secure`, `sameSite=lax`. Límite de 5 intentos fallidos de login por email cada 15 minutos. Matriz de permisos centralizada en `auth/permissions.ts`; cada acción de servidor la consulta.
-
-## 17. Auditoría y privacidad
-
-- Toda transición de reserva, validación de pago, cobro físico, abordaje, cierre de manifiesto y cambio de catálogo escribe `AuditLog`.
-- Los reportes del panel son agregados por defecto. La búsqueda de una persona por cédula existe solo en el manifiesto de una salida concreta y en la búsqueda de reserva por código, y queda registrada en `AuditLog`.
-- Retención configurable (sección 14).
-- Las imágenes de comprobantes y los PDF se sirven solo por rutas autenticadas del panel o por la página pública de la propia reserva.
-
-## 18. Manejo de errores
-
-- Fallo de cupo al enviar el formulario: mensaje claro con el disponible actual y opción de lista de espera.
-- Fallo de WhatsApp: reintentos; tras agotarlos, `manualContactRequired` visible en el panel de Admin y Finanzas.
-- Fallo al generar el PDF: la transición a `PAGADA` se confirma igualmente; el job `issue-ticket` reintenta y el panel muestra "ticket pendiente" hasta que exista.
-- Webhook con firma inválida: 401 y registro en log del servidor, sin escribir en base de datos.
-- Errores no controlados en jobs: pg-boss reintenta con la política del job y registra en `OutboundMessage.lastError` o en el log del worker.
-
-## 19. Despliegue
-
-`docker/docker-compose.yml` con:
-
-- `app`: imagen construida desde `docker/Dockerfile` (multi-stage, `next build`, ejecuta `next start`). Monta `uploads`.
-- `worker`: misma imagen, comando `node dist/worker/index.js`. Monta `uploads`.
-- `db`: `postgres:16`, volumen `pgdata`, sin puerto expuesto al exterior.
-- `caddy`: `Caddyfile` con el dominio, HTTPS automático, proxy a `app:3000`.
-
-Migraciones: `prisma migrate deploy` se ejecuta en el arranque de `app`. Copias de seguridad: script `docker/backup.sh` con `pg_dump` diario y copia del volumen `uploads`; se documenta cómo programarlo con cron del host.
-
-Variables de entorno (documentadas en `.env.example`): `DATABASE_URL`, `SESSION_SECRET`, `TICKET_SECRET`, `WHATSAPP_PROVIDER` (`meta` o `fake`), `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_API_VERSION`, `PUBLIC_BASE_URL`, `UPLOADS_DIR`, `DATA_RETENTION_MONTHS`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `TZ=America/Caracas`.
+- Sin cupo al enviar: mensaje con el disponible actual y opción de lista de espera.
+- Comprobante que no es una imagen real: se rechaza verificando la firma de bytes, no el tipo declarado.
+- Fallo de envío de mensaje: reintentos y, tras agotarlos, `manualContactRequired` visible en el panel.
+- Fallo al generar el PDF: la reserva queda `PAGADA` igualmente y el panel muestra "ticket pendiente" hasta que el reintento lo genere.
+- QR con firma inválida: se rechaza sin consultar la base de datos.
 
 ## 20. Estrategia de tests
 
-**Unitarios (Vitest, sin base de datos):**
+**Unitarios**: máquina de estados completa, serial del ticket, cálculo de montos con tarifa y tasa de salida, saldo y abonos, firma y verificación de QR, normalización de cédula y teléfono, cálculo de edad desde el año de nacimiento, ventanas de los barridos, matriz de permisos de ambos ámbitos, duración de recorrido.
 
-- Máquina de estados: todas las transiciones válidas e inválidas; qué estados ocupan cupo.
-- Generador de código de reserva: formato, alfabeto, reintento por colisión.
-- Cálculo de montos y redondeo con tasas VES y COP; tasa 1 para USD/USDT.
-- Firma y verificación de QR; rechazo de firma manipulada.
-- Normalización y validación de cédula y teléfono.
-- Selección de ventanas de los barridos (`sweep-24h`, `sweep-12h-release`, `sweep-2h`) con relojes simulados, incluida la recuperación tras caída del worker.
-- Parseo del webhook de Meta: botones, estados de entrega, eventos duplicados.
-- Matriz de permisos por rol.
+**Integración contra PostgreSQL real**: veinte reservas concurrentes sobre diez cupos sin sobreventa; abono parcial que deja `ABONADA` y segundo abono que completa a `PAGADA` con ticket; rechazo de comprobante que devuelve al estado correcto; expiración por falta de pago; liberación de pago en sitio a las 12 h; lista de espera; aislamiento por agencia en toda consulta de operador; embarque, salida y llegada con sus efectos sobre las reservas; reportes con cifras exactas; auditoría inmutable; reintentos de mensajes.
 
-**Integración (Vitest contra PostgreSQL en Docker, base de datos limpia por test):**
+**End-to-end con Playwright**: registro de pasajero, reserva de tres personas, abono parcial, aprobación por el operador, segundo pago, emisión del ticket, embarque y llegada, y comprobación de las cifras en el tablero del admin.
 
-- Veinte reservas concurrentes sobre una salida con 10 cupos: exactamente 10 plazas asignadas, ninguna sobreventa.
-- Aprobar comprobante emite ticket y encola `ticket_emitido` con documento.
-- Rechazar comprobante libera cupo y permite recargar desde la página de estado.
-- Liberación a las 12 h de una reserva `PAGO_EN_SITIO` sin reconfirmar; la reconfirmada no se libera; la lista de espera recibe notificación y el claim convierte la entrada.
-- Reintentos de `send-message` con `FakeProvider` fallando; tras 5 fallos la reserva queda con `manualContactRequired`.
-- Índice parcial impide duplicar `recordatorio_24h` para una misma reserva aunque el barrido corra dos veces.
-- `AuditLog` recibe una fila por cada transición y el rol de base de datos no puede actualizarla ni borrarla.
-- Job de retención seudonimiza y borra archivos solo de salidas antiguas.
+**Verificación reforzada por mutación**: invertir la condición de disponibilidad y comprobar que el test de concurrencia falla; alterar la firma del QR y comprobar que su test falla; permitir la liberación de reservas pagadas y comprobar que su test falla.
 
-**End-to-end (Playwright, `WHATSAPP_PROVIDER=fake`):**
-
-- Reserva digital completa de 3 pasajeros con comprobante → finanzas aprueba en el panel → ticket descargable y mensaje registrado en el `FakeProvider` → operaciones escanea el código (se simula introduciéndolo) y aborda al grupo.
-- Reserva de pago físico → aparece como condicional en el manifiesto.
-
-**Verificación reforzada (mutación manual, según la metodología):** invertir la condición de disponibilidad en la transacción de reserva y comprobar que el test de concurrencia falla; alterar un carácter de la firma HMAC y comprobar que el test de QR falla.
-
-Criterio de terminado por tarea: tests definidos en verde, `pnpm lint` y `pnpm typecheck` sin errores, entrada de glosario en `CLAUDE.md` actualizada.
-
-## 21. Comandos previstos
+## 21. Entrega del MVP en localhost
 
 ```
-pnpm dev              app en desarrollo
-pnpm worker:dev       worker en desarrollo
-pnpm build
-pnpm lint
-pnpm typecheck
-pnpm test             unitarios
-pnpm test:integration requiere docker compose -f docker/docker-compose.test.yml up -d
-pnpm test:e2e
-pnpm test -- tests/unit/booking/state-machine.test.ts     un archivo
-pnpm prisma migrate dev
-pnpm seed:admin
+docker compose -f docker/docker-compose.dev.yml up -d
+pnpm install
+pnpm prisma migrate deploy
+pnpm seed
+pnpm dev          # http://localhost:3000
+pnpm worker:dev   # en otra terminal
 ```
+
+El seed crea el terminal con dos agencias, sus rutas, vehículos, choferes y salidas de los próximos días, métodos de pago, tasa de salida, tasas de cambio, un admin, dos operadores y dos cuentas de pasajero de prueba. Las credenciales se imprimen al terminar.
