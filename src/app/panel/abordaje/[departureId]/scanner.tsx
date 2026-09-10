@@ -24,7 +24,8 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [buscando, setBuscando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
-  const [mensaje, setMensaje] = useState<string | null>(null);
+  // El mensaje puede ser un error o una confirmación; el tono lo distingue.
+  const [mensaje, setMensaje] = useState<{ texto: string; ok: boolean } | null>(null);
   const [camaraDisponible, setCamaraDisponible] = useState(false);
   const [camaraActiva, setCamaraActiva] = useState(false);
 
@@ -98,7 +99,7 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
       setCamaraActiva(true);
       escanear();
     } catch {
-      setMensaje("No se pudo acceder a la cámara. Escribe el serial manualmente.");
+      setMensaje({ texto: "No se pudo acceder a la cámara. Escribe el serial manualmente.", ok: false });
     }
   }
 
@@ -108,9 +109,9 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
     setMensaje(null);
     const r = await confirmBoardingAction(resultado.reservation.reservationId, [...seleccionados]);
     if (r.error) {
-      setMensaje(r.error);
+      setMensaje({ texto: r.error, ok: false });
     } else {
-      setMensaje("Grupo abordado correctamente.");
+      setMensaje({ texto: "Grupo abordado correctamente.", ok: true });
       setResultado(null);
       setCode("");
     }
@@ -171,7 +172,15 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
         <video ref={videoRef} hidden={!camaraActiva} muted playsInline className="w-full rounded-lg border border-[var(--color-borde)]" />
       </div>
 
-      {mensaje ? <p className="text-sm font-medium text-[var(--color-peligro)]">{mensaje}</p> : null}
+      {mensaje ? (
+        <p
+          className={`text-sm font-medium ${
+            mensaje.ok ? "text-[var(--color-exito)]" : "text-[var(--color-peligro)]"
+          }`}
+        >
+          {mensaje.texto}
+        </p>
+      ) : null}
       {resultado?.error ? (
         <p className="text-sm font-medium text-[var(--color-peligro)]">{resultado.error}</p>
       ) : null}
