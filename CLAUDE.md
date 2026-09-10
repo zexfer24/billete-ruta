@@ -65,6 +65,36 @@ pnpm test:e2e
 pnpm test -- tests/unit/booking/state-machine.test.ts    un solo archivo
 ```
 
+## Glosario de módulos
+
+Cada carpeta de `src/modules/` expone su API pública en `index.ts`. Nadie importa internos de otro módulo.
+
+| Módulo | Responsabilidad | API principal |
+|---|---|---|
+| `accounts` | Cuentas de pasajero y sus documentos | `registerAccount`, `loginAccount`, `uploadDocument`, `missingDocuments` |
+| `agencies` | Agencias, vehículos y choferes | `createAgencyWithOperator`, `listAgencies`, `createVehicle`, `listDrivers` (trae embarques y desembarques) |
+| `audit` | Bitácora de solo inserción | `writeAudit` |
+| `auth` | Dos ámbitos de sesión y matriz de permisos | `requirePanelUser`, `requirePassenger`, `requireAgencyScope`, `can`, `hashPassword` |
+| `booking` | Reservas, cupos, estados y lista de espera | `createReservation`, `transitionReservation`, `getAvailability`, `processWaitlist`, `canTransition` |
+| `catalog` | Rutas, salidas, tasas y precios | `listBookableDepartures`, `createDeparture`, `getManifest`, `computeAmounts`, `getCurrentDepartureTax` |
+| `messaging` | Canal de mensajes con proveedor intercambiable | `enqueueMessage`, `deliverPendingMessages`, `getWhatsAppProvider`, `renderPreview` |
+| `payments` | Abonos, comprobantes y cobros en efectivo | `submitProof`, `approveProof`, `rejectProof`, `registerCashPayment` |
+| `reports` | Agregados de agencia y de terminal | `revenueByRoute`, `driverMovements`, `departureTaxRevenue`, `agencyMovements`, `listAccounts` |
+| `scheduler` | Ventanas de tiempo de los barridos | `dueForReminder24h`, `dueForRelease12h`, `nextRetryDelayMinutes` |
+| `tickets` | PDF con QR firmado | `issueTicket`, `signTicketCode`, `verifyTicketQr` |
+| `trips` | Embarque, desembarque y abordaje | `startBoarding`, `registerDeparture`, `registerArrival`, `findForBoarding`, `confirmBoarding` |
+
+| Archivo de `src/lib/` | Para qué sirve |
+|---|---|
+| `prisma.ts` | Cliente único de base de datos |
+| `env.ts` | Configuración validada con zod |
+| `decimal.ts` | `toDecimal`, `round2`, `formatMoney` |
+| `time.ts` | Hora de Caracas y formato de 24 horas, duración de recorridos |
+| `identity.ts` | Cédulas, teléfonos, edad y enmascarado |
+| `storage.ts` | Archivos subidos y verificación por firma de bytes |
+
+`src/worker/sweeps.ts` contiene los seis barridos programados y `src/worker/index.ts` el proceso que los ejecuta.
+
 ## Glosario de documentación (`Documentación/`)
 
 | Archivo | Contenido |
