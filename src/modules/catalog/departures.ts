@@ -103,7 +103,7 @@ export interface AgencyDepartureRow {
 /** Salidas de una agencia con su ocupación, para la pantalla de operaciones. */
 export async function listAgencyDepartures(
   agencyId: string,
-  filter: { from?: Date; to?: Date } = {},
+  filter: { from?: Date; to?: Date; order?: "asc" | "desc" } = {},
 ): Promise<AgencyDepartureRow[]> {
   const salidas = await prisma.departure.findMany({
     where: {
@@ -114,7 +114,7 @@ export async function listAgencyDepartures(
       },
     },
     include: { route: true, vehicle: true, driver: true, tripLog: true },
-    orderBy: { departsAt: "asc" },
+    orderBy: { departsAt: filter.order ?? "asc" },
     take: 200,
   });
 

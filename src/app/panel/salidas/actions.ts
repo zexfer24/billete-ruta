@@ -7,12 +7,13 @@ import { createDeparture } from "@/modules/catalog";
 import { registerArrival, registerDeparture, startBoarding } from "@/modules/trips";
 
 /**
- * Convierte el valor de un <input type="datetime-local"> — que representa
- * siempre hora de Caracas en este panel — a un instante UTC. Venezuela no
- * observa horario de verano, así que el desfase -04:00 es fijo.
+ * Une la fecha y la hora elegidas, siempre en hora de Caracas, y devuelve el
+ * instante en UTC. Venezuela no observa horario de verano, así que el desfase
+ * -04:00 es fijo. Se piden por separado para que la hora se elija en formato de
+ * 24 horas y no dependa del idioma del navegador.
  */
-function fromCaracasLocalInput(value: string): Date {
-  return new Date(`${value}:00-04:00`);
+function desdeFechaYHoraCaracas(fecha: string, hora: string): Date {
+  return new Date(`${fecha}T${hora}:00.000-04:00`);
 }
 
 export async function createDepartureAction(formData: FormData): Promise<void> {
@@ -22,13 +23,15 @@ export async function createDepartureAction(formData: FormData): Promise<void> {
     routeId: z.string().uuid(),
     vehicleId: z.string().uuid(),
     driverId: z.string().uuid(),
-    departsAt: z.string().min(1),
+    fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Elige la fecha de la salida"),
+    hora: z.string().regex(/^\d{2}:\d{2}$/, "Elige la hora de la salida"),
   });
   const data = schema.parse({
     routeId: formData.get("routeId"),
     vehicleId: formData.get("vehicleId"),
     driverId: formData.get("driverId"),
-    departsAt: formData.get("departsAt"),
+    fecha: formData.get("fecha"),
+    hora: formData.get("hora"),
   });
 
   await createDeparture({
@@ -37,7 +40,7 @@ export async function createDepartureAction(formData: FormData): Promise<void> {
     routeId: data.routeId,
     vehicleId: data.vehicleId,
     driverId: data.driverId,
-    departsAt: fromCaracasLocalInput(data.departsAt),
+    departsAt: desdeFechaYHoraCaracas(data.fecha, data.hora),
   });
 
   revalidatePath("/panel/salidas");

@@ -1,22 +1,13 @@
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { last24h, revenueByRoute } from "@/modules/reports";
 import type { RouteRevenueRow } from "@/modules/reports";
-import { formatCaracas, formatCaracasDateTime24 } from "@/lib/time";
+import {
+  caracasDayEnd,
+  caracasDayInputValue,
+  caracasDayStart,
+  formatCaracasDateTime24,
+} from "@/lib/time";
 import { formatMoney, round2, ZERO } from "@/lib/decimal";
-
-function fromCaracasLocalInput(value: string): Date {
-  return new Date(`${value}:00-04:00`);
-}
-
-function parseDateInput(value: string | undefined, fallback: Date): Date {
-  if (!value) return fallback;
-  const d = fromCaracasLocalInput(value);
-  return Number.isNaN(d.getTime()) ? fallback : d;
-}
-
-function toLocalInputValue(date: Date): string {
-  return formatCaracas(date, "yyyy-MM-dd'T'HH:mm");
-}
 
 function csvField(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
@@ -42,8 +33,8 @@ export default async function RecaudacionPage({
   const params = await searchParams;
 
   const defaults = last24h();
-  const from = parseDateInput(params.desde, defaults.from);
-  const to = parseDateInput(params.hasta, defaults.to);
+  const from = params.desde ? caracasDayStart(params.desde, defaults.from) : defaults.from;
+  const to = params.hasta ? caracasDayEnd(params.hasta, defaults.to) : defaults.to;
 
   const filas = await revenueByRoute(agencyId, from, to);
   const total = filas.reduce((acc, f) => round2(acc.add(f.totalUsd)), ZERO);
@@ -67,18 +58,18 @@ export default async function RecaudacionPage({
         <label className="flex flex-col gap-1 text-sm font-medium">
           Desde
           <input
-            type="datetime-local"
+            type="date"
             name="desde"
-            defaultValue={toLocalInputValue(from)}
+            defaultValue={caracasDayInputValue(from)}
             className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Hasta
           <input
-            type="datetime-local"
+            type="date"
             name="hasta"
-            defaultValue={toLocalInputValue(to)}
+            defaultValue={caracasDayInputValue(to)}
             className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
           />
         </label>

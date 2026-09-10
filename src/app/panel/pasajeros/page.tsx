@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { listAgencyDepartures } from "@/modules/catalog";
 import { listAgencyPassengers } from "@/modules/reports";
@@ -57,27 +58,53 @@ function buildCsv(rows: AgencyPassengerRow[]): string {
 export default async function PasajerosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ salida?: string; estado?: string; buscar?: string }>;
+  searchParams: Promise<{
+    salida?: string;
+    estado?: string;
+    buscar?: string;
+    pagina?: string;
+  }>;
 }) {
   const user = await requirePanelUser("agency.reports");
   const agencyId = requireAgencyScope(user);
   const params = await searchParams;
 
-  const [pasajeros, salidas] = await Promise.all([
-    listAgencyPassengers(agencyId, {
-      departureId: params.salida || undefined,
-      status: params.estado || undefined,
-      search: params.buscar || undefined,
-    }),
-    listAgencyDepartures(agencyId),
+  const paginaActual = Math.max(1, Number.parseInt(params.pagina ?? "1", 10) || 1);
+  const filtro = {
+    departureId: params.salida || undefined,
+    status: params.estado || undefined,
+    search: params.buscar || undefined,
+  };
+
+  // La tabla muestra una página; la exportación se lleva el filtro completo.
+  const [resultado, exportables, salidas] = await Promise.all([
+    listAgencyPassengers(agencyId, { ...filtro, page: paginaActual, pageSize: 50 }),
+    listAgencyPassengers(agencyId, { ...filtro, page: 1, pageSize: 500 }),
+    listAgencyDepartures(agencyId, { from: new Date(Date.now() - 30 * 24 * 3_600_000) }),
   ]);
 
-  const csv = buildCsv(pasajeros);
+  const pasajeros = resultado.rows;
+  const paginas = Math.max(1, Math.ceil(resultado.total / resultado.pageSize));
+  const csv = buildCsv(exportables.rows);
+
+  function enlacePagina(pagina: number): string {
+    const query = new URLSearchParams();
+    if (params.salida) query.set("salida", params.salida);
+    if (params.estado) query.set("estado", params.estado);
+    if (params.buscar) query.set("buscar", params.buscar);
+    query.set("pagina", String(pagina));
+    return `/panel/pasajeros?${query.toString()}`;
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Pasajeros</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Pasajeros</h1>
+          <p className="text-sm text-[var(--color-texto-suave)]">
+            {resultado.total} reserva(s) con estos filtros
+          </p>
+        </div>
         <a
           href={`data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`}
           download="pasajeros.csv"
@@ -177,6 +204,32 @@ export default async function PasajerosPage({
           </tbody>
         </table>
       </div>
+
+      {paginas > 1 ? (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-[var(--color-texto-suave)]">
+            Página {resultado.page} de {paginas}
+          </span>
+          <div className="flex gap-2">
+            {resultado.page > 1 ? (
+              <Link
+                href={enlacePagina(resultado.page - 1)}
+                className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-1.5 font-medium"
+              >
+                Anterior
+              </Link>
+            ) : null}
+            {resultado.page < paginas ? (
+              <Link
+                href={enlacePagina(resultado.page + 1)}
+                className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-1.5 font-medium"
+              >
+                Siguiente
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

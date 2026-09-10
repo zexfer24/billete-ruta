@@ -92,13 +92,32 @@ function paymentState(status: string, saldo: Prisma.Decimal): AgencyPassengerRow
   return "Pendiente";
 }
 
-/** Pasajeros de la agencia: quién compró, serial y estado de pago. */
+export interface AgencyPassengersPage {
+  rows: AgencyPassengerRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * Pasajeros de la agencia: quién compró, serial y estado de pago. Va paginado
+ * porque una agencia con operación normal acumula miles de reservas y volcarlas
+ * todas en una tabla la vuelve inservible.
+ */
 export async function listAgencyPassengers(
   agencyId: string,
-  filter: { departureId?: string; status?: string; search?: string } = {},
-): Promise<AgencyPassengerRow[]> {
-  const reservas = await prisma.reservation.findMany({
-    where: {
+  filter: {
+    departureId?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<AgencyPassengersPage> {
+  const page = Math.max(1, filter.page ?? 1);
+  const pageSize = Math.min(500, Math.max(10, filter.pageSize ?? 50));
+
+  const where = {
       departure: { route: { agencyId }, ...(filter.departureId ? { id: filter.departureId } : {}) },
       status: filter.status ? (filter.status as never) : undefined,
       ...(filter.search
@@ -110,13 +129,20 @@ export async function listAgencyPassengers(
             ],
           }
         : {}),
-    },
-    include: { account: true, departure: { include: { route: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 300,
-  });
+  } satisfies Prisma.ReservationWhereInput;
 
-  return reservas.map((r) => {
+  const [reservas, total] = await Promise.all([
+    prisma.reservation.findMany({
+      where,
+      include: { account: true, departure: { include: { route: true } } },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.reservation.count({ where }),
+  ]);
+
+  const rows = reservas.map((r) => {
     const saldo = round2(r.totalUsd.sub(r.paidUsd));
     return {
       reservationId: r.id,
@@ -133,6 +159,8 @@ export async function listAgencyPassengers(
       paymentState: paymentState(r.status, saldo),
     };
   });
+
+  return { rows, total, page, pageSize };
 }
 
 export interface DriverMovementRow {

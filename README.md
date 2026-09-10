@@ -49,6 +49,17 @@ El seed las imprime al terminar. Son:
 
 El seed carga dos agencias con sus rutas, vehículos y choferes, 63 salidas repartidas en los próximos siete días, seis métodos de pago, la tasa de salida vigente y las tasas de cambio.
 
+### Datos de un día normal de operación
+
+Para ver las pantallas con volumen real en vez de una base casi vacía:
+
+```bash
+pnpm mock            # añade los datos
+pnpm mock --reset    # los borra y los vuelve a generar
+```
+
+Genera unas 1500 cuentas de pasajero, doce días de viajes ya cumplidos con sus recorridos y horas de embarque y desembarque, y unas 1600 reservas repartidas en todos los estados: pagadas, abonadas a medias, en validación, de pago en sitio, liberadas y canceladas. Con eso la cola de pagos del operador, el tablero del terminal y la base de usuarios se ven como en un día cualquiera. Todas las cuentas generadas usan la contraseña `Pasajero.2026`.
+
 ## Recorrido sugerido para probarlo
 
 1. Entra como pasajero, sube la foto de cédula en Documentos.
@@ -74,6 +85,7 @@ pnpm test:integration      # pruebas contra PostgreSQL real (requiere pnpm db:te
 pnpm test -- tests/unit/booking/state-machine.test.ts    # un solo archivo
 pnpm seed                  # datos de demostración, idempotente
 pnpm db:migrate            # nueva migración en desarrollo
+pnpm mock --reset          # datos de un día normal de operación
 ```
 
 ## Cómo está organizado
@@ -105,3 +117,7 @@ Los módulos de dominio son: `accounts`, `agencies`, `auth`, `audit`, `booking`,
 - La captación desde Instagram con ManyChat, que en la práctica es compartir el enlace público.
 - El despliegue con Docker de la aplicación completa. Esta versión está pensada para correr en localhost.
 - La seudonimización por retención de datos, descrita en la especificación.
+
+## Nota al desarrollar
+
+`pnpm dev` y `pnpm build` comparten la carpeta `.next`. Si ejecutas la compilación mientras el servidor de desarrollo está en marcha, el servidor se queda sin sus fragmentos y la aplicación empieza a fallar con errores del tipo `Cannot find module './2007.js'`. Detén el servidor antes de compilar, o reinícialo después.

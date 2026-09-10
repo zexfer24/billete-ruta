@@ -1,20 +1,13 @@
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { driverMovements, last24h } from "@/modules/reports";
-import { formatCaracas, formatCaracasDateTime24, formatDuration } from "@/lib/time";
+import {
+  caracasDayEnd,
+  caracasDayInputValue,
+  caracasDayStart,
+  formatCaracasDateTime24,
+  formatDuration,
+} from "@/lib/time";
 
-function fromCaracasLocalInput(value: string): Date {
-  return new Date(`${value}:00-04:00`);
-}
-
-function parseDateInput(value: string | undefined, fallback: Date): Date {
-  if (!value) return fallback;
-  const d = fromCaracasLocalInput(value);
-  return Number.isNaN(d.getTime()) ? fallback : d;
-}
-
-function toLocalInputValue(date: Date): string {
-  return formatCaracas(date, "yyyy-MM-dd'T'HH:mm");
-}
 
 export default async function MovimientosPage({
   searchParams,
@@ -26,8 +19,8 @@ export default async function MovimientosPage({
   const params = await searchParams;
 
   const defaults = last24h();
-  const from = parseDateInput(params.desde, defaults.from);
-  const to = parseDateInput(params.hasta, defaults.to);
+  const from = params.desde ? caracasDayStart(params.desde, defaults.from) : defaults.from;
+  const to = params.hasta ? caracasDayEnd(params.hasta, defaults.to) : defaults.to;
 
   const movimientos = await driverMovements(agencyId, from, to);
 
@@ -39,18 +32,18 @@ export default async function MovimientosPage({
         <label className="flex flex-col gap-1 text-sm font-medium">
           Desde
           <input
-            type="datetime-local"
+            type="date"
             name="desde"
-            defaultValue={toLocalInputValue(from)}
+            defaultValue={caracasDayInputValue(from)}
             className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Hasta
           <input
-            type="datetime-local"
+            type="date"
             name="hasta"
-            defaultValue={toLocalInputValue(to)}
+            defaultValue={caracasDayInputValue(to)}
             className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
           />
         </label>

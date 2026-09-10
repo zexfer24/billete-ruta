@@ -41,6 +41,31 @@ export function durationMinutes(from: Date, to: Date): number {
   return Math.round((to.getTime() - from.getTime()) / 60_000);
 }
 
+/**
+ * Valor para un campo <input type="date">, en el día que corresponde en Caracas.
+ * Se usa granularidad de día a propósito: un campo datetime-local se dibuja con
+ * el formato del navegador y en español muestra "p. m.", que rompe la regla de
+ * mostrar siempre las horas en formato de 24 horas.
+ */
+export function caracasDayInputValue(date: Date): string {
+  return formatInTimeZone(date, BUSINESS_TZ, "yyyy-MM-dd");
+}
+
+/** Venezuela no aplica horario de verano, así que el desfase es fijo. */
+const CARACAS_OFFSET = "-04:00";
+
+/** Instante en que empieza ese día en Caracas. */
+export function caracasDayStart(value: string, fallback: Date): Date {
+  const fecha = new Date(`${value}T00:00:00.000${CARACAS_OFFSET}`);
+  return Number.isNaN(fecha.getTime()) ? fallback : fecha;
+}
+
+/** Instante en que termina ese día en Caracas. */
+export function caracasDayEnd(value: string, fallback: Date): Date {
+  const fecha = new Date(`${value}T23:59:59.999${CARACAS_OFFSET}`);
+  return Number.isNaN(fecha.getTime()) ? fallback : fecha;
+}
+
 /** Duración legible: "4 h 35 min", "2 h", "45 min". */
 export function formatDuration(minutes: number): string {
   if (minutes <= 0) return "0 min";

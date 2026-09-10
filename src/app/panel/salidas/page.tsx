@@ -5,12 +5,32 @@ import { listDrivers, listVehicles } from "@/modules/agencies";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { createDepartureAction } from "./actions";
 
-export default async function SalidasPage() {
+/** Horas de salida en formato de 24 horas, cada media hora. */
+const HORAS = Array.from({ length: 48 }, (_, i) => {
+  const h = String(Math.floor(i / 2)).padStart(2, "0");
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${h}:${m}`;
+});
+
+export default async function SalidasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ver?: string }>;
+}) {
   const user = await requirePanelUser("departures.manage");
   const agencyId = requireAgencyScope(user);
+  const { ver } = await searchParams;
+  const historial = ver === "historial";
+
+  const ahora = new Date();
+  // Por defecto se muestra lo que viene; el historial de viajes ya cumplidos
+  // queda detrás de una pestaña para que no tape la operación del día.
+  const rango = historial
+    ? { from: new Date(ahora.getTime() - 30 * 24 * 3_600_000), to: ahora, order: "desc" as const }
+    : { from: new Date(ahora.getTime() - 2 * 3_600_000) };
 
   const [salidas, rutas, vehiculos, choferes] = await Promise.all([
-    listAgencyDepartures(agencyId),
+    listAgencyDepartures(agencyId, rango),
     listRoutes(agencyId),
     listVehicles(agencyId),
     listDrivers(agencyId),
@@ -18,7 +38,32 @@ export default async function SalidasPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Salidas</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Salidas</h1>
+        <nav className="flex gap-1 rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] p-1 text-sm font-medium">
+          <Link
+            href="/panel/salidas"
+            className={`rounded-md px-3 py-1.5 ${
+              historial ? "text-[var(--color-texto-suave)]" : "bg-[var(--color-acento-suave)] text-[var(--color-acento)]"
+            }`}
+          >
+            Próximas
+          </Link>
+          <Link
+            href="/panel/salidas?ver=historial"
+            className={`rounded-md px-3 py-1.5 ${
+              historial ? "bg-[var(--color-acento-suave)] text-[var(--color-acento)]" : "text-[var(--color-texto-suave)]"
+            }`}
+          >
+            Historial
+          </Link>
+        </nav>
+      </div>
+      <p className="-mt-4 text-sm text-[var(--color-texto-suave)]">
+        {historial
+          ? "Viajes de los últimos 30 días, del más reciente al más antiguo."
+          : `${salidas.length} salida(s) programada(s) de aquí en adelante.`}
+      </p>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)]">
         <table className="w-full min-w-[900px] text-left text-sm">
@@ -112,13 +157,28 @@ export default async function SalidasPage() {
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium">
-            Fecha y hora (Caracas)
+            Fecha (Caracas)
             <input
-              type="datetime-local"
-              name="departsAt"
+              type="date"
+              name="fecha"
               required
               className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
             />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            Hora de salida
+            <select
+              name="hora"
+              required
+              defaultValue="06:00"
+              className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm tabular"
+            >
+              {HORAS.map((hora) => (
+                <option key={hora} value={hora}>
+                  {hora}
+                </option>
+              ))}
+            </select>
           </label>
           <button
             type="submit"

@@ -19,7 +19,8 @@
     "db:migrate": "dotenv -e .env -- prisma migrate dev",
     "db:deploy": "dotenv -e .env -- prisma migrate deploy",
     "db:test:deploy": "dotenv -e .env.test -- prisma migrate deploy",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "mock": "dotenv -e .env -- tsx prisma/mock.ts"
   },
   "dependencies": {
     "@prisma/client": "6.16.2",
