@@ -1,0 +1,18 @@
+services:
+  db-test:
+    image: postgres:16-alpine
+    container_name: ticketruta_db_test
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ticketruta
+      POSTGRES_PASSWORD: ticketruta
+      POSTGRES_DB: ticketruta_test
+    ports:
+      - "5435:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketruta -d ticketruta_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

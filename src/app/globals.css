@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+  --fondo: #f7f7f5;
+  --superficie: #ffffff;
+  --borde: #e2e2dd;
+  --texto: #1c1c1a;
+  --texto-suave: #6b6b64;
+  --acento: #1d4ed8;
+  --acento-suave: #eff4ff;
+  --exito: #15803d;
+  --alerta: #b45309;
+  --peligro: #b91c1c;
+}
+
+@theme inline {
+  --color-fondo: var(--fondo);
+  --color-superficie: var(--superficie);
+  --color-borde: var(--borde);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-acento: var(--acento);
+  --color-acento-suave: var(--acento-suave);
+  --color-exito: var(--exito);
+  --color-alerta: var(--alerta);
+  --color-peligro: var(--peligro);
+}
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Las cifras de dinero, cupos y horas se leen mejor con dígitos de ancho fijo. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

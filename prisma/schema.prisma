@@ -1,0 +1,568 @@
+// Esquema de TicketRuta. Ver docs/superpowers/specs/2026-09-10-ticketruta-design.md
+// Reglas: montos en Decimal, fechas de negocio en timestamptz, sin borrado físico
+// de reservas, pasajeros, pagos, mensajes, viajes ni auditoría.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enumeraciones
+// ---------------------------------------------------------------------------
+
+enum ReservationStatus {
+  PENDIENTE_PAGO
+  EN_VALIDACION
+  ABONADA
+  PAGADA
+  PAGO_EN_SITIO
+  LIBERADA
+  CANCELADA
+  ABORDADA
+  NO_SHOW
+}
+
+enum DepartureStatus {
+  PROGRAMADA
+  MANIFIESTO_CERRADO
+  EN_RUTA
+  FINALIZADA
+  CANCELADA
+}
+
+enum PaymentKind {
+  DIGITAL
+  FISICO
+}
+
+enum Currency {
+  USD
+  VES
+  COP
+  USDT
+}
+
+enum ProofStatus {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+enum DocumentType {
+  CEDULA
+  PERMISO_VIAJE
+}
+
+enum MessageStatus {
+  ENCOLADO
+  ENVIADO
+  ENTREGADO
+  LEIDO
+  FALLIDO
+}
+
+enum WaitlistStatus {
+  EN_ESPERA
+  NOTIFICADO
+  CONVERTIDO
+  EXPIRADO
+}
+
+enum PanelRole {
+  ADMIN
+  OPERADOR
+}
+
+enum AttendanceResponse {
+  CONFIRMA
+  INCONVENIENTE
+}
+
+enum ActorType {
+  PASAJERO
+  PANEL
+  SISTEMA
+}
+
+// ---------------------------------------------------------------------------
+// Identidad
+// ---------------------------------------------------------------------------
+
+/// Cuenta de un ciudadano. La cédula normalizada es la credencial de acceso.
+model PassengerAccount {
+  id           String   @id @default(uuid()) @db.Uuid
+  idNumber     String   @unique
+  fullName     String
+  phone        String
+  birthYear    Int
+  passwordHash String
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime? @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  documents    PassengerDocument[]
+  reservations Reservation[]
+  sessions     PassengerSession[]
+  waitlist     WaitlistEntry[]
+
+  @@index([createdAt])
+  @@index([fullName])
+}
+
+model PassengerDocument {
+  id                   String       @id @default(uuid()) @db.Uuid
+  accountId            String       @db.Uuid
+  type                 DocumentType
+  filePath             String
+  originalName         String
+  uploadedAt           DateTime     @default(now()) @db.Timestamptz(3)
+  verifiedAt           DateTime?    @db.Timestamptz(3)
+  verifiedByPanelUserId String?     @db.Uuid
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @updatedAt @db.Timestamptz(3)
+
+  account PassengerAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, type])
+}
+
+model PassengerSession {
+  id         String   @id @default(uuid()) @db.Uuid
+  accountId  String   @db.Uuid
+  tokenHash  String   @unique
+  expiresAt  DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  account PassengerAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
+}
+
+/// Agencia de viajes alojada en el terminal.
+model Agency {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  taxId        String   @unique
+  contactPhone String
+  contactEmail String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  panelUsers     PanelUser[]
+  vehicles       Vehicle[]
+  drivers        Driver[]
+  routes         Route[]
+  paymentMethods PaymentMethod[]
+}
+
+/// Usuario del panel. ADMIN pertenece al terminal y no tiene agencia;
+/// OPERADOR siempre pertenece a una agencia.
+model PanelUser {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         PanelRole
+  agencyId     String?   @db.Uuid
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+
+  agency   Agency?        @relation(fields: [agencyId], references: [id])
+  sessions PanelSession[]
+
+  @@index([agencyId, role])
+}
+
+model PanelSession {
+  id          String   @id @default(uuid()) @db.Uuid
+  panelUserId String   @db.Uuid
+  tokenHash   String   @unique
+  expiresAt   DateTime @db.Timestamptz(3)
+  lastSeenAt  DateTime @default(now()) @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  panelUser PanelUser @relation(fields: [panelUserId], references: [id])
+
+  @@index([panelUserId])
+}
+
+// ---------------------------------------------------------------------------
+// Flota
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id        String   @id @default(uuid()) @db.Uuid
+  agencyId  String   @db.Uuid
+  plate     String
+  brand     String
+  model     String
+  seatCount Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  agency     Agency      @relation(fields: [agencyId], references: [id])
+  departures Departure[]
+  tripLogs   TripLog[]
+
+  @@unique([agencyId, plate])
+  @@index([agencyId, active])
+}
+
+model Driver {
+  id        String   @id @default(uuid()) @db.Uuid
+  agencyId  String   @db.Uuid
+  fullName  String
+  idNumber  String
+  phone     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  agency     Agency      @relation(fields: [agencyId], references: [id])
+  departures Departure[]
+  tripLogs   TripLog[]
+
+  @@unique([agencyId, idNumber])
+  @@index([agencyId, active])
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo
+// ---------------------------------------------------------------------------
+
+model Route {
+  id               String   @id @default(uuid()) @db.Uuid
+  agencyId         String   @db.Uuid
+  name             String
+  origin           String
+  destination      String
+  fareUsd          Decimal  @db.Decimal(10, 2)
+  meetingPoint     String
+  estimatedMinutes Int
+  travelTips       String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  agency     Agency      @relation(fields: [agencyId], references: [id])
+  departures Departure[]
+
+  @@index([agencyId, active])
+}
+
+model Departure {
+  id                          String          @id @default(uuid()) @db.Uuid
+  routeId                     String          @db.Uuid
+  vehicleId                   String          @db.Uuid
+  driverId                    String          @db.Uuid
+  departsAt                   DateTime        @db.Timestamptz(3)
+  capacity                    Int
+  status                      DepartureStatus @default(PROGRAMADA)
+  manifestClosedAt            DateTime?       @db.Timestamptz(3)
+  manifestClosedByPanelUserId String?         @db.Uuid
+  createdAt                   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime        @updatedAt @db.Timestamptz(3)
+
+  route        Route           @relation(fields: [routeId], references: [id])
+  vehicle      Vehicle         @relation(fields: [vehicleId], references: [id])
+  driver       Driver          @relation(fields: [driverId], references: [id])
+  reservations Reservation[]
+  waitlist     WaitlistEntry[]
+  tripLog      TripLog?
+
+  @@unique([vehicleId, departsAt])
+  @@index([departsAt, status])
+  @@index([routeId, departsAt])
+}
+
+/// Método de cobro. Si agencyId es nulo, pertenece al terminal y lo usan todas.
+model PaymentMethod {
+  id        String      @id @default(uuid()) @db.Uuid
+  agencyId  String?     @db.Uuid
+  name      String
+  kind      PaymentKind
+  currency  Currency
+  details   Json
+  active    Boolean     @default(true)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime    @updatedAt @db.Timestamptz(3)
+
+  agency       Agency?       @relation(fields: [agencyId], references: [id])
+  reservations Reservation[]
+  proofs       PaymentProof[]
+
+  @@index([active, sortOrder])
+}
+
+model ExchangeRate {
+  id                  String   @id @default(uuid()) @db.Uuid
+  currency            Currency
+  rateFromUsd         Decimal  @db.Decimal(18, 6)
+  effectiveFrom       DateTime @db.Timestamptz(3)
+  createdByPanelUserId String? @db.Uuid
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([currency, effectiveFrom])
+}
+
+/// Tasa de salida que cobra el terminal por pasajero.
+model DepartureTax {
+  id                   String   @id @default(uuid()) @db.Uuid
+  amountUsd            Decimal  @db.Decimal(10, 2)
+  effectiveFrom        DateTime @db.Timestamptz(3)
+  createdByPanelUserId String?  @db.Uuid
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([effectiveFrom])
+}
+
+// ---------------------------------------------------------------------------
+// Venta
+// ---------------------------------------------------------------------------
+
+model Reservation {
+  id                    String              @id @default(uuid()) @db.Uuid
+  /// Serial del ticket. Formato TR-MMDD-NPAX-XXXX.
+  code                  String              @unique
+  publicToken           String              @unique
+  accountId             String              @db.Uuid
+  departureId           String              @db.Uuid
+  paymentMethodId       String              @db.Uuid
+  status                ReservationStatus   @default(PENDIENTE_PAGO)
+  passengerCount        Int
+  policiesAcceptedAt    DateTime            @db.Timestamptz(3)
+  fareUsd               Decimal             @db.Decimal(10, 2)
+  fareTotalUsd          Decimal             @db.Decimal(10, 2)
+  taxPerPassengerUsd    Decimal             @db.Decimal(10, 2)
+  taxTotalUsd           Decimal             @db.Decimal(10, 2)
+  totalUsd              Decimal             @db.Decimal(10, 2)
+  paidUsd               Decimal             @default(0) @db.Decimal(10, 2)
+  currency              Currency
+  exchangeRateUsed      Decimal             @db.Decimal(18, 6)
+  amountInCurrency      Decimal             @db.Decimal(18, 2)
+  expiresAt             DateTime?           @db.Timestamptz(3)
+  paidAt                DateTime?           @db.Timestamptz(3)
+  reconfirmedAt         DateTime?           @db.Timestamptz(3)
+  attendanceResponse    AttendanceResponse?
+  attendanceRespondedAt DateTime?           @db.Timestamptz(3)
+  boardedAt             DateTime?           @db.Timestamptz(3)
+  cancelledAt           DateTime?           @db.Timestamptz(3)
+  cancellationReason    String?
+  manualContactRequired Boolean             @default(false)
+  createdAt             DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime            @updatedAt @db.Timestamptz(3)
+
+  account       PassengerAccount @relation(fields: [accountId], references: [id])
+  departure     Departure        @relation(fields: [departureId], references: [id])
+  paymentMethod PaymentMethod    @relation(fields: [paymentMethodId], references: [id])
+  passengers    Passenger[]
+  proofs        PaymentProof[]
+  cashPayments  CashPayment[]
+  ticket        Ticket?
+  messages      OutboundMessage[]
+  waitlistFrom  WaitlistEntry[]
+
+  @@index([departureId, status])
+  @@index([accountId, createdAt])
+  @@index([status, expiresAt])
+  @@index([paidAt])
+}
+
+model Passenger {
+  id                   String    @id @default(uuid()) @db.Uuid
+  reservationId        String    @db.Uuid
+  fullName             String
+  idNumber             String
+  birthYear            Int
+  isHolder             Boolean   @default(false)
+  boardedAt            DateTime? @db.Timestamptz(3)
+  boardedByPanelUserId String?   @db.Uuid
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime  @updatedAt @db.Timestamptz(3)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([reservationId])
+  @@index([idNumber])
+}
+
+/// Comprobante de un pago digital. Una reserva puede acumular varios: son los abonos.
+model PaymentProof {
+  id                   String      @id @default(uuid()) @db.Uuid
+  reservationId        String      @db.Uuid
+  paymentMethodId      String      @db.Uuid
+  reference            String
+  imagePath            String
+  amount               Decimal     @db.Decimal(18, 2)
+  currency             Currency
+  amountUsd            Decimal     @db.Decimal(10, 2)
+  status               ProofStatus @default(PENDIENTE)
+  reviewedByPanelUserId String?    @db.Uuid
+  reviewedAt           DateTime?   @db.Timestamptz(3)
+  rejectionReason      String?
+  createdAt            DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime    @updatedAt @db.Timestamptz(3)
+
+  reservation   Reservation   @relation(fields: [reservationId], references: [id])
+  paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([reservationId])
+}
+
+/// Cobro en efectivo registrado por el personal de la agencia.
+model CashPayment {
+  id                    String   @id @default(uuid()) @db.Uuid
+  reservationId         String   @db.Uuid
+  amount                Decimal  @db.Decimal(18, 2)
+  currency              Currency
+  amountUsd             Decimal  @db.Decimal(10, 2)
+  collectedByPanelUserId String  @db.Uuid
+  collectedAt           DateTime @default(now()) @db.Timestamptz(3)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([reservationId])
+  @@index([collectedAt])
+}
+
+model Ticket {
+  id            String    @id @default(uuid()) @db.Uuid
+  reservationId String    @unique @db.Uuid
+  pdfPath       String
+  qrPayload     String
+  issuedAt      DateTime  @default(now()) @db.Timestamptz(3)
+  sentAt        DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+}
+
+model WaitlistEntry {
+  id                    String         @id @default(uuid()) @db.Uuid
+  departureId           String         @db.Uuid
+  accountId             String         @db.Uuid
+  passengerCount        Int
+  status                WaitlistStatus @default(EN_ESPERA)
+  notifiedAt            DateTime?      @db.Timestamptz(3)
+  claimToken            String?        @unique
+  claimExpiresAt        DateTime?      @db.Timestamptz(3)
+  convertedReservationId String?       @db.Uuid
+  createdAt             DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime       @updatedAt @db.Timestamptz(3)
+
+  departure            Departure         @relation(fields: [departureId], references: [id])
+  account              PassengerAccount  @relation(fields: [accountId], references: [id])
+  convertedReservation Reservation?      @relation(fields: [convertedReservationId], references: [id])
+  messages             OutboundMessage[]
+
+  @@index([departureId, status, createdAt])
+  @@index([accountId])
+}
+
+// ---------------------------------------------------------------------------
+// Operación de viaje
+// ---------------------------------------------------------------------------
+
+/// Movimiento del chofer para una salida. departedAt es la hora de embarque
+/// y arrivedAt la hora de desembarque; la duración se calcula al consultar.
+model TripLog {
+  id                String    @id @default(uuid()) @db.Uuid
+  departureId       String    @unique @db.Uuid
+  driverId          String    @db.Uuid
+  vehicleId         String    @db.Uuid
+  boardingStartedAt DateTime? @db.Timestamptz(3)
+  departedAt        DateTime? @db.Timestamptz(3)
+  arrivedAt         DateTime? @db.Timestamptz(3)
+  passengerCount    Int       @default(0)
+  notes             String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  departure Departure @relation(fields: [departureId], references: [id])
+  driver    Driver    @relation(fields: [driverId], references: [id])
+  vehicle   Vehicle   @relation(fields: [vehicleId], references: [id])
+
+  @@index([driverId])
+  @@index([departedAt])
+  @@index([arrivedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Infraestructura
+// ---------------------------------------------------------------------------
+
+model OutboundMessage {
+  id                String        @id @default(uuid()) @db.Uuid
+  reservationId     String?       @db.Uuid
+  waitlistEntryId   String?       @db.Uuid
+  phone             String
+  templateKey       String
+  payload           Json
+  status            MessageStatus @default(ENCOLADO)
+  providerMessageId String?
+  attempts          Int           @default(0)
+  lastError         String?
+  scheduledFor      DateTime      @default(now()) @db.Timestamptz(3)
+  sentAt            DateTime?     @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+
+  reservation   Reservation?   @relation(fields: [reservationId], references: [id])
+  waitlistEntry WaitlistEntry? @relation(fields: [waitlistEntryId], references: [id])
+
+  @@index([status, scheduledFor])
+  @@index([reservationId])
+  @@index([providerMessageId])
+}
+
+model InboundEvent {
+  id              String    @id @default(uuid()) @db.Uuid
+  providerEventId String    @unique
+  phone           String
+  type            String
+  rawPayload      Json
+  receivedAt      DateTime  @default(now()) @db.Timestamptz(3)
+  processedAt     DateTime? @db.Timestamptz(3)
+  processingError String?
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+}
+
+/// Bitácora de solo inserción. Un disparador impide UPDATE y DELETE.
+model AuditLog {
+  id                String    @id @default(uuid()) @db.Uuid
+  actorType         ActorType
+  actorPanelUserId  String?   @db.Uuid
+  actorAccountId    String?   @db.Uuid
+  entityType        String
+  entityId          String
+  action            String
+  before            Json      @default("{}")
+  after             Json      @default("{}")
+  ipAddress         String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([actorPanelUserId])
+}

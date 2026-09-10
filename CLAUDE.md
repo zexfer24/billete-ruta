@@ -4,78 +4,77 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Metodología de trabajo
 
-Este proyecto se rige por la metodología Liminal Flows (`/liminalwork`). Todo cambio de diseño, lógica o código pasa por: contexto → Plan Mode (Fable/Opus, razonamiento alto) → explicación al operador → tests propuestos → descomposición en tareas → aprobación → subagentes (Sonnet, uno por tarea) → reporte al orquestador → validación → tests en verde. El orquestador no implementa; coordina, delega y valida.
+Este proyecto se rige por la metodología Liminal Flows (`/liminalwork`). Todo cambio de diseño, lógica o código pasa por: contexto → Plan Mode → explicación al operador → tests propuestos → descomposición en tareas → aprobación → subagentes (uno por tarea) → reporte al orquestador → validación → tests en verde. El orquestador no implementa; coordina, delega y valida.
 
-Idioma de trabajo: español (documentación, comentarios, comunicación). Identificadores de código en inglés.
+Idioma: comentarios, textos de interfaz y comunicación en español con acentos correctos. Identificadores de código, nombres de archivo y mensajes de commit en inglés.
 
-## Estado del proyecto
+## Documentos rectores
 
-Proyecto nuevo (septiembre 2026). Diseño aprobado y especificado en `docs/superpowers/specs/2026-09-10-ticketruta-design.md`; esa spec es la fuente de verdad para modelo de datos, estados, jobs, mensajería y tests. Código todavía por escribir.
-
-## Stack y decisiones fijas
-
-- Next.js 15 (App Router, TypeScript estricto) como monolito: formulario público, panel y API en un repo. Proceso `worker` aparte para jobs con pg-boss sobre PostgreSQL 16. Prisma como ORM. Tailwind. Vitest + Playwright. pnpm.
-- WhatsApp: Meta Cloud API detrás de la interfaz `WhatsAppProvider`; `FakeProvider` en tests y desarrollo.
-- Hosting: VPS propio con Docker Compose (`app`, `worker`, `db`, `caddy`). Comprobantes y tickets en volumen `uploads`.
-- Cupo total por salida, sin asientos numerados. Roles `ADMIN`, `FINANZAS`, `OPERACIONES` con auth propia. Precio base USD por ruta + tasas VES/COP configurables. Solo `PAGO_EN_SITIO` se libera automáticamente (12 h antes sin reconfirmar).
-- Zona horaria de negocio `America/Caracas`; almacenamiento en UTC.
-- Módulos en `src/modules/*`, cada uno exporta su API pública desde `index.ts`; nadie importa internos de otro módulo.
-
-## Comandos (previstos; confirmar cuando exista el scaffold)
-
-```
-pnpm dev / pnpm worker:dev
-pnpm build / pnpm lint / pnpm typecheck
-pnpm test                       unitarios
-pnpm test:integration           necesita docker compose -f docker/docker-compose.test.yml up -d
-pnpm test:e2e
-pnpm test -- tests/unit/booking/state-machine.test.ts   un archivo
-pnpm prisma migrate dev / pnpm seed:admin
-```
+- `docs/superpowers/specs/2026-09-10-ticketruta-design.md` — especificación aprobada, revisión 2. Fuente de verdad para modelo de datos, estados, montos, jobs, reportes y privacidad.
+- `docs/superpowers/plans/2026-09-10-ticketruta-mvp.md` — plan de implementación del MVP en doce tareas delegables.
+- `Documentación/*.pdf` — documentos de negocio originales (glosario abajo).
 
 ## Qué es TicketRuta
 
-Sistema de reservas y emisión de tickets para un operador de transporte terrestre interurbano (autobuses), pensado para un operador estatal o regulado por el gobierno. Sustituye el registro manual en papel/cuadernos y el cobro informal en taquilla por un embudo 100% automatizado: captación en Instagram → formulario web progresivo → pago dentro del flujo → base de datos → ticket digital por WhatsApp → recordatorios → control de abordaje.
+Sistema para un **terminal de pasajeros terrestre** regulado por el Estado. El terminal aloja varias **agencias de viaje** que venden pasajes en sus propias rutas, con sus propios vehículos y choferes. Sustituye el registro en papel y el cobro informal por identidad verificada, pago con comprobante, ticket digital con QR, control de embarque y desembarque, y estadística en tiempo real.
 
-Contexto geográfico implícito: Venezuela y corredor hacia Colombia (Pago Móvil, Bolívares, Zelle, Nequi, Pesos Colombianos, USDT).
+Contexto geográfico: Venezuela y corredor hacia Colombia. Monedas: USD, VES, COP, USDT.
 
-## Flujo de negocio (5 fases)
+## Los tres actores
 
-1. **Captación (Instagram + ManyChat)**: el usuario comenta una palabra clave o envía DM; ManyChat responde con el enlace al sistema de reservas. Sin intervención humana.
-2. **Registro dinámico (web/app)**: el usuario elige fecha, ruta y horario; selecciona cantidad de pasajeros (1 a 6); el formulario despliega campos de **nombre completo y cédula** del titular y de cada acompañante; acepta obligatoriamente políticas de cancelación y manejo de datos.
-3. **Pago integrado en el flujo**: el pago es requisito para completar la solicitud, no un paso posterior por WhatsApp. Ver reglas de pago abajo.
-4. **Base de datos y emisión del ticket**: al enviar, se registra el grupo completo con su comprobante y se genera un **Código de Reserva Único** (formato de referencia: `UT-0815-4PAX`, donde el sufijo indica el tamaño del grupo). Se envía WhatsApp de "solicitud recibida". Finanzas valida el comprobante cambiando el estatus de `Pendiente` a `Pagado`; ese cambio dispara automáticamente el envío del ticket digital definitivo (PDF o imagen, con QR) por WhatsApp.
-5. **Recordatorios y abordaje**: 24 h antes, recordatorio con punto de encuentro, hora y recomendaciones. 2 h antes, mensaje con botones interactivos de confirmación ("Sí, confirmamos" / "Tuvimos un inconveniente"). En el abordaje, el equipo busca el código del titular o escanea el QR y el sistema confirma que cubre a todo el grupo.
+- **Pasajero**: cuenta propia con cédula como credencial de acceso. Aporta teléfono y año de nacimiento para reservar, y foto de cédula más permisos de viaje opcionales para concretar la venta. Puede abonar en partes.
+- **Operador**: personal de una agencia. Confirma pagos, gestiona vehículos, choferes, salidas y pasajeros, y ve su recaudación por ruta. **Solo ve datos de su agencia.**
+- **Admin**: administrador del terminal. Ve la tasa de salida recaudada en tiempo real, los recorridos, los usuarios nuevos y recurrentes, la base de datos de usuarios y los movimientos de todas las agencias. Supervisa, no vende.
 
-## Reglas de pago
+## Reglas de negocio que no se negocian
 
-- **Pagos digitales** (Zelle, Pago Móvil, Nequi, USDT, transferencia): sección desplegable en el paso final; al elegir método se muestran los datos de cobro correspondientes; **es obligatorio subir imagen del comprobante y número de referencia** antes de poder enviar.
-- **Pago físico** (divisas, Bolívares, Pesos Colombianos, al abordar o en taquilla): no exige comprobante; genera una **Reserva Condicional** con estatus `Pago en Sitio`.
-- **Regla de oro del pago físico**: 12 o 24 h antes del viaje el sistema exige reconfirmación obligatoria por WhatsApp; si no responde, **el cupo se libera automáticamente a la lista de espera**.
+- **Aislamiento por agencia**: toda consulta o acción de un operador filtra por el `agencyId` de su sesión. Nunca se acepta un `agencyId` que venga de un formulario.
+- **Tasa de salida**: el terminal cobra una tasa por pasajero, separada de la tarifa de la agencia. Se guardan ambos montos por separado porque tienen destinatarios distintos.
+- **Abonos parciales**: una reserva acumula pagos. El ticket se emite solo cuando el saldo llega a cero.
+- **Cupos sin sobreventa**: la creación de reserva bloquea la fila de la salida con `SELECT ... FOR UPDATE` y recalcula el disponible dentro de la transacción.
+- **Liberación de cupo**: reserva sin ningún pago a las 2 horas de creada; reserva de pago en sitio no reconfirmada 12 horas antes de la salida. Una reserva pagada nunca se libera automáticamente.
+- **Horas siempre en formato de 24 horas**, en hora de Caracas, con almacenamiento en UTC.
+- **Sin borrado físico** de reservas, pasajeros, comprobantes, mensajes, viajes ni auditoría.
+- **Auditoría de solo inserción**, garantizada por un disparador de base de datos.
+- La base de datos de usuarios es información sensible: solo el admin la consulta y cada consulta queda auditada.
 
-## Estados de reserva (derivados de la documentación)
+## Estados de reserva
 
-`Pendiente` (comprobante cargado, sin validar) → `Pagado` (validado por finanzas, ticket emitido). Paralelo: `Pago en Sitio` (reserva condicional) → `Pagado` o liberada por falta de reconfirmación. Existe una **lista de espera** a la que se reasignan cupos liberados. Cualquier modelo de datos debe soportar además el resultado de la confirmación de 2 h antes y el registro de abordaje.
+`PENDIENTE_PAGO` → `EN_VALIDACION` → `ABONADA` o `PAGADA`. En paralelo `PAGO_EN_SITIO` → `PAGADA` o `LIBERADA`. Estados finales: `LIBERADA`, `CANCELADA`, `ABORDADA`, `NO_SHOW`. Ocupan cupo todos menos los tres últimos de esa lista final. La tabla completa de transiciones está en la sección 8 de la spec y codificada en `src/modules/booking/state-machine.ts`.
 
-## Requisitos de carácter estatal / regulatorio
+## Stack y decisiones fijas
 
-La documentación enfatiza que el operador es estatal o regulado. Implicaciones de diseño no negociables:
+- Next.js 15 (App Router, TypeScript estricto) como monolito, con proceso `worker` aparte para jobs con pg-boss sobre PostgreSQL 16. Prisma. Tailwind. Vitest y Playwright. pnpm.
+- WhatsApp detrás de la interfaz `WhatsAppProvider`. El MVP usa solo la implementación falsa, con bandeja de mensajes visible en el panel del admin. La Meta Cloud API queda documentada en `docs/whatsapp-templates.md` para después del MVP.
+- Entrega inmediata: **MVP en localhost**, no Docker de la aplicación. Solo PostgreSQL en contenedor, puerto 5434 para desarrollo y 5435 para test. Los puertos 5432 y 5433 están ocupados en esta máquina.
+- Módulos en `src/modules/*`, cada uno exporta su API pública desde `index.ts`. Nadie importa internos de otro módulo. Alias `@/` a `src/`.
+- Dinero siempre con `Prisma.Decimal`, nunca `number`.
 
-- **Registro de pasajeros auditable e inalterable**: nombre y cédula de cada persona (no solo del titular), vinculados a ruta, fecha y unidad. Pensar en trazabilidad (historial de cambios, no borrado físico).
-- **Pista de auditoría financiera**: cada transacción vinculada de forma unívoca al registro del pasajero y al comprobante cargado.
-- **Lista de pasajeros cerrada antes de cada salida**: manifiesto por unidad para protocolos de seguridad y emergencias.
-- **Data histórica para planificación de flota**: demanda por ruta, día y horario pico debe ser consultable/exportable.
-- **Equilibrio de privacidad**: el documento "EN QUE AFECTA E INTERESES DEL ESTADO Y PAÍS" advierte que el punto de equilibrio es información suficiente y agregada para planificar, con acceso individualizado controlado. Diseñar con límites de retención, roles de acceso y estadísticas agregadas por defecto.
+## Comandos
+
+```
+pnpm db:up / pnpm db:test:up     PostgreSQL en Docker (5434 y 5435)
+pnpm prisma migrate deploy       aplicar migraciones
+pnpm seed                        datos de demostración con credenciales impresas
+pnpm dev                         http://localhost:3000
+pnpm worker:dev                  jobs programados, en otra terminal
+pnpm typecheck / pnpm lint
+pnpm test                        unitarios
+pnpm test:integration            requiere la base de test levantada
+pnpm test:e2e
+pnpm test -- tests/unit/booking/state-machine.test.ts    un solo archivo
+```
 
 ## Glosario de documentación (`Documentación/`)
 
 | Archivo | Contenido |
 |---|---|
-| `ESTRUCTURA DE RESERVA Y CAPTACIÓN DE LEAD.pdf` | Las 5 fases del embudo: captación, registro, pago, emisión, recordatorios/abordaje. Fuente principal de requisitos funcionales. |
-| `ESTRUCTURA DE MÉTODOS DE PAGO EN EL FLUJO.pdf` | Categorías de pago (digital vs. físico), comprobante obligatorio, reserva condicional y regla de reconfirmación/liberación de cupo. |
-| `SOLUCIONES A SUS PROBLEMAS GUBERNAMENTALES.pdf` | Justificación para operador estatal: trazabilidad de pasajeros, transparencia financiera, inteligencia logística, seguridad ciudadana. |
-| `EN QUE AFECTA E INTERESES DEL ESTADO Y PAÍS.pdf` | Contexto sobre datos de movilidad terrestre y el equilibrio entre control estatal y privacidad. Informa decisiones de retención y acceso a datos. |
+| `ESTRUCTURA DE RESERVA Y CAPTACIÓN DE LEAD.pdf` | Las cinco fases del embudo: captación, registro, pago, emisión, recordatorios y abordaje |
+| `ESTRUCTURA DE MÉTODOS DE PAGO EN EL FLUJO.pdf` | Pago digital con comprobante obligatorio, pago físico con reserva condicional y regla de reconfirmación |
+| `SOLUCIONES A SUS PROBLEMAS GUBERNAMENTALES.pdf` | Justificación estatal: trazabilidad, transparencia financiera, inteligencia logística, seguridad ciudadana |
+| `EN QUE AFECTA E INTERESES DEL ESTADO Y PAÍS.pdf` | Datos de movilidad terrestre y el equilibrio entre control estatal y privacidad |
 
 ## Notas operativas
 
-- Los nombres de los PDFs llevan acentos y la herramienta `Read` puede fallar con ellos por normalización Unicode. Solución: copiarlos al scratchpad con nombres ASCII vía PowerShell (`Copy-Item`) y leer la copia.
+- Los nombres de los PDF llevan acentos y la herramienta `Read` falla con ellos por normalización Unicode. Solución: copiarlos al scratchpad con nombres ASCII mediante PowerShell y leer la copia.
+- El glosario de módulos de `src/` se añade aquí al cerrar la tarea 12 del plan.

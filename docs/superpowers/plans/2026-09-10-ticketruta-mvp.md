@@ -23,6 +23,7 @@
 - Los tests usan `FakeWhatsAppProvider`. Ningún test hace peticiones de red reales.
 - Cada tarea termina con `pnpm typecheck`, `pnpm lint` y sus tests en verde, y con un commit.
 - Base de datos de desarrollo y de test: contenedores Docker en los puertos 5434 y 5435 respectivamente, definidos en `docker/docker-compose.dev.yml` y `docker/docker-compose.test.yml`. No usar los puertos 5432 ni 5433, ya ocupados en esta máquina.
+- Imágenes de prueba ya disponibles en `tests/fixtures/`, no hay que generarlas: `cedula.png`, `comprobante.png` y `permiso-viaje.png` son PNG válidos; `no-es-imagen.png` es texto con extensión `.png` y sirve para probar el rechazo por firma de bytes.
 
 ---
 
