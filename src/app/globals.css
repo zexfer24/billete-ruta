@@ -36,3 +36,21 @@ body {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Animaciones de entrada del panel lateral compartido (src/components/side-panel.tsx). */
+@keyframes panel-entrada {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes fondo-entrada {
+  from {
+    opacity: 0;
+  }
+}
