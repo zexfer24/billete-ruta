@@ -14,7 +14,8 @@ export interface RegistroFormState {
 const registroSchema = z
   .object({
     idNumber: z.string().min(1, "Ingresa tu cédula."),
-    fullName: z.string().min(3, "Escribe tu nombre completo."),
+    givenNames: z.string().min(2, "Escribe tus nombres."),
+    surnames: z.string().min(2, "Escribe tus apellidos."),
     phone: z.string().min(6, "Ingresa tu número de teléfono."),
     birthYear: z.coerce.number().int("El año de nacimiento no es válido."),
     password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
@@ -31,7 +32,8 @@ export async function registrarAction(
 ): Promise<RegistroFormState> {
   const parsed = registroSchema.safeParse({
     idNumber: formData.get("idNumber"),
-    fullName: formData.get("fullName"),
+    givenNames: formData.get("givenNames"),
+    surnames: formData.get("surnames"),
     phone: formData.get("phone"),
     birthYear: formData.get("birthYear"),
     password: formData.get("password"),
@@ -45,7 +47,8 @@ export async function registrarAction(
   try {
     await registerAccount({
       idNumber: parsed.data.idNumber,
-      fullName: parsed.data.fullName,
+      givenNames: parsed.data.givenNames,
+      surnames: parsed.data.surnames,
       phone: parsed.data.phone,
       birthYear: parsed.data.birthYear,
       password: parsed.data.password,

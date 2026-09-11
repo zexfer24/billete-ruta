@@ -12,6 +12,8 @@ const PASAJEROS = [
   {
     idNumber: "V12345678",
     password: "Pasajero.2026",
+    givenNames: "Ana",
+    surnames: "Pérez Rivas",
     fullName: "Ana Pérez Rivas",
     phone: "+584121112233",
     birthYear: 1993,
@@ -19,6 +21,8 @@ const PASAJEROS = [
   {
     idNumber: "V87654321",
     password: "Pasajero.2026",
+    givenNames: "Luis",
+    surnames: "Gómez Salas",
     fullName: "Luis Gómez Salas",
     phone: "+584141112233",
     birthYear: 1986,
@@ -266,6 +270,8 @@ async function main(): Promise<void> {
     await prisma.passengerAccount.create({
       data: {
         idNumber: pasajero.idNumber,
+        givenNames: pasajero.givenNames,
+        surnames: pasajero.surnames,
         fullName: pasajero.fullName,
         phone: pasajero.phone,
         birthYear: pasajero.birthYear,

@@ -97,6 +97,8 @@ enum ActorType {
 model PassengerAccount {
   id           String   @id @default(uuid()) @db.Uuid
   idNumber     String   @unique
+  givenNames   String
+  surnames     String
   fullName     String
   phone        String
   birthYear    Int

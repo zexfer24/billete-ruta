@@ -56,3 +56,25 @@ export function isMinor(birthYear: number, now: Date = new Date()): boolean {
 export function isValidBirthYear(birthYear: number, now: Date = new Date()): boolean {
   return Number.isInteger(birthYear) && birthYear >= 1900 && birthYear <= caracasYear(now);
 }
+
+/** Partículas que no cuentan como el primer nombre o apellido por sí solas. */
+const PARTICULAS = new Set(["de", "del", "la", "las", "los", "y"]);
+
+/**
+ * Devuelve la primera palabra de un nombre o apellido compuesto. Si esa
+ * palabra es una partícula, se une con las siguientes hasta la primera que
+ * no lo sea: «de la Cruz Pérez» devuelve «de la Cruz».
+ */
+export function firstNamePart(value: string): string {
+  const palabras = value.trim().split(/\s+/).filter(Boolean);
+  if (palabras.length === 0) return "";
+  if (!PARTICULAS.has(palabras[0]!.toLowerCase())) {
+    return palabras[0]!;
+  }
+  const resultado: string[] = [];
+  for (const palabra of palabras) {
+    resultado.push(palabra);
+    if (!PARTICULAS.has(palabra.toLowerCase())) break;
+  }
+  return resultado.join(" ");
+}

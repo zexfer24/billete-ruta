@@ -27,7 +27,8 @@ export default function RegistroPage() {
         className="flex flex-col gap-4 rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-6"
       >
         <Campo label="Cédula" name="idNumber" placeholder="V12345678" required />
-        <Campo label="Nombre completo" name="fullName" required />
+        <Campo label="Nombres" name="givenNames" required />
+        <Campo label="Apellidos" name="surnames" required />
         <Campo label="Teléfono" name="phone" placeholder="0412-1234567" required />
         <Campo
           label="Año de nacimiento"

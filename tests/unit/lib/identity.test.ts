@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ageFromBirthYear,
+  firstNamePart,
   isMinor,
   isValidBirthYear,
   isValidIdNumber,
@@ -88,5 +89,25 @@ describe("edad", () => {
     expect(isValidBirthYear(1990, AHORA)).toBe(true);
     expect(isValidBirthYear(1899, AHORA)).toBe(false);
     expect(isValidBirthYear(2027, AHORA)).toBe(false);
+  });
+});
+
+describe("firstNamePart", () => {
+  it("devuelve la primera palabra", () => {
+    expect(firstNamePart("María José")).toBe("María");
+  });
+
+  it("une la partícula inicial con las siguientes palabras hasta la primera que no lo sea", () => {
+    expect(firstNamePart("de la Cruz Pérez")).toBe("de la Cruz");
+    expect(firstNamePart("Del Valle Rojas")).toBe("Del Valle");
+  });
+
+  it("recorta y colapsa espacios", () => {
+    expect(firstNamePart("  Pérez   Rivas ")).toBe("Pérez");
+  });
+
+  it("devuelve cadena vacía si no hay ninguna palabra", () => {
+    expect(firstNamePart("")).toBe("");
+    expect(firstNamePart("   ")).toBe("");
   });
 });

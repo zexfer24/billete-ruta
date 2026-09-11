@@ -14,12 +14,18 @@ import { ValidationError } from "@/modules/booking/errors";
 
 export interface RegisterAccountInput {
   idNumber: string;
-  fullName: string;
+  givenNames: string;
+  surnames: string;
   phone: string;
   birthYear: number;
   password: string;
   country?: "VE" | "CO";
   now?: Date;
+}
+
+/** Recorta los espacios de los extremos y colapsa los espacios internos. */
+function normalizeSpaces(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 /** La cédula es la credencial de acceso, por eso debe ser única y normalizada. */
@@ -29,12 +35,17 @@ export async function registerAccount(
   const ahora = input.now ?? new Date();
   const idNumber = normalizeIdNumber(input.idNumber);
   const phone = normalizePhone(input.phone, input.country ?? "VE");
+  const givenNames = normalizeSpaces(input.givenNames);
+  const surnames = normalizeSpaces(input.surnames);
 
   if (!isValidIdNumber(idNumber)) {
     throw new ValidationError("La cédula no tiene un formato válido.");
   }
-  if (input.fullName.trim().length < 3) {
-    throw new ValidationError("Escribe tu nombre completo.");
+  if (givenNames.length < 2) {
+    throw new ValidationError("Escribe tus nombres.");
+  }
+  if (surnames.length < 2) {
+    throw new ValidationError("Escribe tus apellidos.");
   }
   if (!isValidPhone(phone)) {
     throw new ValidationError("El número de teléfono no es válido.");
@@ -47,13 +58,16 @@ export async function registerAccount(
   }
 
   const passwordHash = await hashPassword(input.password);
+  const fullName = `${givenNames} ${surnames}`;
 
   try {
     return await prisma.$transaction(async (tx) => {
       const cuenta = await tx.passengerAccount.create({
         data: {
           idNumber,
-          fullName: input.fullName.trim(),
+          givenNames,
+          surnames,
+          fullName,
           phone,
           birthYear: input.birthYear,
           passwordHash,
@@ -65,7 +79,12 @@ export async function registerAccount(
         entityType: "PassengerAccount",
         entityId: cuenta.id,
         action: "CUENTA_CREADA",
-        after: { idNumber, fullName: cuenta.fullName },
+        after: {
+          idNumber,
+          givenNames: cuenta.givenNames,
+          surnames: cuenta.surnames,
+          fullName: cuenta.fullName,
+        },
       });
       return { accountId: cuenta.id };
     });

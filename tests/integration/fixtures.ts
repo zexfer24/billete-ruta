@@ -134,16 +134,21 @@ export interface AccountFixtureOptions {
   birthYear?: number;
   withCedula?: boolean;
   withPermiso?: boolean;
-  fullName?: string;
+  givenNames?: string;
+  surnames?: string;
 }
 
 /** Cuenta de pasajero, con su foto de cédula ya cargada salvo que se indique lo contrario. */
 export async function createAccountFixture(options: AccountFixtureOptions = {}) {
   const sufijo = randomUUID().slice(0, 6);
+  const givenNames = options.givenNames ?? "Pasajero";
+  const surnames = options.surnames ?? `${sufijo} Prueba`;
   const cuenta = await prisma.passengerAccount.create({
     data: {
       idNumber: `V${Math.floor(10_000_000 + Math.random() * 89_999_999)}`,
-      fullName: options.fullName ?? `Pasajero ${sufijo}`,
+      givenNames,
+      surnames,
+      fullName: `${givenNames} ${surnames}`,
       phone: "+584121110000",
       birthYear: options.birthYear ?? 1990,
       passwordHash: await hashPassword("Pasajero.2026"),

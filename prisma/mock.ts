@@ -32,12 +32,16 @@ const ANTIGUEDAD_MAX_DIAS = 180;
 const PASAJEROS_FIJOS = [
   {
     idNumber: "V12345678",
+    givenNames: "Ana",
+    surnames: "Pérez Rivas",
     fullName: "Ana Pérez Rivas",
     phone: "+584121112233",
     birthYear: 1993,
   },
   {
     idNumber: "V87654321",
+    givenNames: "Luis",
+    surnames: "Gómez Salas",
     fullName: "Luis Gómez Salas",
     phone: "+584141112233",
     birthYear: 1986,
@@ -117,8 +121,17 @@ function telefono(): string {
   return `+58${elegir(["412", "414", "416", "424", "426"])}${entero(1_000_000, 9_999_999)}`;
 }
 
-function nombreCompleto(): string {
-  return `${elegir(NOMBRES)} ${elegir(APELLIDOS)} ${elegir(APELLIDOS)}`;
+interface NombreGenerado {
+  givenNames: string;
+  surnames: string;
+  fullName: string;
+}
+
+/** Genera un nombre y dos apellidos, como los produce el registro real. */
+function nombreCompleto(): NombreGenerado {
+  const givenNames = elegir(NOMBRES);
+  const surnames = `${elegir(APELLIDOS)} ${elegir(APELLIDOS)}`;
+  return { givenNames, surnames, fullName: `${givenNames} ${surnames}` };
 }
 
 function dec(valor: Prisma.Decimal | string | number): Prisma.Decimal {
@@ -299,6 +312,8 @@ async function main(): Promise<void> {
     return {
       id: randomUUID(),
       idNumber: fijo.idNumber,
+      givenNames: fijo.givenNames,
+      surnames: fijo.surnames,
       fullName: fijo.fullName,
       phone: fijo.phone,
       birthYear: fijo.birthYear,
@@ -313,10 +328,13 @@ async function main(): Promise<void> {
     const registro = new Date(
       ahora.getTime() - entero(0, ANTIGUEDAD_MAX_DIAS) * 24 * 3_600_000 - entero(0, 86_400) * 1000,
     );
+    const nombre = nombreCompleto();
     return {
       id: randomUUID(),
       idNumber: cedulaUnica(cedulasUsadas),
-      fullName: nombreCompleto(),
+      givenNames: nombre.givenNames,
+      surnames: nombre.surnames,
+      fullName: nombre.fullName,
       phone: telefono(),
       birthYear: entero(1955, 2012),
       passwordHash: hashCompartido,
@@ -518,7 +536,7 @@ async function main(): Promise<void> {
         pasajeros.push({
           id: randomUUID(),
           reservationId,
-          fullName: nombreCompleto(),
+          fullName: nombreCompleto().fullName,
           idNumber: cedulaUnica(cedulasUsadas),
           birthYear: entero(1955, 2014),
           isHolder: false,
