@@ -32,21 +32,21 @@ Un operador solo ve y modifica datos de **su** agencia. El admin ve todo el term
 
 ### 3.2 Operador
 
-- **Total recaudado por cada una de sus rutas**, en ventana de 24 horas y con horas presentadas en formato de 24 horas.
-- **Módulo de confirmación de pagos**: ve el comprobante que subió el pasajero, el monto abonado y el saldo, y aprueba o rechaza.
-- **Datos de sus pasajeros**: quién compró el ticket, serial del ticket, y si el pago está pendiente, abonado o confirmado.
-- **Datos de sus vehículos**: placa, modelo, marca y número de asientos.
-- **Datos de sus choferes**: nombre, cédula, total de embarques y total de desembarques.
+- **Total recaudado por cada una de sus rutas**, en la ventana por defecto de 24 horas o en un rango de fecha y hora (00 a 23) elegido, con horas presentadas en formato de 24 horas.
+- **Módulo de confirmación de pagos**: un panel lateral por comprobante, con la imagen ampliable, la clasificación como abono parcial, pago completo o excedente, las cuentas de la reserva y el historial de pagos previos. Aprobar y rechazar solo se hacen desde ese panel.
+- **Datos de sus pasajeros**: quién compró el ticket, serial del ticket, y filtro por estado de pago: Pendiente, Abonado, Confirmado o Sin efecto.
+- **Datos de sus vehículos**: tabla de solo lectura con placa, modelo, marca y número de asientos; la edición se hace en un panel lateral.
+- **Datos de sus choferes**: tabla de solo lectura con nombre, cédula completa (es personal que la propia agencia registró), total de embarques y total de desembarques; la edición se hace en un panel lateral.
 - **Lista de movimiento de sus choferes**: hora de embarque, tiempo de recorrido y hora de desembarque.
 
 ### 3.3 Admin
 
 - **Total recaudado por la tasa de salida en tiempo real**, ventana de 24 horas, horas en formato de 24 horas.
-- **Total de recorridos del terminal.**
-- **Total de usuarios nuevos** del terminal en el periodo.
+- **Total de recorridos del terminal**, en una lista con fecha y hora de salida, localización de embarque (origen · punto de encuentro) y de desembarque (destino).
+- **Total de usuarios nuevos** del terminal en el periodo, en una lista con fecha, hora, cédula, primer nombre y primer apellido.
 - **Total de usuarios recurrentes** (cuentas con dos o más viajes pagados).
 - **Base de datos de usuarios**, con información sensible. Todo acceso queda auditado.
-- **Lista de movimientos de las agencias**: horas de embarque y desembarque, ruta, duración, nombre del chofer y cantidad de pasajeros.
+- **Lista de movimientos de las agencias**: horas de embarque y desembarque, ruta, duración, nombre del chofer y cantidad de pasajeros. Al hacer clic en un viaje se abre un panel con el detalle y los pasajeros a bordo.
 
 ## 4. Tasa de salida
 
@@ -120,7 +120,7 @@ Entidades. Todas con `id` UUID, `createdAt` y `updatedAt`.
 
 **Identidad y agencias**
 
-- `PassengerAccount`: `idNumber` único y normalizado, `fullName`, `phone`, `birthYear` (entero), `passwordHash`, `lastLoginAt`, `active`. La cédula es la credencial de acceso.
+- `PassengerAccount`: `idNumber` único y normalizado, `givenNames`, `surnames`, `fullName` (composición de los dos anteriores), `phone`, `birthYear` (entero), `passwordHash`, `lastLoginAt`, `active`. La cédula es la credencial de acceso.
 - `PassengerDocument`: `accountId`, `type`, `filePath`, `originalName`, `uploadedAt`, `verifiedAt`, `verifiedByPanelUserId`.
 - `Agency`: `name`, `taxId` (RIF) único, `contactPhone`, `contactEmail`, `active`.
 - `PanelUser`: `email` único, `passwordHash`, `name`, `role`, `agencyId` nulo solo para `ADMIN`, `active`. Un `OPERADOR` siempre tiene agencia.
@@ -211,7 +211,7 @@ Saldo pendiente = `totalUsd − paidUsd`. Un pago que excede el saldo se acepta 
 
 ## 12. Flujo del pasajero
 
-1. **Registro** en `/registro`: cédula, nombre completo, teléfono, año de nacimiento y contraseña. La cédula se normaliza y debe ser única.
+1. **Registro** en `/registro`: cédula, nombres, apellidos, teléfono, año de nacimiento y contraseña. La cédula se normaliza y debe ser única.
 2. **Acceso** en `/ingresar` con cédula y contraseña. Sin sesión, `/mi/*` redirige aquí.
 3. **Reservar** en `/mi/reservar`: elegir ruta y salida entre las que tienen cupo, elegir cantidad de 1 a 6, completar nombre, cédula y año de nacimiento de cada acompañante, aceptar políticas.
 4. **Documentos**: antes de poder pagar, la cuenta debe tener foto de cédula cargada. Si algún pasajero del grupo tiene menos de 18 años según su año de nacimiento, el sistema exige además un permiso de viaje.
@@ -224,19 +224,19 @@ Ruta base `/panel`, con login propio en `/panel/ingresar`.
 
 **Operador** (`/panel/...`, todo filtrado por su agencia):
 
-- `pagos`: comprobantes pendientes con imagen ampliable, monto declarado, saldo de la reserva, y botones de aprobar y rechazar con motivo. Registro de cobros en sitio.
-- `pasajeros`: tabla con titular, serial del ticket, ruta, salida, cantidad, total, abonado, saldo y estado de pago. Filtros por salida y por estado.
-- `vehiculos`: alta y edición con placa, marca, modelo y número de asientos.
-- `choferes`: alta y edición con nombre, cédula y teléfono, más el total de embarques y desembarques de cada uno.
+- `pagos`: tabla de comprobantes pendientes con serial, titular, salida, monto declarado, monto en dólares, total, saldo y tipo (abono parcial, pago completo o excede el saldo); cada fila abre un panel lateral con la imagen ampliable, las cuentas de la reserva y el historial de pagos previos. Aprobar y rechazar solo se hacen desde ese panel. Registro de cobros en sitio.
+- `pasajeros`: tabla con titular, serial del ticket, ruta, salida, cantidad, total, abonado, saldo y estado de pago. Filtros por salida y por estado de pago: Pendiente, Abonado, Confirmado o Sin efecto.
+- `vehiculos`: tabla de solo lectura con placa, marca, modelo y número de asientos; alta con formulario y edición en un panel lateral.
+- `choferes`: tabla de solo lectura con nombre, cédula completa y el total de embarques y desembarques de cada uno; el teléfono solo aparece en el panel lateral de edición; alta con formulario.
 - `movimientos`: lista de viajes de sus choferes con hora de embarque, duración del recorrido y hora de desembarque.
 - `salidas`: crear salidas asignando vehículo y chofer, ver ocupación, cerrar manifiesto, iniciar embarque, registrar salida y registrar llegada.
 - `abordaje/[departureId]`: pantalla móvil con lectura de código o QR y casillas por pasajero.
-- `recaudacion`: total recaudado por ruta en las últimas 24 horas, y por rango de fechas.
+- `recaudacion`: total recaudado por ruta en las últimas 24 horas, y por rango de fecha y hora (00 a 23).
 
 **Admin** (`/panel/admin/...`):
 
-- `tablero`: tasa de salida recaudada en las últimas 24 horas actualizada en vivo, recorridos del terminal, usuarios nuevos y usuarios recurrentes.
-- `movimientos`: lista de movimientos de todas las agencias con agencia, ruta, chofer, hora de embarque, duración, hora de desembarque y cantidad de pasajeros.
+- `tablero`: requiere el permiso `terminal.dashboard`. Tasa de salida recaudada en las últimas 24 horas actualizada en vivo, recorridos del terminal y usuarios nuevos en listas de hasta 100 filas con una leyenda cuando hay más, y usuarios recurrentes. El filtro de fechas de recorridos y usuarios nuevos está plegado detrás de un botón que muestra el rango activo.
+- `movimientos`: requiere el permiso `terminal.dashboard`. Lista de movimientos de todas las agencias con agencia, ruta, chofer, hora de embarque, duración, hora de desembarque y cantidad de pasajeros. Al hacer clic en un viaje se abre un panel lateral con el detalle y los pasajeros a bordo.
 - `usuarios`: base de datos de cuentas de pasajero con cédula, nombre, teléfono, año de nacimiento, viajes realizados y última actividad. Cada consulta queda auditada.
 - `agencias`: alta de agencias y de sus usuarios de panel.
 - `tasas`: tasa de salida vigente y su historial, más las tasas de cambio.
@@ -260,9 +260,10 @@ La duración del recorrido es `arrivedAt − departedAt`, calculada al consultar
 |---|---|---|
 | Recaudación por ruta | Operador | Suma de `PaymentProof` aprobados y `CashPayment` en `amountUsd`, agrupada por ruta, para pagos registrados en la ventana |
 | Tasa de salida recaudada | Admin | Suma de `taxTotalUsd` de reservas que alcanzaron `PAGADA` en la ventana |
-| Recorridos del terminal | Admin | `TripLog` con `arrivedAt` no nulo en la ventana |
-| Usuarios nuevos | Admin | `PassengerAccount` creadas en la ventana |
+| Recorridos del terminal | Admin | `TripLog` con `arrivedAt` no nulo en la ventana, con una lista que muestra la hora de salida |
+| Usuarios nuevos | Admin | `PassengerAccount` creadas en la ventana, con una lista |
 | Usuarios recurrentes | Admin | Cuentas con dos o más reservas en estado `PAGADA` o `ABORDADA` |
+| Pasajeros por estado de pago | Operador | Reglas de `paymentStateOf`: Confirmado si la reserva está `PAGADA` o `ABORDADA`; Sin efecto si está `LIBERADA`, `CANCELADA` o `NO_SHOW`; en cualquier otro estado, Abonado si `paidUsd > 0` y Pendiente si `paidUsd = 0` |
 | Movimientos de agencias | Admin | `TripLog` con agencia, ruta, chofer, horas, duración y pasajeros |
 | Demanda por ruta y horario | Ambos | Reservas ocupantes agrupadas por ruta, día de la semana y franja horaria |
 
@@ -293,8 +294,9 @@ Proceso `worker` con pg-boss sobre la misma base de datos. Un barrido cada 5 min
 La base de datos de usuarios es información sensible. Reglas:
 
 - Solo el rol `ADMIN` accede a `/panel/admin/usuarios`, y cada consulta escribe una entrada de auditoría con el usuario que la hizo y el filtro aplicado.
+- El tablero del admin y el detalle de un viaje en Movimientos también quedan auditados: `CONSULTA_USUARIOS_NUEVOS` al listar los usuarios nuevos y `CONSULTA_PASAJEROS_VIAJE` al abrir el panel de un viaje. Las dos muestran la cédula completa y solo las ve el admin.
 - El operador ve de sus pasajeros solo lo necesario para operar: nombre, cédula, serial y estado de pago. No ve la foto de la cédula salvo en la pantalla de abordaje de esa salida concreta.
-- Las cédulas se muestran enmascaradas fuera del manifiesto y del módulo de usuarios del admin.
+- Las cédulas se muestran enmascaradas fuera del manifiesto y del módulo de usuarios del admin. Excepción: la cédula de un chofer se muestra completa a su propia agencia, porque es personal que esa agencia registró.
 - Los archivos subidos se sirven solo por rutas autenticadas que verifican la propiedad o el rol.
 - Los reportes son agregados por defecto.
 - La retención con seudonimización queda documentada como trabajo posterior al MVP.

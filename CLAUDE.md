@@ -71,15 +71,15 @@ Cada carpeta de `src/modules/` expone su API pública en `index.ts`. Nadie impor
 
 | Módulo | Responsabilidad | API principal |
 |---|---|---|
-| `accounts` | Cuentas de pasajero y sus documentos | `registerAccount`, `loginAccount`, `uploadDocument`, `missingDocuments` |
+| `accounts` | Cuentas de pasajero y sus documentos | `registerAccount` (recibe `givenNames` y `surnames`, no `fullName`), `loginAccount`, `uploadDocument`, `missingDocuments` |
 | `agencies` | Agencias, vehículos y choferes | `createAgencyWithOperator`, `listAgencies`, `createVehicle`, `listDrivers` (trae embarques y desembarques) |
 | `audit` | Bitácora de solo inserción | `writeAudit` |
 | `auth` | Dos ámbitos de sesión y matriz de permisos | `requirePanelUser`, `requirePassenger`, `requireAgencyScope`, `can`, `hashPassword` |
 | `booking` | Reservas, cupos, estados y lista de espera | `createReservation`, `transitionReservation`, `getAvailability`, `processWaitlist`, `canTransition` |
 | `catalog` | Rutas, salidas, tasas y precios | `listBookableDepartures`, `createDeparture`, `getManifest`, `computeAmounts`, `getCurrentDepartureTax` |
 | `messaging` | Canal de mensajes con proveedor intercambiable | `enqueueMessage`, `deliverPendingMessages`, `getWhatsAppProvider`, `renderPreview` |
-| `payments` | Abonos, comprobantes y cobros en efectivo | `submitProof`, `approveProof`, `rejectProof`, `registerCashPayment` |
-| `reports` | Agregados de agencia y de terminal | `revenueByRoute`, `driverMovements`, `departureTaxRevenue`, `agencyMovements`, `listAccounts` |
+| `payments` | Abonos, comprobantes y cobros en efectivo | `submitProof`, `approveProof`, `rejectProof`, `registerCashPayment`, `proofCoverage` (abono parcial, pago completo o excedente), `getProofReview` (comprobante, reserva, cobertura e historial, con aislamiento por agencia) |
+| `reports` | Agregados de agencia y de terminal | `revenueByRoute`, `driverMovements`, `departureTaxRevenue`, `agencyMovements`, `listAccounts`, `listTerminalTrips` (recorridos del tablero), `listNewAccounts` (usuarios nuevos, escribe auditoría), `getTripDetail` (viaje con pasajeros a bordo, escribe auditoría), `listAgencyPassengers` (filtra por `paymentState`), `paymentStateOf`, `paymentStateWhere`, `PAYMENT_STATES` |
 | `scheduler` | Ventanas de tiempo de los barridos | `dueForReminder24h`, `dueForRelease12h`, `nextRetryDelayMinutes` |
 | `tickets` | PDF con QR firmado | `issueTicket`, `signTicketCode`, `verifyTicketQr` |
 | `trips` | Embarque, desembarque y abordaje | `startBoarding`, `registerDeparture`, `registerArrival`, `findForBoarding`, `confirmBoarding` |
@@ -89,9 +89,15 @@ Cada carpeta de `src/modules/` expone su API pública en `index.ts`. Nadie impor
 | `prisma.ts` | Cliente único de base de datos |
 | `env.ts` | Configuración validada con zod |
 | `decimal.ts` | `toDecimal`, `round2`, `formatMoney` |
-| `time.ts` | Hora de Caracas y formato de 24 horas, duración de recorridos |
-| `identity.ts` | Cédulas, teléfonos, edad y enmascarado |
+| `time.ts` | Hora de Caracas y formato de 24 horas, duración de recorridos, ventanas por hora (`caracasHourStart`, `caracasHourEnd`, `caracasHourValue`) |
+| `identity.ts` | Cédulas, teléfonos, edad, enmascarado y primer nombre o apellido (`firstNamePart`) |
 | `storage.ts` | Archivos subidos y verificación por firma de bytes |
+
+| Componente de `src/components/` | Para qué sirve |
+|---|---|
+| `side-panel.tsx` | `SidePanel`: panel lateral controlado por la URL |
+| `close-on-escape.tsx` | `CloseOnEscape`: foco, bloqueo del desplazamiento y cierre con Escape |
+| `clickable-row.tsx` | `ClickableRow`: fila de tabla que navega al hacer clic |
 
 `src/worker/sweeps.ts` contiene los seis barridos programados y `src/worker/index.ts` el proceso que los ejecuta.
 
