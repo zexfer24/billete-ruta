@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { createDriver, createVehicle, updateDriver, updateVehicle } from "@/modules/agencies";
@@ -55,6 +56,7 @@ export async function updateVehicleAction(formData: FormData): Promise<void> {
     active: data.active === "true",
   });
   revalidatePath("/panel/vehiculos");
+  redirect("/panel/vehiculos");
 }
 
 export async function createDriverAction(formData: FormData): Promise<void> {
@@ -100,4 +102,5 @@ export async function updateDriverAction(formData: FormData): Promise<void> {
     active: data.active === "true",
   });
   revalidatePath("/panel/choferes");
+  redirect("/panel/choferes");
 }

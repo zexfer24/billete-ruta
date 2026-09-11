@@ -1,11 +1,24 @@
+import Link from "next/link";
+import { z } from "zod";
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { listVehicles } from "@/modules/agencies";
+import { SidePanel } from "@/components/side-panel";
+import { ClickableRow } from "@/components/clickable-row";
 import { createVehicleAction, updateVehicleAction } from "../flota/actions";
 
-export default async function VehiculosPage() {
+export default async function VehiculosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ editar?: string }>;
+}) {
   const user = await requirePanelUser("fleet.manage");
   const agencyId = requireAgencyScope(user);
   const vehiculos = await listVehicles(agencyId);
+  const { editar } = await searchParams;
+  const editarParsed = z.string().uuid().safeParse(editar);
+  const vehiculo = editarParsed.success
+    ? vehiculos.find((v) => v.id === editarParsed.data)
+    : undefined;
 
   return (
     <div className="flex flex-col gap-8">
@@ -16,69 +29,46 @@ export default async function VehiculosPage() {
           <thead className="border-b border-[var(--color-borde)] text-[var(--color-texto-suave)]">
             <tr>
               <th className="px-4 py-3 font-medium">Placa</th>
-              <th className="px-4 py-3 font-medium">Marca</th>
               <th className="px-4 py-3 font-medium">Modelo</th>
-              <th className="px-4 py-3 font-medium">Asientos</th>
+              <th className="px-4 py-3 font-medium">Marca</th>
+              <th className="px-4 py-3 font-medium">N° de asientos</th>
               <th className="px-4 py-3 font-medium">Estado</th>
               <th className="px-4 py-3 font-medium">Editar</th>
             </tr>
           </thead>
           <tbody>
             {vehiculos.map((v) => {
-              const formId = `veh-${v.id}`;
+              const href = `/panel/vehiculos?editar=${v.id}`;
               return (
-                <tr key={v.id} className="border-b border-[var(--color-borde)] last:border-0">
+                <ClickableRow
+                  key={v.id}
+                  href={href}
+                  selected={v.id === vehiculo?.id}
+                  className="border-b border-[var(--color-borde)] last:border-0"
+                >
                   <td className="tabular px-4 py-3">{v.plate}</td>
+                  <td className="px-4 py-3">{v.model}</td>
+                  <td className="px-4 py-3">{v.brand}</td>
+                  <td className="tabular px-4 py-3">{v.seatCount}</td>
                   <td className="px-4 py-3">
-                    <input
-                      form={formId}
-                      name="brand"
-                      defaultValue={v.brand}
-                      className="w-28 rounded-md border border-[var(--color-borde)] bg-[var(--color-fondo)] px-2 py-1 text-sm"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <input
-                      form={formId}
-                      name="model"
-                      defaultValue={v.model}
-                      className="w-28 rounded-md border border-[var(--color-borde)] bg-[var(--color-fondo)] px-2 py-1 text-sm"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <input
-                      form={formId}
-                      name="seatCount"
-                      type="number"
-                      min={4}
-                      max={80}
-                      defaultValue={v.seatCount}
-                      className="tabular w-20 rounded-md border border-[var(--color-borde)] bg-[var(--color-fondo)] px-2 py-1 text-sm"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      form={formId}
-                      name="active"
-                      defaultValue={String(v.active)}
-                      className="rounded-md border border-[var(--color-borde)] bg-[var(--color-fondo)] px-2 py-1 text-sm"
+                    <span
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                        v.active ? "text-[var(--color-exito)]" : "text-[var(--color-texto-suave)]"
+                      }`}
                     >
-                      <option value="true">Activo</option>
-                      <option value="false">Inactivo</option>
-                    </select>
+                      {v.active ? "Activo" : "Inactivo"}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
-                    <form id={formId} action={updateVehicleAction}>
-                      <input type="hidden" name="vehicleId" value={v.id} />
-                      <button
-                        type="submit"
-                        className="rounded-md bg-[var(--color-acento)] px-3 py-1.5 text-sm font-medium text-white"
-                      >
-                        Guardar
-                      </button>
-                    </form>
+                    <Link
+                      href={href}
+                      scroll={false}
+                      className="rounded-md border border-[var(--color-borde)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--color-acento-suave)]"
+                    >
+                      Editar
+                    </Link>
                   </td>
-                </tr>
+                </ClickableRow>
               );
             })}
             {vehiculos.length === 0 ? (
@@ -138,6 +128,70 @@ export default async function VehiculosPage() {
           </button>
         </form>
       </section>
+
+      {vehiculo ? (
+        <SidePanel
+          title={`Editar vehículo ${vehiculo.plate}`}
+          closeHref="/panel/vehiculos"
+        >
+          <form action={updateVehicleAction} className="flex flex-col gap-4">
+            <input type="hidden" name="vehicleId" value={vehiculo.id} />
+            <div className="flex flex-col gap-1 text-sm font-medium">
+              Placa
+              <p className="tabular rounded-lg border border-[var(--color-borde)] bg-[var(--color-fondo)] px-3 py-2 text-sm text-[var(--color-texto-suave)]">
+                {vehiculo.plate}
+              </p>
+            </div>
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Marca
+              <input
+                name="brand"
+                required
+                defaultValue={vehiculo.brand}
+                className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Modelo
+              <input
+                name="model"
+                required
+                defaultValue={vehiculo.model}
+                className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              N° de asientos
+              <input
+                name="seatCount"
+                type="number"
+                min={4}
+                max={80}
+                required
+                defaultValue={vehiculo.seatCount}
+                className="w-24 rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Estado
+              <select
+                name="active"
+                defaultValue={String(vehiculo.active)}
+                className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
+              >
+                <option value="true">Activo</option>
+                <option value="false">Inactivo</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              className="w-fit rounded-lg bg-[var(--color-acento)] px-5 py-2.5 text-sm font-medium text-white"
+            >
+              Guardar cambios
+            </button>
+          </form>
+        </SidePanel>
+      ) : null}
     </div>
   );
 }
