@@ -2,22 +2,18 @@ import Link from "next/link";
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { listAgencyDepartures } from "@/modules/catalog";
 import { listAgencyPassengers } from "@/modules/reports";
-import type { AgencyPassengerRow } from "@/modules/reports";
+import type { AgencyPassengerRow, PaymentState } from "@/modules/reports";
 import { formatMoney, toDecimal } from "@/lib/decimal";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { maskIdNumber } from "@/lib/identity";
 
-const STATUSES = [
-  "PENDIENTE_PAGO",
-  "EN_VALIDACION",
-  "ABONADA",
-  "PAGADA",
-  "PAGO_EN_SITIO",
-  "LIBERADA",
-  "CANCELADA",
-  "ABORDADA",
-  "NO_SHOW",
-] as const;
+/** Valores de la URL para el filtro de estado de pago. */
+const PAYMENT_STATE_PARAMS: Record<string, PaymentState> = {
+  pendiente: "Pendiente",
+  abonado: "Abonado",
+  confirmado: "Confirmado",
+  "sin-efecto": "Sin efecto",
+};
 
 function csvField(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
@@ -60,7 +56,7 @@ export default async function PasajerosPage({
 }: {
   searchParams: Promise<{
     salida?: string;
-    estado?: string;
+    pago?: string;
     buscar?: string;
     pagina?: string;
   }>;
@@ -72,7 +68,7 @@ export default async function PasajerosPage({
   const paginaActual = Math.max(1, Number.parseInt(params.pagina ?? "1", 10) || 1);
   const filtro = {
     departureId: params.salida || undefined,
-    status: params.estado || undefined,
+    paymentState: params.pago ? PAYMENT_STATE_PARAMS[params.pago] : undefined,
     search: params.buscar || undefined,
   };
 
@@ -90,7 +86,7 @@ export default async function PasajerosPage({
   function enlacePagina(pagina: number): string {
     const query = new URLSearchParams();
     if (params.salida) query.set("salida", params.salida);
-    if (params.estado) query.set("estado", params.estado);
+    if (params.pago) query.set("pago", params.pago);
     if (params.buscar) query.set("buscar", params.buscar);
     query.set("pagina", String(pagina));
     return `/panel/pasajeros?${query.toString()}`;
@@ -131,18 +127,17 @@ export default async function PasajerosPage({
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Estado
+          Estado de pago
           <select
-            name="estado"
-            defaultValue={params.estado ?? ""}
+            name="pago"
+            defaultValue={params.pago ?? ""}
             className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
           >
             <option value="">Todos</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
+            <option value="pendiente">Pendiente</option>
+            <option value="abonado">Abonado</option>
+            <option value="confirmado">Confirmado</option>
+            <option value="sin-efecto">Sin efecto</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">

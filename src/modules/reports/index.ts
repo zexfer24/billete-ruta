@@ -10,6 +10,8 @@ export type {
   DriverMovementRow,
   RouteRevenueRow,
 } from "./agency";
+export { PAYMENT_STATES, paymentStateOf, paymentStateWhere } from "./payment-state";
+export type { PaymentState } from "./payment-state";
 export {
   agencyMovements,
   departureTaxByHour,

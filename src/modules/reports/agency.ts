@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { round2, toDecimal, ZERO } from "@/lib/decimal";
 import { durationMinutes } from "@/lib/time";
+import { paymentStateOf, paymentStateWhere } from "./payment-state";
+import type { PaymentState } from "./payment-state";
 
 /** Ventana por defecto de los tableros: las últimas 24 horas. */
 export function last24h(now: Date = new Date()): { from: Date; to: Date } {
@@ -80,16 +82,7 @@ export interface AgencyPassengerRow {
   totalUsd: string;
   paidUsd: string;
   balanceUsd: string;
-  paymentState: "Pendiente" | "Abonado" | "Confirmado" | "Sin efecto";
-}
-
-function paymentState(status: string, saldo: Prisma.Decimal): AgencyPassengerRow["paymentState"] {
-  if (status === "PAGADA" || status === "ABORDADA") return "Confirmado";
-  if (status === "LIBERADA" || status === "CANCELADA" || status === "NO_SHOW") return "Sin efecto";
-  if (saldo.greaterThan(ZERO) && (status === "ABONADA" || status === "EN_VALIDACION")) {
-    return "Abonado";
-  }
-  return "Pendiente";
+  paymentState: PaymentState;
 }
 
 export interface AgencyPassengersPage {
@@ -108,7 +101,7 @@ export async function listAgencyPassengers(
   agencyId: string,
   filter: {
     departureId?: string;
-    status?: string;
+    paymentState?: PaymentState;
     search?: string;
     page?: number;
     pageSize?: number;
@@ -119,7 +112,7 @@ export async function listAgencyPassengers(
 
   const where = {
       departure: { route: { agencyId }, ...(filter.departureId ? { id: filter.departureId } : {}) },
-      status: filter.status ? (filter.status as never) : undefined,
+      ...(filter.paymentState ? { AND: [paymentStateWhere(filter.paymentState)] } : {}),
       ...(filter.search
         ? {
             OR: [
@@ -156,7 +149,7 @@ export async function listAgencyPassengers(
       totalUsd: r.totalUsd.toString(),
       paidUsd: r.paidUsd.toString(),
       balanceUsd: (saldo.isNegative() ? toDecimal(0) : saldo).toString(),
-      paymentState: paymentState(r.status, saldo),
+      paymentState: paymentStateOf(r.status, r.paidUsd),
     };
   });
 
