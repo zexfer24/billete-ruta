@@ -1,30 +1,65 @@
 import Link from "next/link";
-import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { z } from "zod";
+import type { ProofStatus } from "@prisma/client";
+import { ForbiddenError, requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { getProofReview, proofCoverage, type ProofCoverage, type ProofReview } from "@/modules/payments";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/decimal";
 import { maskIdNumber } from "@/lib/identity";
 import { formatCaracasDateTime24 } from "@/lib/time";
+import { SidePanel } from "@/components/side-panel";
+import { ClickableRow } from "@/components/clickable-row";
 import { approveProofAction, cashPaymentAction, rejectProofAction } from "./actions";
 
 /** Comprobantes por página: la cola se revisa de a poco, del más viejo al más nuevo. */
 const POR_PAGINA = 25;
 
+const ESTADO_COMPROBANTE_LABEL: Record<ProofStatus, string> = {
+  PENDIENTE: "Pendiente",
+  APROBADO: "Aprobado",
+  RECHAZADO: "Rechazado",
+};
+
+function coverageBadge(coverage: ProofCoverage): { text: string; className: string } {
+  switch (coverage.kind) {
+    case "ABONO_PARCIAL":
+      return { text: "Abono parcial", className: "bg-[var(--color-acento-suave)]" };
+    case "PAGO_COMPLETO":
+      return { text: "Completa el pago", className: "text-[var(--color-exito)]" };
+    case "EXCEDE_SALDO":
+      return {
+        text: `Excede el saldo en ${formatMoney(coverage.excessUsd, "USD")}`,
+        className: "text-[var(--color-alerta)]",
+      };
+  }
+}
+
 export default async function PagosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pagina?: string }>;
+  searchParams: Promise<{ pagina?: string; comprobante?: string }>;
 }) {
   const user = await requirePanelUser("payments.review");
   const agencyId = requireAgencyScope(user);
-  const { pagina } = await searchParams;
+  const { pagina, comprobante } = await searchParams;
   const paginaActual = Math.max(1, Number.parseInt(pagina ?? "1", 10) || 1);
+  const comprobanteParsed = z.string().uuid().safeParse(comprobante);
+  const comprobanteId = comprobanteParsed.success ? comprobanteParsed.data : undefined;
+
+  function buildHref(id?: string): string {
+    const params = new URLSearchParams();
+    if (paginaActual > 1) params.set("pagina", String(paginaActual));
+    if (id) params.set("comprobante", id);
+    const query = params.toString();
+    return query ? `/panel/pagos?${query}` : "/panel/pagos";
+  }
 
   const where = {
     status: "PENDIENTE" as const,
     reservation: { departure: { route: { agencyId } } },
   };
 
-  const [comprobantes, total] = await Promise.all([
+  const [comprobantes, total, review] = await Promise.all([
     prisma.paymentProof.findMany({
       where,
       include: {
@@ -37,6 +72,12 @@ export default async function PagosPage({
       take: POR_PAGINA,
     }),
     prisma.paymentProof.count({ where }),
+    comprobanteId
+      ? getProofReview(comprobanteId, agencyId).catch((error: unknown) => {
+          if (error instanceof ForbiddenError) return null;
+          throw error;
+        })
+      : Promise.resolve(null),
   ]);
 
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
@@ -62,7 +103,7 @@ export default async function PagosPage({
         ) : (
           <>
             <div className="overflow-x-auto rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)]">
-              <table className="w-full min-w-[1040px] text-left text-sm">
+              <table className="w-full min-w-[1120px] text-left text-sm">
                 <thead className="border-b border-[var(--color-borde)] text-[var(--color-texto-suave)]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Serial</th>
@@ -72,15 +113,25 @@ export default async function PagosPage({
                     <th className="px-4 py-3 font-medium">En dólares</th>
                     <th className="px-4 py-3 font-medium">Total</th>
                     <th className="px-4 py-3 font-medium">Saldo</th>
+                    <th className="px-4 py-3 font-medium">Tipo</th>
                     <th className="px-4 py-3 font-medium" />
                   </tr>
                 </thead>
                 <tbody>
                   {comprobantes.map((c) => {
                     const saldo = c.reservation.totalUsd.sub(c.reservation.paidUsd);
+                    const coverage = proofCoverage(
+                      c.reservation.totalUsd,
+                      c.reservation.paidUsd,
+                      c.amountUsd,
+                    );
+                    const badge = coverageBadge(coverage);
+                    const href = buildHref(c.id);
                     return (
-                      <tr
+                      <ClickableRow
                         key={c.id}
+                        href={href}
+                        selected={c.id === comprobanteId}
                         className="border-b border-[var(--color-borde)] last:border-b-0 align-top"
                       >
                         <td className="px-4 py-3">
@@ -110,52 +161,22 @@ export default async function PagosPage({
                           {formatMoney(saldo, "USD")}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <a
-                              href={`/api/archivos/${c.imagePath}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[var(--color-acento)] underline"
-                            >
-                              Ver
-                            </a>
-                            <form action={approveProofAction}>
-                              <input type="hidden" name="proofId" value={c.id} />
-                              <button
-                                type="submit"
-                                className="rounded-lg bg-[var(--color-exito)] px-3 py-1.5 text-xs font-medium text-white"
-                              >
-                                Aprobar
-                              </button>
-                            </form>
-                            <details className="relative">
-                              <summary className="cursor-pointer list-none rounded-lg bg-[var(--color-peligro)] px-3 py-1.5 text-xs font-medium text-white">
-                                Rechazar
-                              </summary>
-                              <form
-                                action={rejectProofAction}
-                                className="mt-2 flex items-center gap-2"
-                              >
-                                <input type="hidden" name="proofId" value={c.id} />
-                                <input
-                                  type="text"
-                                  name="reason"
-                                  placeholder="Motivo del rechazo"
-                                  required
-                                  minLength={4}
-                                  className="w-44 rounded-lg border border-[var(--color-borde)] bg-[var(--color-fondo)] px-2 py-1.5 text-xs"
-                                />
-                                <button
-                                  type="submit"
-                                  className="rounded-lg bg-[var(--color-peligro)] px-3 py-1.5 text-xs font-medium text-white"
-                                >
-                                  Confirmar
-                                </button>
-                              </form>
-                            </details>
-                          </div>
+                          <span
+                            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}
+                          >
+                            {badge.text}
+                          </span>
                         </td>
-                      </tr>
+                        <td className="px-4 py-3">
+                          <Link
+                            href={href}
+                            scroll={false}
+                            className="rounded-lg bg-[var(--color-acento)] px-3 py-1.5 text-xs font-medium text-white"
+                          >
+                            Revisar
+                          </Link>
+                        </td>
+                      </ClickableRow>
                     );
                   })}
                 </tbody>
@@ -234,6 +255,206 @@ export default async function PagosPage({
           </button>
         </form>
       </section>
+
+      {review ? (
+        <PanelComprobante review={review} pagina={paginaActual} closeHref={buildHref()} />
+      ) : null}
     </div>
+  );
+}
+
+function PanelComprobante({
+  review,
+  pagina,
+  closeHref,
+}: {
+  review: ProofReview;
+  pagina: number;
+  closeHref: string;
+}) {
+  const { proof, reservation, coverage, history } = review;
+  const badge = coverage ? coverageBadge(coverage) : null;
+
+  return (
+    <SidePanel
+      title={`Comprobante ${reservation.code}`}
+      subtitle={`${reservation.holderName} · ${maskIdNumber(reservation.holderIdNumber)}`}
+      closeHref={closeHref}
+    >
+      <div className="flex flex-col gap-6">
+        {badge ? (
+          <span
+            className={`inline-block w-fit rounded-full px-3 py-1 text-sm font-medium ${badge.className}`}
+          >
+            {badge.text}
+          </span>
+        ) : null}
+
+        <div>
+          <a href={`/api/archivos/${proof.imagePath}`} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/api/archivos/${proof.imagePath}`}
+              alt={`Comprobante de pago, referencia ${proof.reference}`}
+              className="max-h-[60vh] w-full rounded-lg border border-[var(--color-borde)] bg-[var(--color-fondo)] object-contain"
+            />
+          </a>
+          <p className="mt-1 text-xs text-[var(--color-texto-suave)]">
+            Haz clic en la imagen para verla en tamaño completo.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold tracking-tight">Datos del pago</h3>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+            <dt className="font-medium text-[var(--color-texto-suave)]">Referencia</dt>
+            <dd>{proof.reference}</dd>
+            <dt className="font-medium text-[var(--color-texto-suave)]">Método</dt>
+            <dd>{proof.paymentMethodName}</dd>
+            <dt className="font-medium text-[var(--color-texto-suave)]">Monto declarado</dt>
+            <dd className="tabular">{formatMoney(proof.amount, proof.currency)}</dd>
+            <dt className="font-medium text-[var(--color-texto-suave)]">En dólares</dt>
+            <dd className="tabular">{formatMoney(proof.amountUsd, "USD")}</dd>
+            <dt className="font-medium text-[var(--color-texto-suave)]">Cargado el</dt>
+            <dd className="tabular">{formatCaracasDateTime24(proof.createdAt)}</dd>
+          </dl>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold tracking-tight">Reserva</h3>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+            <dt className="font-medium text-[var(--color-texto-suave)]">Serial</dt>
+            <dd>{reservation.code}</dd>
+            <dt className="font-medium text-[var(--color-texto-suave)]">Ruta</dt>
+            <dd>
+              {reservation.routeName} ({reservation.origin} → {reservation.destination})
+            </dd>
+            <dt className="font-medium text-[var(--color-texto-suave)]">Salida</dt>
+            <dd className="tabular">{formatCaracasDateTime24(reservation.departsAt)}</dd>
+            <dt className="font-medium text-[var(--color-texto-suave)]">Pasajeros</dt>
+            <dd>{reservation.passengerCount}</dd>
+            <dt className="font-medium text-[var(--color-texto-suave)]">Estado de la reserva</dt>
+            <dd>{reservation.status}</dd>
+          </dl>
+        </div>
+
+        {coverage ? (
+          <div>
+            <h3 className="text-sm font-semibold tracking-tight">Cuentas</h3>
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+              <dt className="font-medium text-[var(--color-texto-suave)]">Total de la reserva</dt>
+              <dd className="tabular">{formatMoney(reservation.totalUsd, "USD")}</dd>
+              <dt className="font-medium text-[var(--color-texto-suave)]">Pagado antes</dt>
+              <dd className="tabular">{formatMoney(reservation.paidUsd, "USD")}</dd>
+              <dt className="font-medium text-[var(--color-texto-suave)]">Este comprobante (USD)</dt>
+              <dd className="tabular">{formatMoney(proof.amountUsd, "USD")}</dd>
+              <dt className="font-medium text-[var(--color-texto-suave)]">Saldo tras aprobar</dt>
+              <dd className="tabular font-semibold">
+                {formatMoney(coverage.balanceAfterUsd, "USD")}
+              </dd>
+            </dl>
+          </div>
+        ) : null}
+
+        <div>
+          <h3 className="text-sm font-semibold tracking-tight">
+            Historial de pagos de esta reserva
+          </h3>
+          {history.length === 0 ? (
+            <p className="mt-2 text-sm text-[var(--color-texto-suave)]">
+              Sin pagos anteriores en esta reserva.
+            </p>
+          ) : (
+            <div className="mt-2 overflow-x-auto rounded-lg border border-[var(--color-borde)]">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-[var(--color-borde)] text-xs uppercase tracking-wide text-[var(--color-texto-suave)]">
+                  <tr>
+                    <th className="px-3 py-2">Fecha</th>
+                    <th className="px-3 py-2">Tipo</th>
+                    <th className="px-3 py-2">Monto</th>
+                    <th className="px-3 py-2">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((item) => (
+                    <tr key={item.id} className="border-b border-[var(--color-borde)] last:border-0">
+                      <td className="tabular px-3 py-2">{formatCaracasDateTime24(item.at)}</td>
+                      <td className="px-3 py-2">
+                        {item.kind === "COMPROBANTE" ? "Comprobante" : "Efectivo"}
+                      </td>
+                      <td className="tabular px-3 py-2">
+                        {formatMoney(item.amount, item.currency)}
+                        {item.currency !== "USD" ? (
+                          <span className="block text-xs text-[var(--color-texto-suave)]">
+                            {formatMoney(item.amountUsd, "USD")}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2">
+                        {item.kind === "EFECTIVO" ? (
+                          "Cobrado"
+                        ) : (
+                          <>
+                            {ESTADO_COMPROBANTE_LABEL[item.status as ProofStatus]}
+                            {item.status === "RECHAZADO" && item.rejectionReason ? (
+                              <span className="block text-xs text-[var(--color-texto-suave)]">
+                                {item.rejectionReason}
+                              </span>
+                            ) : null}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {proof.status === "PENDIENTE" ? (
+          <div className="flex flex-col gap-3 border-t border-[var(--color-borde)] pt-6 sm:flex-row sm:items-start">
+            <form action={approveProofAction}>
+              <input type="hidden" name="proofId" value={proof.id} />
+              <input type="hidden" name="pagina" value={pagina} />
+              <button
+                type="submit"
+                className="rounded-lg bg-[var(--color-exito)] px-4 py-2 text-sm font-medium text-white"
+              >
+                Aprobar pago
+              </button>
+            </form>
+            <form action={rejectProofAction} className="flex flex-1 flex-col gap-2">
+              <input type="hidden" name="proofId" value={proof.id} />
+              <input type="hidden" name="pagina" value={pagina} />
+              <label className="flex flex-col gap-1 text-sm font-medium">
+                Motivo del rechazo
+                <textarea
+                  name="reason"
+                  required
+                  minLength={4}
+                  rows={2}
+                  className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
+                />
+              </label>
+              <button
+                type="submit"
+                className="w-fit rounded-lg bg-[var(--color-peligro)] px-4 py-2 text-sm font-medium text-white"
+              >
+                Rechazar
+              </button>
+            </form>
+          </div>
+        ) : (
+          <p className="border-t border-[var(--color-borde)] pt-6 text-sm text-[var(--color-texto-suave)]">
+            Este comprobante ya fue {proof.status === "APROBADO" ? "aprobado" : "rechazado"} el{" "}
+            {proof.reviewedAt ? formatCaracasDateTime24(proof.reviewedAt) : "—"}.
+            {proof.status === "RECHAZADO" && proof.rejectionReason
+              ? ` Motivo: ${proof.rejectionReason}`
+              : ""}
+          </p>
+        )}
+      </div>
+    </SidePanel>
   );
 }

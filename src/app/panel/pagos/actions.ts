@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { Currency } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -10,10 +11,13 @@ import { issueTicket } from "@/modules/tickets";
 
 const CURRENCIES = ["USD", "VES", "COP", "USDT"] as const;
 
+const paginaSchema = z.coerce.number().int().min(1).catch(1);
+
 export async function approveProofAction(formData: FormData): Promise<void> {
   const user = await requirePanelUser("payments.review");
   const agencyId = requireAgencyScope(user);
   const proofId = z.string().uuid().parse(formData.get("proofId"));
+  const pagina = paginaSchema.parse(formData.get("pagina"));
 
   const resultado = await approveProof({ proofId, panelUserId: user.id, agencyId });
   if (resultado.shouldIssueTicket) {
@@ -23,6 +27,8 @@ export async function approveProofAction(formData: FormData): Promise<void> {
   revalidatePath("/panel/pagos");
   revalidatePath("/panel");
   revalidatePath("/panel/pasajeros");
+
+  redirect(pagina > 1 ? `/panel/pagos?pagina=${pagina}` : "/panel/pagos");
 }
 
 export async function rejectProofAction(formData: FormData): Promise<void> {
@@ -33,11 +39,14 @@ export async function rejectProofAction(formData: FormData): Promise<void> {
     proofId: formData.get("proofId"),
     reason: formData.get("reason"),
   });
+  const pagina = paginaSchema.parse(formData.get("pagina"));
 
   await rejectProof({ proofId, panelUserId: user.id, agencyId, reason });
 
   revalidatePath("/panel/pagos");
   revalidatePath("/panel/pasajeros");
+
+  redirect(pagina > 1 ? `/panel/pagos?pagina=${pagina}` : "/panel/pagos");
 }
 
 export async function cashPaymentAction(formData: FormData): Promise<void> {
