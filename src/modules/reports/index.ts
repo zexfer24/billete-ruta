@@ -14,10 +14,20 @@ export {
   agencyMovements,
   departureTaxByHour,
   departureTaxRevenue,
+  getTripDetail,
   listAccounts,
+  listNewAccounts,
+  listTerminalTrips,
   newAccounts,
   recurringAccounts,
   terminalDashboard,
   terminalTripCount,
 } from "./terminal";
-export type { AccountRow, AgencyMovementRow } from "./terminal";
+export type {
+  AccountRow,
+  AgencyMovementRow,
+  NewAccountRow,
+  TerminalTripRow,
+  TripDetail,
+  TripPassengerRow,
+} from "./terminal";

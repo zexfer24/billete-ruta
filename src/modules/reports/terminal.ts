@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { round2, ZERO } from "@/lib/decimal";
 import { durationMinutes, formatCaracas } from "@/lib/time";
+import { firstNamePart } from "@/lib/identity";
 import { writeAudit } from "@/modules/audit";
 
 /**
@@ -49,8 +50,106 @@ export async function terminalTripCount(from: Date, to: Date): Promise<number> {
   return prisma.tripLog.count({ where: { arrivedAt: { gte: from, lte: to } } });
 }
 
+export interface TerminalTripRow {
+  tripLogId: string;
+  departedAt: Date | null;
+  origin: string;
+  meetingPoint: string;
+  destination: string;
+  agencyName: string;
+}
+
+/** Lista de recorridos completados en el terminal, para el tablero del admin. */
+export async function listTerminalTrips(
+  from: Date,
+  to: Date,
+  options: { limit?: number } = {},
+): Promise<{ rows: TerminalTripRow[]; total: number }> {
+  const limit = Math.min(500, Math.max(1, options.limit ?? 100));
+  const where: Prisma.TripLogWhereInput = { arrivedAt: { gte: from, lte: to } };
+
+  const [registros, total] = await Promise.all([
+    prisma.tripLog.findMany({
+      where,
+      include: { departure: { include: { route: { include: { agency: true } } } } },
+      orderBy: { departedAt: "desc" },
+      take: limit,
+    }),
+    prisma.tripLog.count({ where }),
+  ]);
+
+  return {
+    rows: registros.map((r) => ({
+      tripLogId: r.id,
+      departedAt: r.departedAt,
+      origin: r.departure.route.origin,
+      meetingPoint: r.departure.route.meetingPoint,
+      destination: r.departure.route.destination,
+      agencyName: r.departure.route.agency.name,
+    })),
+    total,
+  };
+}
+
 export async function newAccounts(from: Date, to: Date): Promise<number> {
   return prisma.passengerAccount.count({ where: { createdAt: { gte: from, lte: to } } });
+}
+
+export interface NewAccountRow {
+  id: string;
+  createdAt: Date;
+  idNumber: string;
+  firstName: string;
+  firstSurname: string;
+}
+
+/**
+ * Cuentas nuevas del terminal, para el tablero del admin. Cada consulta queda
+ * auditada porque expone la identidad de pasajeros concretos.
+ */
+export async function listNewAccounts(
+  from: Date,
+  to: Date,
+  panelUserId: string,
+  options: { limit?: number } = {},
+): Promise<{ rows: NewAccountRow[]; total: number }> {
+  const limit = Math.min(500, Math.max(1, options.limit ?? 100));
+  const where: Prisma.PassengerAccountWhereInput = { createdAt: { gte: from, lte: to } };
+
+  const [cuentas, total] = await Promise.all([
+    prisma.passengerAccount.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    prisma.passengerAccount.count({ where }),
+  ]);
+
+  const rows: NewAccountRow[] = cuentas.map((c) => ({
+    id: c.id,
+    createdAt: c.createdAt,
+    idNumber: c.idNumber,
+    firstName: firstNamePart(c.givenNames),
+    firstSurname: firstNamePart(c.surnames),
+  }));
+
+  await prisma.$transaction(async (tx) => {
+    await writeAudit(tx, {
+      actorType: "PANEL",
+      actorPanelUserId: panelUserId,
+      entityType: "PassengerAccount",
+      entityId: "consulta",
+      action: "CONSULTA_USUARIOS_NUEVOS",
+      after: {
+        desde: from.toISOString(),
+        hasta: to.toISOString(),
+        resultados: rows.length,
+        total,
+      },
+    });
+  });
+
+  return { rows, total };
 }
 
 /** Cuentas con dos o más viajes pagados: los usuarios que vuelven. */
@@ -117,6 +216,113 @@ export async function agencyMovements(
       r.departedAt && r.arrivedAt ? durationMinutes(r.departedAt, r.arrivedAt) : null,
     passengerCount: r.passengerCount,
   }));
+}
+
+export interface TripPassengerRow {
+  id: string;
+  fullName: string;
+  idNumber: string;
+  isHolder: boolean;
+  reservationCode: string;
+  boardedAt: Date;
+}
+
+export interface TripDetail {
+  tripLogId: string;
+  departureId: string;
+  agencyName: string;
+  routeName: string;
+  origin: string;
+  meetingPoint: string;
+  destination: string;
+  driverName: string;
+  driverIdNumber: string;
+  vehiclePlate: string;
+  vehicleBrand: string;
+  vehicleModel: string;
+  departsAt: Date;
+  boardingStartedAt: Date | null;
+  departedAt: Date | null;
+  arrivedAt: Date | null;
+  durationMinutes: number | null;
+  passengerCount: number;
+  passengers: TripPassengerRow[];
+}
+
+/**
+ * Detalle de un viaje para el panel de Movimientos del admin: agencia, ruta,
+ * chofer, unidad y el manifiesto de pasajeros que abordaron. La cédula va
+ * completa porque es el manifiesto y solo lo ve el admin. Cada consulta
+ * queda auditada.
+ */
+export async function getTripDetail(
+  tripLogId: string,
+  panelUserId: string,
+): Promise<TripDetail | null> {
+  const registro = await prisma.tripLog.findUnique({
+    where: { id: tripLogId },
+    include: {
+      driver: true,
+      vehicle: true,
+      departure: { include: { route: { include: { agency: true } } } },
+    },
+  });
+  if (!registro) return null;
+
+  const pasajeros = await prisma.passenger.findMany({
+    where: {
+      reservation: { departureId: registro.departureId },
+      boardedAt: { not: null },
+    },
+    include: { reservation: { select: { code: true } } },
+    orderBy: [{ boardedAt: "asc" }, { createdAt: "asc" }],
+  });
+
+  const detalle: TripDetail = {
+    tripLogId: registro.id,
+    departureId: registro.departureId,
+    agencyName: registro.departure.route.agency.name,
+    routeName: registro.departure.route.name,
+    origin: registro.departure.route.origin,
+    meetingPoint: registro.departure.route.meetingPoint,
+    destination: registro.departure.route.destination,
+    driverName: registro.driver.fullName,
+    driverIdNumber: registro.driver.idNumber,
+    vehiclePlate: registro.vehicle.plate,
+    vehicleBrand: registro.vehicle.brand,
+    vehicleModel: registro.vehicle.model,
+    departsAt: registro.departure.departsAt,
+    boardingStartedAt: registro.boardingStartedAt,
+    departedAt: registro.departedAt,
+    arrivedAt: registro.arrivedAt,
+    durationMinutes:
+      registro.departedAt && registro.arrivedAt
+        ? durationMinutes(registro.departedAt, registro.arrivedAt)
+        : null,
+    passengerCount: registro.passengerCount,
+    passengers: pasajeros.map((p) => ({
+      id: p.id,
+      fullName: p.fullName,
+      idNumber: p.idNumber,
+      isHolder: p.isHolder,
+      reservationCode: p.reservation.code,
+      // El where filtró boardedAt no nulo, así que el valor siempre existe aquí.
+      boardedAt: p.boardedAt as Date,
+    })),
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await writeAudit(tx, {
+      actorType: "PANEL",
+      actorPanelUserId: panelUserId,
+      entityType: "TripLog",
+      entityId: tripLogId,
+      action: "CONSULTA_PASAJEROS_VIAJE",
+      after: { departureId: registro.departureId, pasajeros: detalle.passengers.length },
+    });
+  });
+
+  return detalle;
 }
 
 export interface AccountRow {
