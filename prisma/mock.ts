@@ -25,6 +25,25 @@ const CUENTAS = 1500;
 /** Antigüedad máxima de registro de una cuenta, en días. */
 const ANTIGUEDAD_MAX_DIAS = 180;
 
+/**
+ * Cuentas documentadas en el README. Se recrean siempre, porque el reinicio
+ * borra las que dejó el seed y sin ellas nadie puede entrar como pasajero.
+ */
+const PASAJEROS_FIJOS = [
+  {
+    idNumber: "V12345678",
+    fullName: "Ana Pérez Rivas",
+    phone: "+584121112233",
+    birthYear: 1993,
+  },
+  {
+    idNumber: "V87654321",
+    fullName: "Luis Gómez Salas",
+    phone: "+584141112233",
+    birthYear: 1986,
+  },
+] as const;
+
 const NOMBRES = [
   "Ana", "Luis", "María", "José", "Carmen", "Carlos", "Rosa", "Pedro", "Yubisay", "Rafael",
   "Gabriela", "Jesús", "Yolanda", "Miguel", "Zuleima", "Antonio", "Marisol", "Freddy",
@@ -273,8 +292,24 @@ async function main(): Promise<void> {
   // una sola vez y se reutiliza. Todas comparten la contraseña Pasajero.2026.
   const hashCompartido = await argon2.hash("Pasajero.2026", { type: argon2.argon2id });
 
-  const cedulasUsadas = new Set<string>();
-  const cuentas = Array.from({ length: CUENTAS }, () => {
+  const cedulasUsadas = new Set<string>(PASAJEROS_FIJOS.map((p) => p.idNumber));
+
+  const cuentasFijas = PASAJEROS_FIJOS.map((fijo) => {
+    const registro = new Date(ahora.getTime() - 90 * 24 * 3_600_000);
+    return {
+      id: randomUUID(),
+      idNumber: fijo.idNumber,
+      fullName: fijo.fullName,
+      phone: fijo.phone,
+      birthYear: fijo.birthYear,
+      passwordHash: hashCompartido,
+      createdAt: registro,
+      updatedAt: registro,
+      lastLoginAt: new Date(ahora.getTime() - entero(1, 48) * 3_600_000),
+    };
+  });
+
+  const cuentasAleatorias = Array.from({ length: CUENTAS - cuentasFijas.length }, () => {
     const registro = new Date(
       ahora.getTime() - entero(0, ANTIGUEDAD_MAX_DIAS) * 24 * 3_600_000 - entero(0, 86_400) * 1000,
     );
@@ -294,13 +329,15 @@ async function main(): Promise<void> {
     };
   });
 
+  const cuentas = [...cuentasFijas, ...cuentasAleatorias];
+
   for (let i = 0; i < cuentas.length; i += 500) {
     await prisma.passengerAccount.createMany({ data: cuentas.slice(i, i + 500) });
   }
 
   // Casi todos tienen la cédula cargada; algunos aún no la suben.
   const documentos = cuentas
-    .filter(() => suerte(0.92))
+    .filter((c) => PASAJEROS_FIJOS.some((f) => f.idNumber === c.idNumber) || suerte(0.92))
     .map((c) => ({
       id: randomUUID(),
       accountId: c.id,
@@ -643,6 +680,61 @@ async function main(): Promise<void> {
     }
   }
 
+  // --- Reservas visibles para las cuentas documentadas --------------------
+  // Sin esto las cuentas del README podrían quedar sin ninguna reserva y el
+  // recorrido de prueba del sistema no tendría nada que mostrar.
+  const salidasFuturas = new Set(todas.filter((s) => !s.pasada).map((s) => s.id));
+  const titularPorReserva = new Map<string, Prisma.PassengerCreateManyInput>();
+  for (const pasajero of pasajeros) {
+    if (pasajero.isHolder) titularPorReserva.set(pasajero.reservationId, pasajero);
+  }
+  const mensajesPorReserva = new Map<string, Prisma.OutboundMessageCreateManyInput[]>();
+  for (const mensaje of mensajes) {
+    if (!mensaje.reservationId) continue;
+    const lista = mensajesPorReserva.get(mensaje.reservationId) ?? [];
+    lista.push(mensaje);
+    mensajesPorReserva.set(mensaje.reservationId, lista);
+  }
+
+  const yaAsignadas = new Set<string>();
+
+  function reasignar(cuenta: (typeof cuentas)[number], estados: ReservationStatus[]): void {
+    for (const estado of estados) {
+      const candidata = reservas.find(
+        (r) =>
+          r.status === estado &&
+          salidasFuturas.has(r.departureId) &&
+          !yaAsignadas.has(r.id as string) &&
+          r.passengerCount === 1,
+      );
+      if (!candidata) continue;
+      const id = candidata.id as string;
+      yaAsignadas.add(id);
+      candidata.accountId = cuenta.id;
+
+      const titular = titularPorReserva.get(id);
+      if (titular) {
+        titular.fullName = cuenta.fullName;
+        titular.idNumber = cuenta.idNumber;
+        titular.birthYear = cuenta.birthYear;
+      }
+      for (const mensaje of mensajesPorReserva.get(id) ?? []) {
+        mensaje.phone = cuenta.phone;
+      }
+    }
+  }
+
+  const estadosDemo: ReservationStatus[] = [
+    "PAGADA",
+    "ABONADA",
+    "EN_VALIDACION",
+    "PENDIENTE_PAGO",
+    "PAGO_EN_SITIO",
+  ];
+  for (const cuenta of cuentasFijas) {
+    reasignar(cuenta, estadosDemo);
+  }
+
   async function insertar<T>(
     nombre: string,
     filas: T[],
@@ -707,7 +799,12 @@ async function main(): Promise<void> {
       `  Recorridos completados       ${recorridos}`,
       `  Tasa de salida últimas 24 h  $ ${tasa24h.toFixed(2)}`,
       "",
-      "  Todas las cuentas generadas usan la contraseña Pasajero.2026.",
+      "  Acceso de pasajeros en /ingresar:",
+      ...PASAJEROS_FIJOS.map(
+        (p) => `    Cédula ${p.idNumber}   Pasajero.2026   (${p.fullName})`,
+      ),
+      "",
+      "  Las demás cuentas generadas usan la misma contraseña Pasajero.2026.",
       "",
     ].join("\n"),
   );
