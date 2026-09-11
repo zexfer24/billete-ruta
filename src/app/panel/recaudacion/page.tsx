@@ -1,13 +1,18 @@
+import Link from "next/link";
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { last24h, revenueByRoute } from "@/modules/reports";
 import type { RouteRevenueRow } from "@/modules/reports";
 import {
-  caracasDayEnd,
   caracasDayInputValue,
-  caracasDayStart,
+  caracasHourEnd,
+  caracasHourStart,
+  caracasHourValue,
   formatCaracasDateTime24,
 } from "@/lib/time";
 import { formatMoney, round2, ZERO } from "@/lib/decimal";
+
+/** Horas "00" a "23" para los <select> de filtro, en formato de 24 horas. */
+const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
 
 function csvField(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
@@ -26,15 +31,23 @@ function buildCsv(filas: RouteRevenueRow[]): string {
 export default async function RecaudacionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ desde?: string; hasta?: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string; horaDesde?: string; horaHasta?: string }>;
 }) {
   const user = await requirePanelUser("agency.reports");
   const agencyId = requireAgencyScope(user);
   const params = await searchParams;
 
   const defaults = last24h();
-  const from = params.desde ? caracasDayStart(params.desde, defaults.from) : defaults.from;
-  const to = params.hasta ? caracasDayEnd(params.hasta, defaults.to) : defaults.to;
+  let from = params.desde
+    ? caracasHourStart(params.desde, params.horaDesde ?? "00", defaults.from)
+    : defaults.from;
+  let to = params.hasta
+    ? caracasHourEnd(params.hasta, params.horaHasta ?? "23", defaults.to)
+    : defaults.to;
+  if (from > to) {
+    from = defaults.from;
+    to = defaults.to;
+  }
 
   const filas = await revenueByRoute(agencyId, from, to);
   const total = filas.reduce((acc, f) => round2(acc.add(f.totalUsd)), ZERO);
@@ -65,6 +78,20 @@ export default async function RecaudacionPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
+          Hora
+          <select
+            name="horaDesde"
+            defaultValue={caracasHourValue(from)}
+            className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
+          >
+            {HOURS.map((h) => (
+              <option key={h} value={h}>
+                {h}:00
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-medium">
           Hasta
           <input
             type="date"
@@ -73,12 +100,29 @@ export default async function RecaudacionPage({
             className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Hora
+          <select
+            name="horaHasta"
+            defaultValue={caracasHourValue(to)}
+            className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
+          >
+            {HOURS.map((h) => (
+              <option key={h} value={h}>
+                {h}:59
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="submit"
           className="rounded-lg bg-[var(--color-acento)] px-4 py-2 text-sm font-medium text-white"
         >
           Filtrar
         </button>
+        <Link href="/panel/recaudacion" className="text-sm text-[var(--color-texto-suave)] underline">
+          Volver a las últimas 24 h
+        </Link>
       </form>
 
       <p className="text-sm text-[var(--color-texto-suave)]">

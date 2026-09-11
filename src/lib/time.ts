@@ -66,6 +66,29 @@ export function caracasDayEnd(value: string, fallback: Date): Date {
   return Number.isNaN(fecha.getTime()) ? fallback : fecha;
 }
 
+/** Instante en que empieza esa hora del día en Caracas; cae al valor por defecto si la fecha o la hora no son válidas. */
+export function caracasHourStart(date: string, hour: string, fallback: Date): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}$/.test(hour)) return fallback;
+  const hourValue = Number.parseInt(hour, 10);
+  if (hourValue < 0 || hourValue > 23) return fallback;
+  const fecha = new Date(`${date}T${hour}:00:00.000${CARACAS_OFFSET}`);
+  return Number.isNaN(fecha.getTime()) ? fallback : fecha;
+}
+
+/** Instante en que termina esa hora del día en Caracas; cae al valor por defecto si la fecha o la hora no son válidas. */
+export function caracasHourEnd(date: string, hour: string, fallback: Date): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}$/.test(hour)) return fallback;
+  const hourValue = Number.parseInt(hour, 10);
+  if (hourValue < 0 || hourValue > 23) return fallback;
+  const fecha = new Date(`${date}T${hour}:59:59.999${CARACAS_OFFSET}`);
+  return Number.isNaN(fecha.getTime()) ? fallback : fecha;
+}
+
+/** La hora en Caracas como "HH", para precargar los <select> de hora. */
+export function caracasHourValue(date: Date): string {
+  return formatInTimeZone(date, BUSINESS_TZ, "HH");
+}
+
 /** Duración legible: "4 h 35 min", "2 h", "45 min". */
 export function formatDuration(minutes: number): string {
   if (minutes <= 0) return "0 min";
