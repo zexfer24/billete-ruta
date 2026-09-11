@@ -1,7 +1,7 @@
 import type { ReservationStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { toDecimal, ZERO } from "@/lib/decimal";
-import { PAYMENT_STATES, paymentStateOf } from "@/modules/reports";
+import { PAYMENT_STATES, paymentStateFromSlug, paymentStateOf } from "@/modules/reports";
 
 describe("paymentStateOf", () => {
   it("Confirmado para PAGADA o ABORDADA, sin importar lo pagado", () => {
@@ -66,6 +66,30 @@ describe("paymentStateOf", () => {
     ];
     for (const estado of TODOS) {
       expect(PAYMENT_STATES).toContain(paymentStateOf(estado, ZERO));
+    }
+  });
+});
+
+describe("paymentStateFromSlug", () => {
+  it("traduce los cuatro slugs válidos", () => {
+    expect(paymentStateFromSlug("pendiente")).toBe("Pendiente");
+    expect(paymentStateFromSlug("abonado")).toBe("Abonado");
+    expect(paymentStateFromSlug("confirmado")).toBe("Confirmado");
+    expect(paymentStateFromSlug("sin-efecto")).toBe("Sin efecto");
+  });
+
+  it("devuelve undefined para valores ausentes o inválidos, incluidas claves heredadas de Object.prototype", () => {
+    const invalidos = [
+      undefined,
+      "",
+      "ABONADO",
+      "constructor",
+      "toString",
+      "__proto__",
+      "hasOwnProperty",
+    ] as const;
+    for (const slug of invalidos) {
+      expect(paymentStateFromSlug(slug)).toBeUndefined();
     }
   });
 });

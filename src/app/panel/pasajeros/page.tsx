@@ -1,19 +1,11 @@
 import Link from "next/link";
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { listAgencyDepartures } from "@/modules/catalog";
-import { listAgencyPassengers } from "@/modules/reports";
-import type { AgencyPassengerRow, PaymentState } from "@/modules/reports";
+import { listAgencyPassengers, paymentStateFromSlug } from "@/modules/reports";
+import type { AgencyPassengerRow } from "@/modules/reports";
 import { formatMoney, toDecimal } from "@/lib/decimal";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { maskIdNumber } from "@/lib/identity";
-
-/** Valores de la URL para el filtro de estado de pago. */
-const PAYMENT_STATE_PARAMS: Record<string, PaymentState> = {
-  pendiente: "Pendiente",
-  abonado: "Abonado",
-  confirmado: "Confirmado",
-  "sin-efecto": "Sin efecto",
-};
 
 function csvField(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
@@ -68,7 +60,7 @@ export default async function PasajerosPage({
   const paginaActual = Math.max(1, Number.parseInt(params.pagina ?? "1", 10) || 1);
   const filtro = {
     departureId: params.salida || undefined,
-    paymentState: params.pago ? PAYMENT_STATE_PARAMS[params.pago] : undefined,
+    paymentState: paymentStateFromSlug(params.pago),
     search: params.buscar || undefined,
   };
 

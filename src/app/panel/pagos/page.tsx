@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { ProofStatus } from "@prisma/client";
 import { ForbiddenError, requireAgencyScope, requirePanelUser } from "@/modules/auth";
@@ -81,6 +82,16 @@ export default async function PagosPage({
   ]);
 
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+
+  // Si la página pedida quedó vacía (por ejemplo, tras aprobar o rechazar el
+  // último comprobante de la última página, o por una URL escrita a mano),
+  // redirige a la última página válida sin arrastrar el `comprobante`.
+  if (total > 0 && paginaActual > paginas) {
+    const params = new URLSearchParams();
+    if (paginas > 1) params.set("pagina", String(paginas));
+    const query = params.toString();
+    redirect(query ? `/panel/pagos?${query}` : "/panel/pagos");
+  }
 
   return (
     <div className="flex flex-col gap-10">

@@ -64,7 +64,7 @@ export default async function MovimientosAdminPage({
     if (rawParams.agency) params.set("agency", rawParams.agency);
     if (viaje) params.set("viaje", viaje);
     const query = params.toString();
-    return query ? `?${query}` : "?";
+    return query ? `/panel/admin/movimientos?${query}` : "/panel/admin/movimientos";
   }
 
   const [movements, agencies, detail] = await Promise.all([

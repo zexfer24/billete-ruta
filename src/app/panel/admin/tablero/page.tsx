@@ -77,7 +77,7 @@ export default async function TableroAdminPage({
       </div>
 
       <details className="group rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-4">
-        <summary className="flex list-none flex-wrap items-center gap-2 rounded-md border border-[var(--color-borde)] px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[var(--color-acento-suave)]">
+        <summary className="flex list-none flex-wrap items-center gap-2 rounded-md border border-[var(--color-borde)] px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[var(--color-acento-suave)] [&::-webkit-details-marker]:hidden">
           <span>
             Rango: {formatCaracasDateTime24(from)} — {formatCaracasDateTime24(to)}
           </span>

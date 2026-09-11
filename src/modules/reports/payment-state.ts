@@ -52,4 +52,23 @@ export function paymentStateWhere(state: PaymentState): Prisma.ReservationWhereI
     case "Pendiente":
       return { status: { in: [...ABIERTOS_STATUSES] }, paidUsd: { lte: 0 } };
   }
+  const exhaustivo: never = state;
+  throw new Error(`Estado de pago desconocido: ${String(exhaustivo)}`);
+}
+
+/** Traduce el slug de la URL (`?pago=`) a un `PaymentState`. Usa un `Map` en
+ * lugar de un objeto plano para que claves heredadas de `Object.prototype`
+ * (`constructor`, `toString`, `__proto__`, `hasOwnProperty`, …) nunca
+ * coincidan; cualquier valor que no sea uno de los cuatro slugs válidos
+ * devuelve `undefined`. */
+const SLUG_TO_PAYMENT_STATE = new Map<string, PaymentState>([
+  ["pendiente", "Pendiente"],
+  ["abonado", "Abonado"],
+  ["confirmado", "Confirmado"],
+  ["sin-efecto", "Sin efecto"],
+]);
+
+export function paymentStateFromSlug(slug: string | undefined): PaymentState | undefined {
+  if (slug === undefined) return undefined;
+  return SLUG_TO_PAYMENT_STATE.get(slug);
 }
