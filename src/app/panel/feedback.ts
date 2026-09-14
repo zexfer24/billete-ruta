@@ -3,6 +3,7 @@ import { ForbiddenError } from "@/modules/auth";
 import {
   DepartureClosedError,
   InvalidTransitionError,
+  MissingDocumentsError,
   NoSeatsAvailableError,
   NotOwnerError,
   ValidationError,
@@ -21,7 +22,8 @@ export function userFacingMessage(error: unknown): string | null {
     error instanceof ValidationError ||
     error instanceof NoSeatsAvailableError ||
     error instanceof DepartureClosedError ||
-    error instanceof NotOwnerError
+    error instanceof NotOwnerError ||
+    error instanceof MissingDocumentsError
   ) {
     return error.message;
   }

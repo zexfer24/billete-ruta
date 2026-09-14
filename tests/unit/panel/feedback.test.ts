@@ -4,6 +4,7 @@ import { ForbiddenError } from "@/modules/auth";
 import {
   DepartureClosedError,
   InvalidTransitionError,
+  MissingDocumentsError,
   NoSeatsAvailableError,
   NotOwnerError,
   ValidationError,
@@ -29,6 +30,15 @@ describe("userFacingMessage", () => {
   it("traduce NotOwnerError con su propio texto", () => {
     const error = new NotOwnerError();
     expect(userFacingMessage(error)).toBe("Esta reserva no pertenece a tu cuenta.");
+  });
+
+  it("traduce MissingDocumentsError con su propio texto", () => {
+    const error = new MissingDocumentsError(
+      "Antes de reservar debes cargar la foto de tu cédula en la sección Documentos.",
+    );
+    expect(userFacingMessage(error)).toBe(
+      "Antes de reservar debes cargar la foto de tu cédula en la sección Documentos.",
+    );
   });
 
   it("traduce InvalidTransitionError a un mensaje fijo", () => {
