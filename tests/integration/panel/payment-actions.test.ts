@@ -41,7 +41,7 @@ vi.mock("@/modules/auth", async (importOriginal) => {
 });
 
 const { approveProofAction, cashPaymentAction, rejectProofAction } = await import(
-  "@/app/panel/pagos/actions"
+  "@/app/panel/pasajeros/actions"
 );
 
 beforeEach(async () => {
@@ -98,6 +98,7 @@ describe("cashPaymentAction", () => {
       ),
     );
 
+    expect(url.pathname).toBe("/panel/pasajeros");
     expect(url.searchParams.get("error")).toBeTruthy();
     expect(await prisma.cashPayment.count()).toBe(0);
   });
@@ -143,6 +144,7 @@ describe("cashPaymentAction", () => {
       ),
     );
 
+    expect(url.pathname).toBe("/panel/pasajeros");
     expect(url.searchParams.get("ok")).toBe("cobro-ticket");
     const fila = await prisma.reservation.findUniqueOrThrow({
       where: { id: reserva.reservationId },
@@ -152,6 +154,72 @@ describe("cashPaymentAction", () => {
       where: { reservationId: reserva.reservationId },
     });
     expect(ticket).not.toBeNull();
+  });
+
+  it("con reservationId desde el panel de la reserva, vuelve a ese panel y emite el ticket", async () => {
+    const { agencia, operador, fisico, salida } = await escenario();
+    const cuenta = await createAccountFixture();
+    const reserva = await createReservation({
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: fisico.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      cashPaymentAction(
+        buildFormData({
+          reservationId: reserva.reservationId,
+          amount: "47.50",
+          currency: "USD",
+        }),
+      ),
+    );
+
+    expect(url.pathname).toBe("/panel/pasajeros");
+    expect(url.searchParams.get("reserva")).toBe(reserva.reservationId);
+    expect(url.searchParams.get("ok")).toBe("cobro-ticket");
+    const fila = await prisma.reservation.findUniqueOrThrow({
+      where: { id: reserva.reservationId },
+    });
+    expect(fila.status).toBe("PAGADA");
+    const ticket = await prisma.ticket.findUnique({
+      where: { reservationId: reserva.reservationId },
+    });
+    expect(ticket).not.toBeNull();
+  });
+
+  it("con origen=tablero y serial inexistente, vuelve al tablero con el formulario abierto", async () => {
+    const { agencia, operador } = await escenario();
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      cashPaymentAction(
+        buildFormData({
+          code: "TR-INEXISTENTE",
+          amount: "47.50",
+          currency: "USD",
+          origen: "tablero",
+        }),
+      ),
+    );
+
+    expect(url.pathname).toBe("/panel");
+    expect(url.searchParams.get("registrar")).toBe("cobro");
+    expect(url.searchParams.get("error")).toBeTruthy();
+  });
+
+  it("sin reservationId ni code da el error de reserva no indicada", async () => {
+    const { agencia, operador } = await escenario();
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      cashPaymentAction(buildFormData({ amount: "47.50", currency: "USD" })),
+    );
+
+    expect(url.searchParams.get("error")).toBe("Indica la reserva a cobrar.");
   });
 });
 
@@ -218,5 +286,36 @@ describe("rejectProofAction y approveProofAction", () => {
     );
 
     expect(url.searchParams.get("error")).toBe("Este comprobante ya fue rechazado.");
+  });
+
+  it("aprobar con reservaId oculto vuelve al panel de esa reserva", async () => {
+    const { agencia, operador, digital, salida } = await escenario();
+    const cuenta = await createAccountFixture();
+    const reserva = await createReservation({
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: digital.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+    const { proofId } = await submitProof({
+      reservationId: reserva.reservationId,
+      accountId: cuenta.id,
+      paymentMethodId: digital.id,
+      reference: "REF-0003",
+      amount: "47.50",
+      currency: "USD",
+      imagePath: "comprobantes/x/a.png",
+    });
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      approveProofAction(buildFormData({ proofId, reservaId: reserva.reservationId })),
+    );
+
+    expect(url.pathname).toBe("/panel/pasajeros");
+    expect(url.searchParams.get("reserva")).toBe(reserva.reservationId);
+    expect(url.searchParams.get("comprobante")).toBeNull();
+    expect(url.searchParams.get("ok")).toBe("aprobado");
   });
 });
