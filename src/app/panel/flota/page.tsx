@@ -5,7 +5,6 @@ import { listDrivers, listVehicles } from "@/modules/agencies";
 import { agencyFleetStatus } from "@/modules/reports";
 import type { UnitDeparture } from "@/modules/reports";
 import { UNIT_STATE_LABELS, unitStateTone, type UnitState } from "@/lib/labels";
-import { formatCaracas, formatCaracasTime24 } from "@/lib/time";
 import { SidePanel } from "@/components/side-panel";
 import { ClickableRow } from "@/components/clickable-row";
 import { PanelFeedback } from "@/components/panel-feedback";
@@ -20,6 +19,7 @@ import {
 } from "@/components/panel-ui";
 import { VehicleForm } from "../_forms/vehicle-form";
 import { DriverForm } from "../_forms/driver-form";
+import { describeUnitTrip } from "../_shared/unit-trip";
 
 /** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
 const OK_LABELS: Record<string, string> = {
@@ -43,46 +43,14 @@ const ORDEN_RESUMEN: readonly UnitState[] = [
  * vehículos y la de choferes para no duplicar la lógica entre pestañas.
  */
 function TripCell({ current, upcoming }: { current: UnitDeparture | null; upcoming: UnitDeparture[] }) {
-  if (current?.status === "EN_RUTA") {
-    return (
-      <div>
-        <p>{current.routeName}</p>
-        <p className="text-xs text-[var(--color-texto-suave)]">
-          Salió {formatCaracasTime24(current.departedAt ?? current.departsAt)}
-          {current.estimatedArrivalAt
-            ? ` · llegada estimada ${formatCaracasTime24(current.estimatedArrivalAt)}`
-            : ""}
-        </p>
-      </div>
-    );
-  }
-
-  if (current?.status === "MANIFIESTO_CERRADO") {
-    return (
-      <div>
-        <p>{current.routeName}</p>
-        <p className="text-xs text-[var(--color-texto-suave)]">
-          Embarcando · sale {formatCaracasTime24(current.departsAt)}
-        </p>
-      </div>
-    );
-  }
-
-  const proxima = upcoming[0];
-  if (proxima) {
-    const restantes = upcoming.length - 1;
-    return (
-      <div>
-        <p>{proxima.routeName}</p>
-        <p className="text-xs text-[var(--color-texto-suave)]">
-          {formatCaracas(proxima.departsAt, "dd/MM HH:mm")}
-          {restantes > 0 ? ` · +${restantes} más` : ""}
-        </p>
-      </div>
-    );
-  }
-
-  return <span className="text-[var(--color-texto-suave)]">—</span>;
+  const viaje = describeUnitTrip({ current, upcoming }, new Date());
+  if (!viaje) return <span className="text-[var(--color-texto-suave)]">—</span>;
+  return (
+    <div>
+      <p>{viaje.title}</p>
+      <p className="text-xs text-[var(--color-texto-suave)]">{viaje.detail}</p>
+    </div>
+  );
 }
 
 export default async function FlotaPage({
