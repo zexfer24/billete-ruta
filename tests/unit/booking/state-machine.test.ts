@@ -43,6 +43,8 @@ describe("occupiesSeat", () => {
 describe("canTransition", () => {
   const validas: Array<[ReservationStatus, ReservationStatus]> = [
     ["PENDIENTE_PAGO", "EN_VALIDACION"],
+    ["PENDIENTE_PAGO", "ABONADA"],
+    ["PENDIENTE_PAGO", "PAGADA"],
     ["PENDIENTE_PAGO", "LIBERADA"],
     ["PENDIENTE_PAGO", "CANCELADA"],
     ["EN_VALIDACION", "ABONADA"],
@@ -66,9 +68,8 @@ describe("canTransition", () => {
   });
 
   const invalidas: Array<[ReservationStatus, ReservationStatus]> = [
-    ["PENDIENTE_PAGO", "PAGADA"],
     ["PENDIENTE_PAGO", "ABORDADA"],
-    ["PENDIENTE_PAGO", "ABONADA"],
+    ["PENDIENTE_PAGO", "NO_SHOW"],
     ["PAGADA", "PENDIENTE_PAGO"],
     ["PAGADA", "ABONADA"],
     ["PAGADA", "EN_VALIDACION"],

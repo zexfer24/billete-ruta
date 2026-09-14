@@ -13,9 +13,11 @@ export const OCCUPYING_STATUSES = [
 /**
  * Transiciones permitidas. Ver la sección 8 de la especificación.
  * PAGO_EN_SITIO no llega a NO_SHOW: si nunca pagó, se cancela al registrar la salida.
+ * El cobro en efectivo del panel puede saldar o abonar una reserva digital que
+ * todavía está PENDIENTE_PAGO, sin pasar por EN_VALIDACION.
  */
 const TRANSITIONS: Record<ReservationStatus, readonly ReservationStatus[]> = {
-  PENDIENTE_PAGO: ["EN_VALIDACION", "LIBERADA", "CANCELADA"],
+  PENDIENTE_PAGO: ["EN_VALIDACION", "ABONADA", "PAGADA", "LIBERADA", "CANCELADA"],
   EN_VALIDACION: ["ABONADA", "PAGADA", "PENDIENTE_PAGO", "CANCELADA"],
   ABONADA: ["EN_VALIDACION", "PAGADA", "CANCELADA"],
   PAGO_EN_SITIO: ["PAGADA", "LIBERADA", "CANCELADA", "ABORDADA"],

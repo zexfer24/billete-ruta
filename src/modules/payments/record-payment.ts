@@ -4,6 +4,7 @@ import { formatMoney, round2, toDecimal, ZERO } from "@/lib/decimal";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { writeAudit } from "@/modules/audit";
 import { balanceUsd, statusAfterPayment, toUsd } from "@/modules/catalog/pricing";
+import { getCurrentExchangeRate } from "@/modules/catalog/rates";
 import { enqueueMessage } from "@/modules/messaging";
 import { ForbiddenError } from "@/modules/auth/permissions";
 import { NotOwnerError, ValidationError } from "@/modules/booking/errors";
@@ -11,6 +12,48 @@ import { transitionReservation } from "@/modules/booking/transition";
 
 /** Estados en los que el pasajero todavía puede subir un comprobante. */
 const CAN_SUBMIT_PROOF = ["PENDIENTE_PAGO", "ABONADA", "EN_VALIDACION", "PAGO_EN_SITIO"] as const;
+
+const CURRENCY_LABELS: Record<Currency, string> = {
+  USD: "USD",
+  USDT: "USDT",
+  VES: "VES",
+  COP: "COP",
+};
+
+/**
+ * Convierte un pago a dólares. Si llega en la moneda de la reserva se usa la
+ * tasa congelada al vender (el precio quedó fijado a esa tasa); si llega en
+ * otra moneda (VES o COP) se usa la tasa vigente en ese instante, porque esa
+ * tasa nunca se fijó para esta reserva. USD y USDT siempre van 1:1.
+ */
+async function paymentAmountUsd(
+  tx: Prisma.TransactionClient,
+  {
+    amount,
+    currency,
+    reservation,
+    now,
+  }: {
+    amount: Prisma.Decimal;
+    currency: Currency;
+    reservation: { currency: Currency; exchangeRateUsed: Prisma.Decimal };
+    now: Date;
+  },
+): Promise<Prisma.Decimal> {
+  if (currency === reservation.currency) {
+    return toUsd(amount, currency, reservation.exchangeRateUsed);
+  }
+  if (currency === "USD" || currency === "USDT") {
+    return toUsd(amount, currency, reservation.exchangeRateUsed);
+  }
+  const tasaVigente = await getCurrentExchangeRate(currency, now, tx);
+  if (tasaVigente === null) {
+    throw new ValidationError(
+      `No hay una tasa de cambio vigente para ${CURRENCY_LABELS[currency]}. El administrador debe cargarla.`,
+    );
+  }
+  return toUsd(amount, currency, tasaVigente);
+}
 
 export interface SubmitProofInput {
   reservationId: string;
@@ -47,7 +90,12 @@ export async function submitProof(input: SubmitProofInput): Promise<{ proofId: s
       );
     }
 
-    const montoUsd = toUsd(monto, input.currency, reserva.exchangeRateUsed);
+    const montoUsd = await paymentAmountUsd(tx, {
+      amount: monto,
+      currency: input.currency,
+      reservation: reserva,
+      now: ahora,
+    });
 
     const comprobante = await tx.paymentProof.create({
       data: {
@@ -338,7 +386,12 @@ export async function registerCashPayment(
       return { shouldIssueTicket: false };
     }
 
-    const montoUsd = toUsd(monto, input.currency, reserva.exchangeRateUsed);
+    const montoUsd = await paymentAmountUsd(tx, {
+      amount: monto,
+      currency: input.currency,
+      reservation: reserva,
+      now: ahora,
+    });
     const nuevoPagado = round2(reserva.paidUsd.add(montoUsd));
 
     await tx.cashPayment.create({

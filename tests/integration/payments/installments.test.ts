@@ -1,13 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { ForbiddenError } from "@/modules/auth";
-import { NotOwnerError, createReservation, getAvailability } from "@/modules/booking";
+import { NotOwnerError, ValidationError, createReservation, getAvailability } from "@/modules/booking";
 import {
   approveProof,
   registerCashPayment,
   rejectProof,
   submitProof,
 } from "@/modules/payments";
+import { runSweeps } from "@/worker/sweeps";
 import {
   createAccountFixture,
   createAgencyFixture,
@@ -344,5 +345,129 @@ describe("abonos parciales", () => {
     const { salida } = await createDepartureFixture({ capacity: 5 });
     const antes = await getAvailability(salida.id);
     expect(antes.available).toBe(5);
+  });
+});
+
+describe("conversión de moneda y cobro sin pagos previos", () => {
+  /** Reserva digital en USD de un solo pasajero: 45 de tarifa + 2,50 de tasa = 47,50 USD. */
+  async function escenarioDigitalUsd() {
+    const { salida, agencia } = await createDepartureFixture({ capacity: 20 });
+    const metodo = await createPaymentMethodFixture({ kind: "DIGITAL", currency: "USD" });
+    const cuenta = await createAccountFixture();
+    const operador = await createPanelUserFixture({ agencyId: agencia.id });
+
+    const reserva = await createReservation({
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: metodo.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+
+    return { salida, agencia, metodo, cuenta, operador, reserva };
+  }
+
+  it("un cobro en efectivo en bolívares sobre una reserva en dólares usa la tasa vigente, no la congelada", async () => {
+    const { reserva, operador, agencia } = await escenarioDigitalUsd();
+
+    // Tasa vigente de VES = 36,7412. 367,412 Bs ÷ 36,7412 = 10 US$.
+    await registerCashPayment({
+      reservationId: reserva.reservationId,
+      panelUserId: operador.id,
+      agencyId: agencia.id,
+      amount: "367.412",
+      currency: "VES",
+    });
+
+    const cobro = await prisma.cashPayment.findFirstOrThrow({
+      where: { reservationId: reserva.reservationId },
+    });
+    expect(cobro.amountUsd.toString()).toBe("10");
+
+    const fila = await prisma.reservation.findUniqueOrThrow({
+      where: { id: reserva.reservationId },
+    });
+    expect(fila.paidUsd.toString()).toBe("10");
+  });
+
+  it("un cobro sin tasa de cambio vigente para esa moneda lanza un error y no crea el cobro", async () => {
+    const { reserva, operador, agencia } = await escenarioDigitalUsd();
+    await prisma.exchangeRate.deleteMany({ where: { currency: "COP" } });
+
+    await expect(
+      registerCashPayment({
+        reservationId: reserva.reservationId,
+        panelUserId: operador.id,
+        agencyId: agencia.id,
+        amount: "40000",
+        currency: "COP",
+      }),
+    ).rejects.toThrow(ValidationError);
+
+    expect(await prisma.cashPayment.count({ where: { reservationId: reserva.reservationId } })).toBe(
+      0,
+    );
+  });
+
+  it("un cobro en efectivo por el total salda una reserva sin pagos previos y emite el ticket", async () => {
+    const { reserva, operador, agencia } = await escenarioDigitalUsd();
+
+    const resultado = await registerCashPayment({
+      reservationId: reserva.reservationId,
+      panelUserId: operador.id,
+      agencyId: agencia.id,
+      amount: "47.50",
+      currency: "USD",
+    });
+
+    expect(resultado.shouldIssueTicket).toBe(true);
+    const fila = await prisma.reservation.findUniqueOrThrow({
+      where: { id: reserva.reservationId },
+    });
+    expect(fila.status).toBe("PAGADA");
+    expect(fila.paidAt).not.toBeNull();
+    expect(fila.expiresAt).toBeNull();
+  });
+
+  it("un cobro en efectivo parcial deja abonada una reserva sin pagos previos y no la libera el barrido de 2 horas", async () => {
+    const { reserva, operador, agencia } = await escenarioDigitalUsd();
+
+    await registerCashPayment({
+      reservationId: reserva.reservationId,
+      panelUserId: operador.id,
+      agencyId: agencia.id,
+      amount: "20.00",
+      currency: "USD",
+    });
+
+    const fila = await prisma.reservation.findUniqueOrThrow({
+      where: { id: reserva.reservationId },
+    });
+    expect(fila.status).toBe("ABONADA");
+    expect(fila.expiresAt).toBeNull();
+
+    await runSweeps(new Date(Date.now() + 3 * 3_600_000));
+
+    const trasBarrido = await prisma.reservation.findUniqueOrThrow({
+      where: { id: reserva.reservationId },
+    });
+    expect(trasBarrido.status).toBe("ABONADA");
+  });
+
+  it("un comprobante en bolívares sobre una reserva en dólares usa la tasa vigente", async () => {
+    const { reserva, cuenta, metodo } = await escenarioDigitalUsd();
+
+    const { proofId } = await submitProof({
+      reservationId: reserva.reservationId,
+      accountId: cuenta.id,
+      paymentMethodId: metodo.id,
+      reference: "REF-BS-VIGENTE",
+      amount: "367.412",
+      currency: "VES",
+      imagePath: "comprobantes/x/a.png",
+    });
+
+    const comprobante = await prisma.paymentProof.findUniqueOrThrow({ where: { id: proofId } });
+    expect(comprobante.amountUsd.toString()).toBe("10");
   });
 });

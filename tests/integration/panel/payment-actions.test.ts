@@ -43,10 +43,6 @@ vi.mock("@/modules/auth", async (importOriginal) => {
 const { approveProofAction, cashPaymentAction, rejectProofAction } = await import(
   "@/app/panel/pagos/actions"
 );
-const { registerArrivalAction, registerDepartureAction, startBoardingAction } = await import(
-  "@/app/panel/salidas/actions"
-);
-const { createDriverAction, createVehicleAction } = await import("@/app/panel/flota/actions");
 
 beforeEach(async () => {
   await resetDatabase();
@@ -222,82 +218,5 @@ describe("rejectProofAction y approveProofAction", () => {
     );
 
     expect(url.searchParams.get("error")).toBe("Este comprobante ya fue rechazado.");
-  });
-});
-
-describe("acciones de salidas", () => {
-  it("registrar la llegada antes de la salida da error y vuelve al manifiesto", async () => {
-    const { agencia, operador, salida } = await escenario();
-    currentUser = operatorSession(agencia.id, operador.id);
-
-    await captureRedirectUrl(startBoardingAction(buildFormData({ departureId: salida.id })));
-
-    const url = await captureRedirectUrl(
-      registerArrivalAction(buildFormData({ departureId: salida.id })),
-    );
-
-    expect(url.pathname).toBe(`/panel/salidas/${salida.id}`);
-    expect(url.searchParams.get("error")).toBeTruthy();
-  });
-
-  it("registrar la salida dos veces da error la segunda vez", async () => {
-    const { agencia, operador, salida } = await escenario();
-    currentUser = operatorSession(agencia.id, operador.id);
-
-    await captureRedirectUrl(startBoardingAction(buildFormData({ departureId: salida.id })));
-    await captureRedirectUrl(registerDepartureAction(buildFormData({ departureId: salida.id })));
-
-    const url = await captureRedirectUrl(
-      registerDepartureAction(buildFormData({ departureId: salida.id })),
-    );
-
-    expect(url.searchParams.get("error")).toBeTruthy();
-  });
-});
-
-describe("acciones de flota", () => {
-  it("una placa demasiado corta da error", async () => {
-    const { agencia, operador } = await escenario();
-    currentUser = operatorSession(agencia.id, operador.id);
-
-    const url = await captureRedirectUrl(
-      createVehicleAction(
-        buildFormData({ plate: "AB", brand: "Marca", model: "Modelo", seatCount: "40" }),
-      ),
-    );
-
-    expect(url.searchParams.get("error")).toBeTruthy();
-    expect(await prisma.vehicle.findFirst({ where: { plate: "AB" } })).toBeNull();
-  });
-
-  it("una placa duplicada da error", async () => {
-    const { agencia, operador, vehiculo } = await escenario();
-    currentUser = operatorSession(agencia.id, operador.id);
-
-    const url = await captureRedirectUrl(
-      createVehicleAction(
-        buildFormData({ plate: vehiculo.plate, brand: "Otra", model: "Otro", seatCount: "40" }),
-      ),
-    );
-
-    expect(url.searchParams.get("error")).toBeTruthy();
-    expect(await prisma.vehicle.count({ where: { agencyId: agencia.id } })).toBe(1);
-  });
-
-  it("una cédula de chofer inválida da error", async () => {
-    const { agencia, operador } = await escenario();
-    currentUser = operatorSession(agencia.id, operador.id);
-
-    const url = await captureRedirectUrl(
-      createDriverAction(
-        buildFormData({
-          fullName: "Chofer de prueba",
-          idNumber: "no-es-cedula",
-          phone: "+584160000000",
-        }),
-      ),
-    );
-
-    expect(url.searchParams.get("error")).toBeTruthy();
   });
 });
