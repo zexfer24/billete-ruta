@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEPARTURE_STATUS_LABELS,
   MESSAGE_STATUS_LABELS,
   PROOF_STATUS_LABELS,
   RESERVATION_STATUS_LABELS,
+  SALES_CHANNEL_LABELS,
+  UNIT_STATE_LABELS,
+  departureStatusLabel,
+  departureStatusTone,
   messageStatusTone,
   reservationStatusLabel,
   reservationStatusTone,
+  salesChannelLabel,
+  unitStateTone,
 } from "@/lib/labels";
 
 describe("reservationStatusLabel", () => {
@@ -110,5 +117,82 @@ describe("messageStatusTone", () => {
 
   it("un estado desconocido devuelve tono neutro", () => {
     expect(messageStatusTone("ESTADO_INVENTADO")).toBe("neutro");
+  });
+});
+
+describe("departureStatusLabel", () => {
+  it("traduce los cinco estados de salida", () => {
+    expect(departureStatusLabel("PROGRAMADA")).toBe("Programada");
+    expect(departureStatusLabel("MANIFIESTO_CERRADO")).toBe("Embarcando");
+    expect(departureStatusLabel("EN_RUTA")).toBe("En ruta");
+    expect(departureStatusLabel("FINALIZADA")).toBe("Finalizada");
+    expect(departureStatusLabel("CANCELADA")).toBe("Cancelada");
+  });
+
+  it("un estado desconocido devuelve el mismo texto", () => {
+    expect(departureStatusLabel("ESTADO_INVENTADO")).toBe("ESTADO_INVENTADO");
+  });
+
+  it("DEPARTURE_STATUS_LABELS tiene exactamente los cinco estados", () => {
+    expect(Object.keys(DEPARTURE_STATUS_LABELS).sort()).toEqual(
+      ["CANCELADA", "EN_RUTA", "FINALIZADA", "MANIFIESTO_CERRADO", "PROGRAMADA"].sort(),
+    );
+  });
+});
+
+describe("departureStatusTone", () => {
+  it("PROGRAMADA es marca", () => {
+    expect(departureStatusTone("PROGRAMADA")).toBe("marca");
+  });
+
+  it("MANIFIESTO_CERRADO es alerta", () => {
+    expect(departureStatusTone("MANIFIESTO_CERRADO")).toBe("alerta");
+  });
+
+  it("EN_RUTA es éxito", () => {
+    expect(departureStatusTone("EN_RUTA")).toBe("exito");
+  });
+
+  it("FINALIZADA es neutro", () => {
+    expect(departureStatusTone("FINALIZADA")).toBe("neutro");
+  });
+
+  it("CANCELADA es peligro", () => {
+    expect(departureStatusTone("CANCELADA")).toBe("peligro");
+  });
+
+  it("un estado desconocido devuelve tono neutro", () => {
+    expect(departureStatusTone("ESTADO_INVENTADO")).toBe("neutro");
+  });
+});
+
+describe("UNIT_STATE_LABELS y unitStateTone", () => {
+  it("traduce los cinco estados de unidad", () => {
+    expect(UNIT_STATE_LABELS.EN_RUTA).toBe("En ruta");
+    expect(UNIT_STATE_LABELS.EMBARCANDO).toBe("Embarcando");
+    expect(UNIT_STATE_LABELS.ASIGNADO).toBe("Asignado");
+    expect(UNIT_STATE_LABELS.DISPONIBLE).toBe("Disponible");
+    expect(UNIT_STATE_LABELS.FUERA_DE_SERVICIO).toBe("Fuera de servicio");
+  });
+
+  it("EN_RUTA es éxito, EMBARCANDO alerta, ASIGNADO marca, DISPONIBLE neutro y FUERA_DE_SERVICIO peligro", () => {
+    expect(unitStateTone("EN_RUTA")).toBe("exito");
+    expect(unitStateTone("EMBARCANDO")).toBe("alerta");
+    expect(unitStateTone("ASIGNADO")).toBe("marca");
+    expect(unitStateTone("DISPONIBLE")).toBe("neutro");
+    expect(unitStateTone("FUERA_DE_SERVICIO")).toBe("peligro");
+  });
+});
+
+describe("SALES_CHANNEL_LABELS y salesChannelLabel", () => {
+  it("traduce los dos canales de venta", () => {
+    expect(SALES_CHANNEL_LABELS.APP).toBe("App");
+    expect(SALES_CHANNEL_LABELS.TAQUILLA).toBe("Taquilla");
+    expect(salesChannelLabel("APP")).toBe("App");
+    expect(salesChannelLabel("TAQUILLA")).toBe("Taquilla");
+  });
+
+  it("un canal desconocido devuelve el mismo texto", () => {
+    expect(salesChannelLabel("CANAL_INVENTADO")).toBe("CANAL_INVENTADO");
   });
 });

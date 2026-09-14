@@ -96,6 +96,7 @@ export interface AgencyDepartureRow {
   vehiclePlate: string;
   driverName: string;
   hasTripLog: boolean;
+  boardingStartedAt: Date | null;
   departedAt: Date | null;
   arrivedAt: Date | null;
 }
@@ -135,6 +136,7 @@ export async function listAgencyDepartures(
       vehiclePlate: salida.vehicle.plate,
       driverName: salida.driver.fullName,
       hasTripLog: salida.tripLog !== null,
+      boardingStartedAt: salida.tripLog?.boardingStartedAt ?? null,
       departedAt: salida.tripLog?.departedAt ?? null,
       arrivedAt: salida.tripLog?.arrivedAt ?? null,
     };

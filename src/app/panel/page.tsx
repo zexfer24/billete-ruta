@@ -1,10 +1,11 @@
 import { requireAgencyUser } from "@/modules/auth";
 import { agencyDashboard } from "@/modules/reports";
 import { formatMoney } from "@/lib/decimal";
+import { caracasPeriodRange } from "@/lib/time";
 
 export default async function PanelResumenPage() {
   const { user, agencyId } = await requireAgencyUser("agency.reports");
-  const resumen = await agencyDashboard(agencyId);
+  const resumen = await agencyDashboard(agencyId, caracasPeriodRange("hoy"));
 
   return (
     <div className="flex flex-col gap-6">
@@ -13,10 +14,10 @@ export default async function PanelResumenPage() {
       </h1>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card label="Comprobantes pendientes" value={String(resumen.pendientes)} />
-        <Card label="Salidas próximas (48 h)" value={String(resumen.proximas)} />
-        <Card label="Recaudación (últimas 24 h)" value={formatMoney(resumen.recaudacionUsd, "USD")} />
-        <Card label="Mensajes fallidos" value={String(resumen.fallidos)} />
+        <Card label="Tickets pendientes" value={String(resumen.pendingTickets.total)} />
+        <Card label="Salidas de hoy" value={String(resumen.departures.total)} />
+        <Card label="Recaudación de hoy" value={formatMoney(resumen.revenue.totalUsd, "USD")} />
+        <Card label="Mensajes fallidos" value={String(resumen.failedMessages)} />
       </div>
     </div>
   );

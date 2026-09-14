@@ -64,3 +64,68 @@ const MESSAGE_STATUS_TONES: Record<string, StatusTone> = {
 export function messageStatusTone(status: string): StatusTone {
   return MESSAGE_STATUS_TONES[status] ?? "neutro";
 }
+
+/** Los cinco estados de DepartureStatus (prisma/schema.prisma), en español. */
+export const DEPARTURE_STATUS_LABELS: Record<string, string> = {
+  PROGRAMADA: "Programada",
+  MANIFIESTO_CERRADO: "Embarcando",
+  EN_RUTA: "En ruta",
+  FINALIZADA: "Finalizada",
+  CANCELADA: "Cancelada",
+};
+
+/** Texto en español de un estado de salida; un estado desconocido devuelve su propio nombre. */
+export function departureStatusLabel(status: string): string {
+  return DEPARTURE_STATUS_LABELS[status] ?? status;
+}
+
+const DEPARTURE_STATUS_TONES: Record<string, StatusTone> = {
+  PROGRAMADA: "marca",
+  MANIFIESTO_CERRADO: "alerta",
+  EN_RUTA: "exito",
+  FINALIZADA: "neutro",
+  CANCELADA: "peligro",
+};
+
+/** Tono de pastilla de un estado de salida; un estado desconocido cae en "neutro". */
+export function departureStatusTone(status: string): StatusTone {
+  return DEPARTURE_STATUS_TONES[status] ?? "neutro";
+}
+
+/**
+ * Estado operativo de una unidad (chofer o vehículo), derivado de sus salidas
+ * en `agencyFleetStatus`. No es un campo de la base de datos.
+ */
+export type UnitState = "EN_RUTA" | "EMBARCANDO" | "ASIGNADO" | "DISPONIBLE" | "FUERA_DE_SERVICIO";
+
+export const UNIT_STATE_LABELS: Record<UnitState, string> = {
+  EN_RUTA: "En ruta",
+  EMBARCANDO: "Embarcando",
+  ASIGNADO: "Asignado",
+  DISPONIBLE: "Disponible",
+  FUERA_DE_SERVICIO: "Fuera de servicio",
+};
+
+const UNIT_STATE_TONES: Record<UnitState, StatusTone> = {
+  EN_RUTA: "exito",
+  EMBARCANDO: "alerta",
+  ASIGNADO: "marca",
+  DISPONIBLE: "neutro",
+  FUERA_DE_SERVICIO: "peligro",
+};
+
+/** Tono de pastilla del estado operativo de una unidad. */
+export function unitStateTone(state: UnitState): StatusTone {
+  return UNIT_STATE_TONES[state];
+}
+
+/** Los dos canales de venta de SalesChannel (prisma/schema.prisma), en español. */
+export const SALES_CHANNEL_LABELS: Record<string, string> = {
+  APP: "App",
+  TAQUILLA: "Taquilla",
+};
+
+/** Texto en español de un canal de venta; un canal desconocido devuelve su propio nombre. */
+export function salesChannelLabel(channel: string): string {
+  return SALES_CHANNEL_LABELS[channel] ?? channel;
+}

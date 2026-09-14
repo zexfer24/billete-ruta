@@ -104,6 +104,56 @@ export function minutesUntil(date: Date, now: Date = new Date()): number {
   return Math.floor((date.getTime() - now.getTime()) / 60_000);
 }
 
+/** Los tres períodos que ofrece el tablero del operador. */
+export type DashboardPeriod = "hoy" | "7d" | "30d";
+
+export const DASHBOARD_PERIODS: readonly DashboardPeriod[] = ["hoy", "7d", "30d"];
+
+export const DASHBOARD_PERIOD_LABELS: Record<DashboardPeriod, string> = {
+  hoy: "Hoy",
+  "7d": "7 días",
+  "30d": "30 días",
+};
+
+/** Días que cubre cada período, contando el día de hoy. */
+const PERIOD_DAYS: Record<DashboardPeriod, number> = { hoy: 1, "7d": 7, "30d": 30 };
+
+/** Traduce el slug de la URL (`?periodo=`) a un `DashboardPeriod`. Usa un `Map`
+ * en lugar de un objeto plano por la misma razón que `paymentStateFromSlug`:
+ * evita que una clave heredada de `Object.prototype` cuele como período
+ * válido. Un slug ausente o desconocido cae en "hoy". */
+const SLUG_TO_DASHBOARD_PERIOD = new Map<string, DashboardPeriod>([
+  ["hoy", "hoy"],
+  ["7d", "7d"],
+  ["30d", "30d"],
+]);
+
+export function periodFromSlug(slug: string | undefined): DashboardPeriod {
+  if (slug === undefined) return "hoy";
+  return SLUG_TO_DASHBOARD_PERIOD.get(slug) ?? "hoy";
+}
+
+/**
+ * Rango de un período del tablero, terminado en `now`. El inicio es el
+ * comienzo del día en Caracas de hace (días − 1) días, para que "Hoy" cubra
+ * exactamente el día en curso y "7 días" incluya siete días completos.
+ */
+export function caracasPeriodRange(
+  period: DashboardPeriod,
+  now: Date = new Date(),
+): { from: Date; to: Date } {
+  const dias = PERIOD_DAYS[period];
+  const inicioBruto = new Date(now.getTime() - (dias - 1) * 86_400_000);
+  const from = caracasDayStart(caracasDayInputValue(inicioBruto), now);
+  return { from, to: now };
+}
+
+/** Rango del día de `now` en Caracas, de inicio a fin. */
+export function caracasDayRange(now: Date = new Date()): { from: Date; to: Date } {
+  const valor = caracasDayInputValue(now);
+  return { from: caracasDayStart(valor, now), to: caracasDayEnd(valor, now) };
+}
+
 /** Texto de salida relativa para la línea de tiempo del pasajero. */
 export function formatRelativeDeparture(date: Date, now: Date = new Date()): string {
   const diffMs = date.getTime() - now.getTime();

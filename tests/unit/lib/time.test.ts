@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  caracasDayRange,
   caracasHourEnd,
   caracasHourStart,
   caracasHourValue,
   caracasParts,
+  caracasPeriodRange,
   durationMinutes,
   formatCaracasDate,
   formatCaracasDateTime24,
@@ -11,6 +13,7 @@ import {
   formatDuration,
   formatRelativeDeparture,
   minutesUntil,
+  periodFromSlug,
 } from "@/lib/time";
 
 describe("formato en hora de Caracas", () => {
@@ -142,5 +145,54 @@ describe("formatRelativeDeparture", () => {
     const nowTarde = new Date("2026-09-11T03:00:00Z"); // 23:00 Caracas del 10/09/2026
     const salida = new Date("2026-09-11T05:00:00Z"); // 01:00 Caracas del 11/09/2026
     expect(formatRelativeDeparture(salida, nowTarde)).toBe("11/09 01:00");
+  });
+});
+
+describe("periodFromSlug", () => {
+  it("traduce los tres slugs válidos", () => {
+    expect(periodFromSlug("hoy")).toBe("hoy");
+    expect(periodFromSlug("7d")).toBe("7d");
+    expect(periodFromSlug("30d")).toBe("30d");
+  });
+
+  it("cae en 'hoy' con undefined o un valor desconocido", () => {
+    expect(periodFromSlug(undefined)).toBe("hoy");
+    expect(periodFromSlug("semana")).toBe("hoy");
+  });
+
+  it("no deja que una clave heredada de Object.prototype cuele como período válido", () => {
+    expect(periodFromSlug("constructor")).toBe("hoy");
+  });
+});
+
+describe("caracasPeriodRange", () => {
+  // now = 2026-09-13T02:30:00Z, que en Caracas (UTC-4) es el 12/09/2026 a las 22:30.
+  const now = new Date("2026-09-13T02:30:00Z");
+
+  it("'hoy' empieza en el inicio del día de hoy en Caracas", () => {
+    const { from, to } = caracasPeriodRange("hoy", now);
+    expect(from).toEqual(new Date("2026-09-12T04:00:00.000Z"));
+    expect(to).toBe(now);
+  });
+
+  it("'7d' empieza siete días antes, al inicio del día en Caracas", () => {
+    const { from, to } = caracasPeriodRange("7d", now);
+    expect(from).toEqual(new Date("2026-09-06T04:00:00.000Z"));
+    expect(to).toBe(now);
+  });
+
+  it("'30d' empieza treinta días antes, al inicio del día en Caracas", () => {
+    const { from, to } = caracasPeriodRange("30d", now);
+    expect(from).toEqual(new Date("2026-08-14T04:00:00.000Z"));
+    expect(to).toBe(now);
+  });
+});
+
+describe("caracasDayRange", () => {
+  it("va desde el inicio hasta el fin del día de `now` en Caracas", () => {
+    const now = new Date("2026-09-13T02:30:00Z"); // 22:30 Caracas del 12/09/2026
+    const { from, to } = caracasDayRange(now);
+    expect(from).toEqual(new Date("2026-09-12T04:00:00.000Z"));
+    expect(to).toEqual(new Date("2026-09-13T03:59:59.999Z"));
   });
 });

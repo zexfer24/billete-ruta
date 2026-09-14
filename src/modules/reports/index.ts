@@ -1,5 +1,4 @@
 export {
-  agencyDashboard,
   driverMovements,
   last24h,
   listAgencyPassengers,
@@ -10,6 +9,17 @@ export type {
   DriverMovementRow,
   RouteRevenueRow,
 } from "./agency";
+export { agencyDashboard } from "./dashboard";
+export type { AgencyDashboard } from "./dashboard";
+export { agencyFleetStatus, unitStateOf } from "./fleet-status";
+export type {
+  AgencyFleetStatus,
+  DriverStatusRow,
+  UnitDeparture,
+  VehicleStatusRow,
+} from "./fleet-status";
+export { listRecentTickets } from "./tickets";
+export type { RecentTicketRow } from "./tickets";
 export {
   PAYMENT_STATES,
   paymentStateFromSlug,

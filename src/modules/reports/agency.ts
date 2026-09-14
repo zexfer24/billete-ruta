@@ -203,33 +203,3 @@ export async function driverMovements(
     passengerCount: r.passengerCount,
   }));
 }
-
-/** Resumen para la portada del panel del operador. */
-export async function agencyDashboard(agencyId: string, now: Date = new Date()) {
-  const { from, to } = last24h(now);
-  const [pendientes, proximas, fallidos, recaudacion] = await Promise.all([
-    prisma.paymentProof.count({
-      where: {
-        status: "PENDIENTE",
-        reservation: { departure: { route: { agencyId } } },
-      },
-    }),
-    prisma.departure.count({
-      where: {
-        route: { agencyId },
-        status: "PROGRAMADA",
-        departsAt: { gte: now, lte: new Date(now.getTime() + 48 * 3_600_000) },
-      },
-    }),
-    prisma.outboundMessage.count({
-      where: {
-        status: "FALLIDO",
-        reservation: { departure: { route: { agencyId } } },
-      },
-    }),
-    revenueByRoute(agencyId, from, to),
-  ]);
-
-  const total = recaudacion.reduce((acc, fila) => round2(acc.add(fila.totalUsd)), ZERO);
-  return { pendientes, proximas, fallidos, recaudacionUsd: total, porRuta: recaudacion };
-}
