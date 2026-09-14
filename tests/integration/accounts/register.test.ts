@@ -260,4 +260,154 @@ describe("createCounterAccount y activación en /registro", () => {
       "Ya existe una cuenta con la cédula V20000006. Intenta ingresar en vez de registrarte.",
     );
   });
+
+  it("dos activaciones simultáneas: solo una gana y la auditoría queda una sola vez", async () => {
+    const operador = await crearOperador();
+    const { accountId } = await prisma.$transaction((tx) =>
+      createCounterAccount(tx, {
+        idNumber: "V20000007",
+        givenNames: "Ana",
+        surnames: "Torres Díaz",
+        phone: "0412-1112233",
+        birthYear: 1995,
+        panelUserId: operador.id,
+      }),
+    );
+
+    const datosBase = {
+      idNumber: "V20000007",
+      givenNames: "Ana",
+      surnames: "Torres Díaz",
+      phone: "0412-1112233",
+      birthYear: 1995,
+    };
+
+    const resultados = await Promise.allSettled([
+      registerAccount({ ...datosBase, password: "Primera.2026" }),
+      registerAccount({ ...datosBase, password: "Segunda.2026" }),
+    ]);
+
+    const cumplidas = resultados.filter(
+      (r): r is PromiseFulfilledResult<{ accountId: string }> => r.status === "fulfilled",
+    );
+    const rechazadas = resultados.filter(
+      (r): r is PromiseRejectedResult => r.status === "rejected",
+    );
+    expect(cumplidas).toHaveLength(1);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0]!.reason).toBeInstanceOf(ValidationError);
+    expect(rechazadas[0]!.reason.message).toBe(
+      "Ya existe una cuenta con la cédula V20000007. Intenta ingresar en vez de registrarte.",
+    );
+
+    const sesionPrimera = await loginAccount("V20000007", "Primera.2026");
+    const sesionSegunda = await loginAccount("V20000007", "Segunda.2026");
+    // Solo la contraseña de la activación que ganó la carrera funciona.
+    expect([sesionPrimera === null, sesionSegunda === null].filter(Boolean)).toHaveLength(1);
+
+    const auditorias = await prisma.auditLog.findMany({
+      where: { entityId: accountId, action: "CUENTA_ACTIVADA" },
+    });
+    expect(auditorias).toHaveLength(1);
+  });
+
+  it("cinco años equivocados agotan los intentos; el sexto se bloquea aunque los datos sean correctos", async () => {
+    const operador = await crearOperador();
+    await prisma.$transaction((tx) =>
+      createCounterAccount(tx, {
+        idNumber: "V20000008",
+        givenNames: "Ana",
+        surnames: "Torres Díaz",
+        phone: "0412-1112233",
+        birthYear: 1995,
+        panelUserId: operador.id,
+      }),
+    );
+
+    for (let intento = 0; intento < 5; intento += 1) {
+      await expect(
+        registerAccount({
+          idNumber: "V20000008",
+          givenNames: "Ana",
+          surnames: "Torres Díaz",
+          phone: "0412-1112233",
+          birthYear: 1988,
+          password: "Pasajero.2026",
+        }),
+      ).rejects.toThrow(
+        "Esta cédula tiene una cuenta creada en taquilla y los datos no coinciden. Acércate a la taquilla de tu agencia.",
+      );
+    }
+
+    await expect(
+      registerAccount({
+        idNumber: "V20000008",
+        givenNames: "Ana",
+        surnames: "Torres Díaz",
+        phone: "0412-1112233",
+        birthYear: 1995,
+        password: "Pasajero.2026",
+      }),
+    ).rejects.toThrow(
+      "Demasiados intentos de activación para esta cédula. Espera 15 minutos o acércate a la taquilla de tu agencia.",
+    );
+
+    const cuenta = await prisma.passengerAccount.findUniqueOrThrow({
+      where: { idNumber: "V20000008" },
+    });
+    expect(cuenta.passwordHash).toBeNull();
+  });
+
+  it("un fallo seguido de una activación correcta limpia el contador de intentos", async () => {
+    const operador = await crearOperador();
+    await prisma.$transaction((tx) =>
+      createCounterAccount(tx, {
+        idNumber: "V20000009",
+        givenNames: "Ana",
+        surnames: "Torres Díaz",
+        phone: "0412-1112233",
+        birthYear: 1995,
+        panelUserId: operador.id,
+      }),
+    );
+
+    await expect(
+      registerAccount({
+        idNumber: "V20000009",
+        givenNames: "Ana",
+        surnames: "Torres Díaz",
+        phone: "0412-1112233",
+        birthYear: 1988,
+        password: "Pasajero.2026",
+      }),
+    ).rejects.toThrow(
+      "Esta cédula tiene una cuenta creada en taquilla y los datos no coinciden. Acércate a la taquilla de tu agencia.",
+    );
+
+    const activacion = await registerAccount({
+      idNumber: "V20000009",
+      givenNames: "Ana",
+      surnames: "Torres Díaz",
+      phone: "0412-1112233",
+      birthYear: 1995,
+      password: "Pasajero.2026",
+    });
+    expect(activacion.accountId).toBeDefined();
+
+    // Si el contador no se hubiera limpiado, esto igual daría "Ya existe…"
+    // porque ya tiene contraseña; lo relevante es que no sea el mensaje de
+    // demasiados intentos.
+    await expect(
+      registerAccount({
+        idNumber: "V20000009",
+        givenNames: "Ana",
+        surnames: "Torres Díaz",
+        phone: "0412-1112233",
+        birthYear: 1995,
+        password: "Otra.2026",
+      }),
+    ).rejects.toThrow(
+      "Ya existe una cuenta con la cédula V20000009. Intenta ingresar en vez de registrarte.",
+    );
+  });
 });

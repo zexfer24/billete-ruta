@@ -9,6 +9,7 @@ import {
 } from "@/lib/identity";
 import { writeAudit } from "@/modules/audit";
 import { hashPassword, verifyPassword } from "@/modules/auth/passwords";
+import { checkLoginRate, clearLoginRate } from "@/modules/auth/rate-limit";
 import { createPassengerSession } from "@/modules/auth/sessions";
 import { ValidationError } from "@/modules/booking/errors";
 
@@ -105,22 +106,39 @@ export async function registerAccount(
     );
   }
 
-  const passwordHash = await hashPassword(input.password);
-
   if (existente) {
     // Cuenta creada en la taquilla, todavía sin contraseña: se activa solo si
     // los datos que aporta el pasajero coinciden con los que registró el operador.
+    // El intento cuenta contra el límite de fuerza bruta aunque los datos no
+    // coincidan, porque el año de nacimiento por sí solo tiene poco espacio
+    // de búsqueda.
+    const claveIntentos = `activacion:${datos.idNumber}`;
+    if (!checkLoginRate(claveIntentos)) {
+      throw new ValidationError(
+        "Demasiados intentos de activación para esta cédula. Espera 15 minutos o acércate a la taquilla de tu agencia.",
+      );
+    }
     if (existente.phone !== datos.phone || existente.birthYear !== datos.birthYear) {
       throw new ValidationError(
         "Esta cédula tiene una cuenta creada en taquilla y los datos no coinciden. Acércate a la taquilla de tu agencia.",
       );
     }
 
-    return prisma.$transaction(async (tx) => {
-      await tx.passengerAccount.update({
-        where: { id: existente.id },
+    // El hash es costoso a propósito: se calcula solo tras confirmar los datos.
+    const passwordHash = await hashPassword(input.password);
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      // `updateMany` con `passwordHash: null` en el `where` cierra la carrera
+      // entre dos activaciones simultáneas: solo una encuentra la fila.
+      const actualizado = await tx.passengerAccount.updateMany({
+        where: { id: existente.id, passwordHash: null },
         data: { passwordHash },
       });
+      if (actualizado.count !== 1) {
+        throw new ValidationError(
+          `Ya existe una cuenta con la cédula ${datos.idNumber}. Intenta ingresar en vez de registrarte.`,
+        );
+      }
       await writeAudit(tx, {
         actorType: "PASAJERO",
         actorAccountId: existente.id,
@@ -131,7 +149,12 @@ export async function registerAccount(
       });
       return { accountId: existente.id };
     });
+
+    clearLoginRate(claveIntentos);
+    return resultado;
   }
+
+  const passwordHash = await hashPassword(input.password);
 
   try {
     return await prisma.$transaction(async (tx) => {
