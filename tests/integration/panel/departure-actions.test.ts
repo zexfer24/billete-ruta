@@ -1,6 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PanelSessionUser } from "@/modules/auth";
-import { createDepartureFixture, createPanelUserFixture, seedRatesFixture } from "../fixtures";
+import {
+  createAgencyFixture,
+  createDepartureFixture,
+  createDriverFixture,
+  createPanelUserFixture,
+  createRouteFixture,
+  createVehicleFixture,
+  seedRatesFixture,
+} from "../fixtures";
 import { disconnect, resetDatabase } from "../setup";
 
 /** Señal que reemplaza el `NEXT_REDIRECT` real de Next.js, para poder afirmar el destino. */
@@ -31,9 +39,8 @@ vi.mock("@/modules/auth", async (importOriginal) => {
   };
 });
 
-const { registerArrivalAction, registerDepartureAction, startBoardingAction } = await import(
-  "@/app/panel/salidas/actions"
-);
+const { createDepartureAction, registerArrivalAction, registerDepartureAction, startBoardingAction } =
+  await import("@/app/panel/salidas/actions");
 
 beforeEach(async () => {
   await resetDatabase();
@@ -102,6 +109,63 @@ describe("acciones de salidas", () => {
       registerDepartureAction(buildFormData({ departureId: salida.id })),
     );
 
+    expect(url.searchParams.get("error")).toBeTruthy();
+  });
+});
+
+describe("createDepartureAction", () => {
+  it("datos inválidos sin origen reabren el panel lateral de salidas", async () => {
+    const agencia = await createAgencyFixture();
+    const operador = await createPanelUserFixture({ agencyId: agencia.id });
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      createDepartureAction(buildFormData({ fecha: "2026-09-20", hora: "08:00" })),
+    );
+
+    expect(url.pathname).toBe("/panel/salidas");
+    expect(url.searchParams.get("crear")).toBe("1");
+    expect(url.searchParams.get("error")).toBeTruthy();
+  });
+
+  it("alta válida con origen=tablero vuelve al tablero", async () => {
+    const agencia = await createAgencyFixture();
+    const ruta = await createRouteFixture(agencia.id);
+    const vehiculo = await createVehicleFixture(agencia.id, 40);
+    const chofer = await createDriverFixture(agencia.id);
+    const operador = await createPanelUserFixture({ agencyId: agencia.id });
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      createDepartureAction(
+        buildFormData({
+          routeId: ruta.id,
+          vehicleId: vehiculo.id,
+          driverId: chofer.id,
+          fecha: "2026-09-20",
+          hora: "08:00",
+          origen: "tablero",
+        }),
+      ),
+    );
+
+    expect(url.pathname).toBe("/panel");
+    expect(url.searchParams.get("ok")).toBe("salida-creada");
+  });
+
+  it("datos inválidos con origen=tablero vuelven al tablero con el registro abierto", async () => {
+    const agencia = await createAgencyFixture();
+    const operador = await createPanelUserFixture({ agencyId: agencia.id });
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      createDepartureAction(
+        buildFormData({ fecha: "2026-09-20", hora: "08:00", origen: "tablero" }),
+      ),
+    );
+
+    expect(url.pathname).toBe("/panel");
+    expect(url.searchParams.get("registrar")).toBe("salida");
     expect(url.searchParams.get("error")).toBeTruthy();
   });
 });

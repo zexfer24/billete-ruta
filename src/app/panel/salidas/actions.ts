@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
 import { createDeparture } from "@/modules/catalog";
 import { registerArrival, registerDeparture, startBoarding } from "@/modules/trips";
+import { parsePanelOrigin } from "@/lib/panel-nav";
 import { panelFeedbackUrl, userFacingMessage } from "../feedback";
 
 /**
@@ -22,6 +23,10 @@ function salidasUrl(params: Record<string, string | number | undefined | null>):
   return panelFeedbackUrl("/panel/salidas", params);
 }
 
+function tableroUrl(params: Record<string, string | number | undefined | null>): string {
+  return panelFeedbackUrl("/panel", params);
+}
+
 function salidaDetalleUrl(
   departureId: string,
   params: Record<string, string | number | undefined | null>,
@@ -32,6 +37,15 @@ function salidaDetalleUrl(
 export async function createDepartureAction(formData: FormData): Promise<void> {
   const user = await requirePanelUser("departures.manage");
   const agencyId = requireAgencyScope(user);
+  const origen = parsePanelOrigin(formData.get("origen"));
+
+  function errorRedirect(mensaje: string): never {
+    if (origen === "tablero") {
+      redirect(tableroUrl({ registrar: "salida", error: mensaje }));
+    }
+    redirect(salidasUrl({ crear: 1, error: mensaje }));
+  }
+
   const schema = z.object({
     routeId: z.string().uuid("Elige la ruta de la salida."),
     vehicleId: z.string().uuid("Elige el vehículo."),
@@ -47,7 +61,7 @@ export async function createDepartureAction(formData: FormData): Promise<void> {
     hora: formData.get("hora"),
   });
   if (!parsed.success) {
-    redirect(salidasUrl({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }));
+    errorRedirect(parsed.error.issues[0]?.message ?? "Datos inválidos.");
   }
   const data = parsed.data;
 
@@ -68,11 +82,15 @@ export async function createDepartureAction(formData: FormData): Promise<void> {
   }
 
   if (errorMessage) {
-    redirect(salidasUrl({ error: errorMessage }));
+    errorRedirect(errorMessage);
   }
 
   revalidatePath("/panel/salidas");
+  revalidatePath("/panel");
 
+  if (origen === "tablero") {
+    redirect(tableroUrl({ ok: "salida-creada" }));
+  }
   redirect(salidasUrl({ ok: "salida-creada" }));
 }
 
@@ -100,6 +118,7 @@ export async function startBoardingAction(formData: FormData): Promise<void> {
 
   revalidatePath(`/panel/salidas/${departureId}`);
   revalidatePath("/panel/salidas");
+  revalidatePath("/panel");
 
   redirect(salidaDetalleUrl(departureId, { ok: "embarque" }));
 }
@@ -129,6 +148,7 @@ export async function registerDepartureAction(formData: FormData): Promise<void>
   revalidatePath(`/panel/salidas/${departureId}`);
   revalidatePath("/panel/salidas");
   revalidatePath("/panel/pasajeros");
+  revalidatePath("/panel");
 
   redirect(salidaDetalleUrl(departureId, { ok: "salida" }));
 }
@@ -157,7 +177,8 @@ export async function registerArrivalAction(formData: FormData): Promise<void> {
 
   revalidatePath(`/panel/salidas/${departureId}`);
   revalidatePath("/panel/salidas");
-  revalidatePath("/panel/movimientos");
+  revalidatePath("/panel/reportes");
+  revalidatePath("/panel");
 
   redirect(salidaDetalleUrl(departureId, { ok: "llegada" }));
 }
