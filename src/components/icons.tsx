@@ -273,3 +273,62 @@ export function IconMapPin(props: IconProps) {
     </IconBase>
   );
 }
+
+/** Billete con el signo de una moneda, para pagos en efectivo. */
+export function IconCash(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <circle cx="12" cy="12" r="3" />
+      <line x1="6" y1="10" x2="6" y2="10" />
+      <line x1="18" y1="14" x2="18" y2="14" />
+    </IconBase>
+  );
+}
+
+/** Tres barras verticales de altura creciente, para reportes. */
+export function IconChart(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="5" y1="20" x2="5" y2="13" />
+      <line x1="12" y1="20" x2="12" y2="6" />
+      <line x1="19" y1="20" x2="19" y2="16" />
+    </IconBase>
+  );
+}
+
+/** Lista de líneas con viñetas. */
+export function IconList(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="9" y1="6" x2="20" y2="6" />
+      <line x1="9" y1="12" x2="20" y2="12" />
+      <line x1="9" y1="18" x2="20" y2="18" />
+      <line x1="4" y1="6" x2="4" y2="6" />
+      <line x1="4" y1="12" x2="4" y2="12" />
+      <line x1="4" y1="18" x2="4" y2="18" />
+    </IconBase>
+  );
+}
+
+/** Cruz simple, para añadir o crear. */
+export function IconPlus(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </IconBase>
+  );
+}
+
+/** Mostrador con toldo, para la taquilla. */
+export function IconStore(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 9 5 4h14l1 5" />
+      <path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9" />
+      <line x1="4" y1="9" x2="20" y2="9" />
+      <line x1="12" y1="13" x2="12" y2="20" />
+    </IconBase>
+  );
+}

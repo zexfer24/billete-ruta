@@ -11,6 +11,9 @@
   --exito: #15803d;
   --alerta: #b45309;
   --peligro: #b91c1c;
+  --exito-suave: #eaf6ef;
+  --alerta-suave: #fdf3e6;
+  --peligro-suave: #fdecec;
 
   /* Lenguaje visual de la app del pasajero (Omio + Transit). */
   --marca: #1e3a8a;
@@ -38,6 +41,9 @@
   --color-exito: var(--exito);
   --color-alerta: var(--alerta);
   --color-peligro: var(--peligro);
+  --color-exito-suave: var(--exito-suave);
+  --color-alerta-suave: var(--alerta-suave);
+  --color-peligro-suave: var(--peligro-suave);
 
   --color-marca: var(--marca);
   --color-marca-oscura: var(--marca-oscura);
