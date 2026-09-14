@@ -86,6 +86,9 @@ describe("acciones de flota", () => {
       ),
     );
 
+    expect(url.pathname).toBe("/panel/flota");
+    expect(url.searchParams.get("vista")).toBe("vehiculos");
+    expect(url.searchParams.get("registrar")).toBe("vehiculo");
     expect(url.searchParams.get("error")).toBeTruthy();
     expect(await prisma.vehicle.findFirst({ where: { plate: "AB" } })).toBeNull();
   });
@@ -100,6 +103,9 @@ describe("acciones de flota", () => {
       ),
     );
 
+    expect(url.pathname).toBe("/panel/flota");
+    expect(url.searchParams.get("vista")).toBe("vehiculos");
+    expect(url.searchParams.get("registrar")).toBe("vehiculo");
     expect(url.searchParams.get("error")).toBeTruthy();
     expect(await prisma.vehicle.count({ where: { agencyId: agencia.id } })).toBe(1);
   });
@@ -118,6 +124,64 @@ describe("acciones de flota", () => {
       ),
     );
 
+    expect(url.pathname).toBe("/panel/flota");
+    expect(url.searchParams.get("vista")).toBe("choferes");
+    expect(url.searchParams.get("registrar")).toBe("chofer");
     expect(url.searchParams.get("error")).toBeTruthy();
+  });
+
+  it("una alta de vehículo válida con origen=tablero va al tablero", async () => {
+    const { agencia, operador } = await escenario();
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      createVehicleAction(
+        buildFormData({
+          plate: "AB1234CD",
+          brand: "Marca",
+          model: "Modelo",
+          seatCount: "40",
+          origen: "tablero",
+        }),
+      ),
+    );
+
+    expect(url.pathname).toBe("/panel");
+    expect(url.searchParams.get("ok")).toBe("vehiculo-creado");
+  });
+
+  it("una alta de vehículo inválida con origen=tablero vuelve al tablero con el registro abierto", async () => {
+    const { agencia, operador } = await escenario();
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      createVehicleAction(
+        buildFormData({ plate: "AB", brand: "Marca", model: "Modelo", seatCount: "40", origen: "tablero" }),
+      ),
+    );
+
+    expect(url.pathname).toBe("/panel");
+    expect(url.searchParams.get("registrar")).toBe("vehiculo");
+    expect(url.searchParams.get("error")).toBeTruthy();
+  });
+
+  it("un origen distinto de 'tablero' se ignora y va a /panel/flota", async () => {
+    const { agencia, operador } = await escenario();
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      createVehicleAction(
+        buildFormData({
+          plate: "AB1234CD",
+          brand: "Marca",
+          model: "Modelo",
+          seatCount: "40",
+          origen: "https://evil.test",
+        }),
+      ),
+    );
+
+    expect(url.pathname).toBe("/panel/flota");
+    expect(url.searchParams.get("ok")).toBe("vehiculo-creado");
   });
 });
