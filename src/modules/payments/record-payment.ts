@@ -361,9 +361,17 @@ export interface CashPaymentInput {
   now?: Date;
 }
 
-/** Cobro en efectivo registrado en taquilla o al abordar. */
-export async function registerCashPayment(
-  input: CashPaymentInput,
+/**
+ * Cobro en efectivo, dentro de la transacción que le pase el llamador.
+ *
+ * `amountUsdOverride` es solo para la venta en taquilla: al cobrar en la
+ * misma transacción que crea la reserva, permite saldar exactamente el monto
+ * ya calculado en la moneda de la reserva, sin arrastrar un error de
+ * redondeo al convertir de nuevo.
+ */
+export async function registerCashPaymentInTx(
+  tx: Prisma.TransactionClient,
+  input: CashPaymentInput & { amountUsdOverride?: Prisma.Decimal },
 ): Promise<{ shouldIssueTicket: boolean }> {
   const ahora = input.now ?? new Date();
   const monto = toDecimal(input.amount);
@@ -371,88 +379,95 @@ export async function registerCashPayment(
     throw new ValidationError("El monto cobrado debe ser mayor que cero.");
   }
 
-  return prisma.$transaction(async (tx) => {
-    const reserva = await tx.reservation.findUniqueOrThrow({
-      where: { id: input.reservationId },
-      include: {
-        account: true,
-        departure: { include: { route: true } },
-      },
-    });
-    if (reserva.departure.route.agencyId !== input.agencyId) {
-      throw new ForbiddenError("OPERADOR", "payments.cash");
-    }
-    if (reserva.status === "PAGADA" || reserva.status === "ABORDADA") {
-      return { shouldIssueTicket: false };
-    }
+  const reserva = await tx.reservation.findUniqueOrThrow({
+    where: { id: input.reservationId },
+    include: {
+      account: true,
+      departure: { include: { route: true } },
+    },
+  });
+  if (reserva.departure.route.agencyId !== input.agencyId) {
+    throw new ForbiddenError("OPERADOR", "payments.cash");
+  }
+  if (reserva.status === "PAGADA" || reserva.status === "ABORDADA") {
+    return { shouldIssueTicket: false };
+  }
 
-    const montoUsd = await paymentAmountUsd(tx, {
+  const montoUsd =
+    input.amountUsdOverride ??
+    (await paymentAmountUsd(tx, {
       amount: monto,
       currency: input.currency,
       reservation: reserva,
       now: ahora,
-    });
-    const nuevoPagado = round2(reserva.paidUsd.add(montoUsd));
+    }));
+  const nuevoPagado = round2(reserva.paidUsd.add(montoUsd));
 
-    await tx.cashPayment.create({
-      data: {
-        reservationId: reserva.id,
-        amount: monto,
-        currency: input.currency,
-        amountUsd: montoUsd,
-        collectedByPanelUserId: input.panelUserId,
-        collectedAt: ahora,
-      },
-    });
-    await tx.reservation.update({
-      where: { id: reserva.id },
-      data: { paidUsd: nuevoPagado },
-    });
-
-    const destino = statusAfterPayment(reserva.status, reserva.totalUsd, nuevoPagado);
-    let shouldIssueTicket = false;
-    if (destino !== reserva.status) {
-      const efectos = await transitionReservation(
-        {
-          reservationId: reserva.id,
-          to: destino,
-          actor: { type: "PANEL", panelUserId: input.panelUserId },
-          now: ahora,
-        },
-        tx,
-      );
-      shouldIssueTicket = efectos.shouldIssueTicket;
-    }
-
-    await writeAudit(tx, {
-      actorType: "PANEL",
-      actorPanelUserId: input.panelUserId,
-      entityType: "Reservation",
-      entityId: reserva.id,
-      action: "COBRO_EN_SITIO",
-      before: { paidUsd: reserva.paidUsd.toString(), status: reserva.status },
-      after: {
-        paidUsd: nuevoPagado.toString(),
-        status: destino,
-        amount: monto.toString(),
-        currency: input.currency,
-      },
-    });
-
-    if (destino === "PAGADA") {
-      await enqueueMessage(tx, {
-        reservationId: reserva.id,
-        phone: reserva.account.phone,
-        templateKey: "ticket_emitido",
-        payload: {
-          nombre: reserva.account.fullName,
-          serial: reserva.code,
-          salida: formatCaracasDateTime24(reserva.departure.departsAt),
-          punto: reserva.departure.route.meetingPoint,
-        },
-      });
-    }
-
-    return { shouldIssueTicket };
+  await tx.cashPayment.create({
+    data: {
+      reservationId: reserva.id,
+      amount: monto,
+      currency: input.currency,
+      amountUsd: montoUsd,
+      collectedByPanelUserId: input.panelUserId,
+      collectedAt: ahora,
+    },
   });
+  await tx.reservation.update({
+    where: { id: reserva.id },
+    data: { paidUsd: nuevoPagado },
+  });
+
+  const destino = statusAfterPayment(reserva.status, reserva.totalUsd, nuevoPagado);
+  let shouldIssueTicket = false;
+  if (destino !== reserva.status) {
+    const efectos = await transitionReservation(
+      {
+        reservationId: reserva.id,
+        to: destino,
+        actor: { type: "PANEL", panelUserId: input.panelUserId },
+        now: ahora,
+      },
+      tx,
+    );
+    shouldIssueTicket = efectos.shouldIssueTicket;
+  }
+
+  await writeAudit(tx, {
+    actorType: "PANEL",
+    actorPanelUserId: input.panelUserId,
+    entityType: "Reservation",
+    entityId: reserva.id,
+    action: "COBRO_EN_SITIO",
+    before: { paidUsd: reserva.paidUsd.toString(), status: reserva.status },
+    after: {
+      paidUsd: nuevoPagado.toString(),
+      status: destino,
+      amount: monto.toString(),
+      currency: input.currency,
+    },
+  });
+
+  if (destino === "PAGADA") {
+    await enqueueMessage(tx, {
+      reservationId: reserva.id,
+      phone: reserva.account.phone,
+      templateKey: "ticket_emitido",
+      payload: {
+        nombre: reserva.account.fullName,
+        serial: reserva.code,
+        salida: formatCaracasDateTime24(reserva.departure.departsAt),
+        punto: reserva.departure.route.meetingPoint,
+      },
+    });
+  }
+
+  return { shouldIssueTicket };
+}
+
+/** Cobro en efectivo registrado en taquilla o al abordar. */
+export async function registerCashPayment(
+  input: CashPaymentInput,
+): Promise<{ shouldIssueTicket: boolean }> {
+  return prisma.$transaction((tx) => registerCashPaymentInTx(tx, input));
 }

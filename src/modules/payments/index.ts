@@ -1,6 +1,7 @@
 export {
   approveProof,
   registerCashPayment,
+  registerCashPaymentInTx,
   rejectProof,
   submitProof,
 } from "./record-payment";

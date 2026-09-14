@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getEnv } from "./env";
 
@@ -85,6 +85,20 @@ export async function saveUploadAt(relativePath: string, data: Buffer): Promise<
 
 export async function readUpload(relativePath: string): Promise<Buffer> {
   return readFile(resolveInside(relativePath));
+}
+
+/**
+ * Borra un archivo subido. Se usa para deshacer archivos ya guardados en
+ * disco cuando la operación que los necesitaba falla antes de confirmar en
+ * base de datos. Un archivo que ya no está ahí no es un error.
+ */
+export async function deleteUpload(relativePath: string): Promise<void> {
+  try {
+    await unlink(resolveInside(relativePath));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
 }
 
 export function uploadExtensionFor(format: ImageFormat): string {

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { isMinor, isValidBirthYear, isValidIdNumber, normalizeIdNumber } from "@/lib/identity";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { formatMoney } from "@/lib/decimal";
+import { ForbiddenError } from "@/modules/auth/permissions";
 import { writeAudit } from "@/modules/audit";
 import { computeAmounts } from "@/modules/catalog/pricing";
 import { getCurrentDepartureTax, getCurrentExchangeRate } from "@/modules/catalog/rates";
@@ -46,11 +47,28 @@ export interface CreateReservationResult {
 }
 
 /**
- * Crea una reserva descontando cupo de forma segura. El bloqueo de la fila de la
- * salida impide que dos compras simultáneas vendan el mismo puesto.
+ * Canal por el que se crea la reserva. La app del pasajero no aporta datos
+ * adicionales; la taquilla identifica al operador y su agencia, para el
+ * aislamiento por agencia y para dejar constancia de quién vendió.
  */
-export async function createReservation(
+export type ReservationChannelOptions =
+  | { channel: "APP" }
+  | { channel: "TAQUILLA"; panelUserId: string; agencyId: string };
+
+/**
+ * Crea una reserva descontando cupo de forma segura, dentro de la transacción
+ * que le pase el llamador. El bloqueo de la fila de la salida impide que dos
+ * compras simultáneas vendan el mismo puesto.
+ *
+ * El canal `APP` reproduce el comportamiento de siempre. El canal `TAQUILLA`
+ * exige un método de pago físico, se salta la regla de las 12 horas porque el
+ * cobro ocurre en la misma transacción, deja la reserva en `PAGO_EN_SITIO` y
+ * no encola el mensaje de reserva condicional: el ticket lo avisa el cobro.
+ */
+export async function createReservationInTx(
+  tx: Prisma.TransactionClient,
   input: CreateReservationInput,
+  options: ReservationChannelOptions,
 ): Promise<CreateReservationResult> {
   const ahora = input.now ?? new Date();
 
@@ -58,7 +76,7 @@ export async function createReservation(
     throw new ValidationError("Debes aceptar las políticas para completar la reserva.");
   }
 
-  const cuenta = await prisma.passengerAccount.findUniqueOrThrow({
+  const cuenta = await tx.passengerAccount.findUniqueOrThrow({
     where: { id: input.accountId },
     include: { documents: true },
   });
@@ -83,7 +101,8 @@ export async function createReservation(
   }
 
   // Documentos: la foto de cédula es obligatoria para concretar la venta y el
-  // permiso de viaje se exige si viaja alguien menor de edad.
+  // permiso de viaje se exige si viaja alguien menor de edad. Cuentan los
+  // documentos ya creados en esta misma transacción.
   const tieneCedula = cuenta.documents.some((d) => d.type === "CEDULA");
   if (!tieneCedula) {
     throw new MissingDocumentsError(
@@ -99,154 +118,176 @@ export async function createReservation(
     );
   }
 
-  const metodo = await prisma.paymentMethod.findUniqueOrThrow({
+  const metodo = await tx.paymentMethod.findUniqueOrThrow({
     where: { id: input.paymentMethodId },
   });
   if (!metodo.active) {
     throw new ValidationError("Ese método de pago no está disponible.");
   }
+  if (options.channel === "TAQUILLA" && metodo.kind !== "FISICO") {
+    throw new ValidationError("La venta en taquilla requiere un método de pago en efectivo.");
+  }
 
-  const tasaCambio = await getCurrentExchangeRate(metodo.currency, ahora);
-  const tasaSalida = await getCurrentDepartureTax(ahora);
+  const tasaCambio = await getCurrentExchangeRate(metodo.currency, ahora, tx);
+  const tasaSalida = await getCurrentDepartureTax(ahora, tx);
 
+  // Serializa a los compradores de esta salida antes de contar puestos.
+  await tx.$queryRaw`SELECT id FROM "Departure" WHERE id = ${input.departureId}::uuid FOR UPDATE`;
+
+  const salida = await tx.departure.findUniqueOrThrow({
+    where: { id: input.departureId },
+    include: { route: true },
+  });
+
+  if (options.channel === "TAQUILLA" && salida.route.agencyId !== options.agencyId) {
+    throw new ForbiddenError("OPERADOR", "sales.counter");
+  }
+
+  if (salida.status !== "PROGRAMADA") {
+    throw new DepartureClosedError();
+  }
+  if (salida.departsAt <= ahora) {
+    throw new DepartureClosedError("Esta salida ya partió.");
+  }
+
+  const horasParaSalida = (salida.departsAt.getTime() - ahora.getTime()) / 3_600_000;
+  if (options.channel === "APP" && metodo.kind === "FISICO" && horasParaSalida < CASH_MIN_LEAD_HOURS) {
+    throw new ValidationError(
+      "El pago en sitio solo se admite con más de 12 horas de anticipación. Elige un método digital.",
+    );
+  }
+
+  const disponibilidad = await getAvailability(input.departureId, tx);
+  if (disponibilidad.available < passengerCount) {
+    throw new NoSeatsAvailableError(disponibilidad.available);
+  }
+
+  const montos = computeAmounts({
+    fareUsd: salida.route.fareUsd,
+    taxPerPassengerUsd: tasaSalida,
+    passengerCount,
+    currency: metodo.currency,
+    rateFromUsd: tasaCambio,
+  });
+
+  const estado = metodo.kind === "DIGITAL" ? "PENDIENTE_PAGO" : "PAGO_EN_SITIO";
+  const code = generateReservationCode(salida.departsAt, passengerCount);
+  const publicToken = randomUUID();
+
+  const reserva = await tx.reservation.create({
+    data: {
+      code,
+      publicToken,
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: metodo.id,
+      status: estado,
+      salesChannel: options.channel,
+      soldByPanelUserId: options.channel === "TAQUILLA" ? options.panelUserId : null,
+      passengerCount,
+      policiesAcceptedAt: ahora,
+      fareUsd: salida.route.fareUsd,
+      fareTotalUsd: montos.fareTotalUsd,
+      taxPerPassengerUsd: tasaSalida,
+      taxTotalUsd: montos.taxTotalUsd,
+      totalUsd: montos.totalUsd,
+      currency: metodo.currency,
+      exchangeRateUsed: montos.exchangeRateUsed,
+      amountInCurrency: montos.amountInCurrency,
+      expiresAt:
+        estado === "PENDIENTE_PAGO"
+          ? new Date(ahora.getTime() + UNPAID_EXPIRY_MINUTES * 60_000)
+          : null,
+    },
+  });
+
+  await tx.passenger.create({
+    data: {
+      reservationId: reserva.id,
+      fullName: cuenta.fullName,
+      idNumber: cuenta.idNumber,
+      birthYear: cuenta.birthYear,
+      isHolder: true,
+    },
+  });
+  for (const acompanante of input.companions) {
+    await tx.passenger.create({
+      data: {
+        reservationId: reserva.id,
+        fullName: acompanante.fullName.trim(),
+        idNumber: normalizeIdNumber(acompanante.idNumber),
+        birthYear: acompanante.birthYear,
+        isHolder: false,
+      },
+    });
+  }
+
+  await writeAudit(tx, {
+    actorType: options.channel === "TAQUILLA" ? "PANEL" : "PASAJERO",
+    actorPanelUserId: options.channel === "TAQUILLA" ? options.panelUserId : undefined,
+    actorAccountId: options.channel === "TAQUILLA" ? null : cuenta.id,
+    entityType: "Reservation",
+    entityId: reserva.id,
+    action: "RESERVA_CREADA",
+    after: {
+      code,
+      passengerCount,
+      totalUsd: montos.totalUsd.toString(),
+      status: estado,
+      ...(options.channel === "TAQUILLA" ? { channel: "TAQUILLA" } : {}),
+    },
+  });
+
+  if (options.channel === "APP") {
+    if (estado === "PENDIENTE_PAGO") {
+      await enqueueMessage(tx, {
+        reservationId: reserva.id,
+        phone: cuenta.phone,
+        templateKey: "solicitud_recibida",
+        payload: {
+          nombre: cuenta.fullName,
+          pasajeros: String(passengerCount),
+          serial: code,
+        },
+      });
+    } else {
+      await enqueueMessage(tx, {
+        reservationId: reserva.id,
+        phone: cuenta.phone,
+        templateKey: "reserva_condicional",
+        payload: {
+          nombre: cuenta.fullName,
+          serial: code,
+          monto: formatMoney(montos.amountInCurrency, metodo.currency),
+          salida: formatCaracasDateTime24(salida.departsAt),
+        },
+      });
+    }
+  }
+
+  return {
+    reservationId: reserva.id,
+    code,
+    publicToken,
+    totalUsd: montos.totalUsd.toString(),
+    status: estado,
+  };
+}
+
+/**
+ * API del pasajero: crea una reserva desde la app. Reintenta si el serial
+ * generado choca con uno existente.
+ */
+export async function createReservation(
+  input: CreateReservationInput,
+): Promise<CreateReservationResult> {
   let ultimoError: unknown;
 
   for (let intento = 0; intento < CODE_ATTEMPTS; intento += 1) {
     try {
-      return await prisma.$transaction(async (tx) => {
-        // Serializa a los compradores de esta salida antes de contar puestos.
-        await tx.$queryRaw`SELECT id FROM "Departure" WHERE id = ${input.departureId}::uuid FOR UPDATE`;
-
-        const salida = await tx.departure.findUniqueOrThrow({
-          where: { id: input.departureId },
-          include: { route: true },
-        });
-
-        if (salida.status !== "PROGRAMADA") {
-          throw new DepartureClosedError();
-        }
-        if (salida.departsAt <= ahora) {
-          throw new DepartureClosedError("Esta salida ya partió.");
-        }
-
-        const horasParaSalida =
-          (salida.departsAt.getTime() - ahora.getTime()) / 3_600_000;
-        if (metodo.kind === "FISICO" && horasParaSalida < CASH_MIN_LEAD_HOURS) {
-          throw new ValidationError(
-            "El pago en sitio solo se admite con más de 12 horas de anticipación. Elige un método digital.",
-          );
-        }
-
-        const disponibilidad = await getAvailability(input.departureId, tx);
-        if (disponibilidad.available < passengerCount) {
-          throw new NoSeatsAvailableError(disponibilidad.available);
-        }
-
-        const montos = computeAmounts({
-          fareUsd: salida.route.fareUsd,
-          taxPerPassengerUsd: tasaSalida,
-          passengerCount,
-          currency: metodo.currency,
-          rateFromUsd: tasaCambio,
-        });
-
-        const estado = metodo.kind === "DIGITAL" ? "PENDIENTE_PAGO" : "PAGO_EN_SITIO";
-        const code = generateReservationCode(salida.departsAt, passengerCount);
-        const publicToken = randomUUID();
-
-        const reserva = await tx.reservation.create({
-          data: {
-            code,
-            publicToken,
-            accountId: cuenta.id,
-            departureId: salida.id,
-            paymentMethodId: metodo.id,
-            status: estado,
-            passengerCount,
-            policiesAcceptedAt: ahora,
-            fareUsd: salida.route.fareUsd,
-            fareTotalUsd: montos.fareTotalUsd,
-            taxPerPassengerUsd: tasaSalida,
-            taxTotalUsd: montos.taxTotalUsd,
-            totalUsd: montos.totalUsd,
-            currency: metodo.currency,
-            exchangeRateUsed: montos.exchangeRateUsed,
-            amountInCurrency: montos.amountInCurrency,
-            expiresAt:
-              estado === "PENDIENTE_PAGO"
-                ? new Date(ahora.getTime() + UNPAID_EXPIRY_MINUTES * 60_000)
-                : null,
-          },
-        });
-
-        await tx.passenger.create({
-          data: {
-            reservationId: reserva.id,
-            fullName: cuenta.fullName,
-            idNumber: cuenta.idNumber,
-            birthYear: cuenta.birthYear,
-            isHolder: true,
-          },
-        });
-        for (const acompanante of input.companions) {
-          await tx.passenger.create({
-            data: {
-              reservationId: reserva.id,
-              fullName: acompanante.fullName.trim(),
-              idNumber: normalizeIdNumber(acompanante.idNumber),
-              birthYear: acompanante.birthYear,
-              isHolder: false,
-            },
-          });
-        }
-
-        await writeAudit(tx, {
-          actorType: "PASAJERO",
-          actorAccountId: cuenta.id,
-          entityType: "Reservation",
-          entityId: reserva.id,
-          action: "RESERVA_CREADA",
-          after: {
-            code,
-            passengerCount,
-            totalUsd: montos.totalUsd.toString(),
-            status: estado,
-          },
-        });
-
-        if (estado === "PENDIENTE_PAGO") {
-          await enqueueMessage(tx, {
-            reservationId: reserva.id,
-            phone: cuenta.phone,
-            templateKey: "solicitud_recibida",
-            payload: {
-              nombre: cuenta.fullName,
-              pasajeros: String(passengerCount),
-              serial: code,
-            },
-          });
-        } else {
-          await enqueueMessage(tx, {
-            reservationId: reserva.id,
-            phone: cuenta.phone,
-            templateKey: "reserva_condicional",
-            payload: {
-              nombre: cuenta.fullName,
-              serial: code,
-              monto: formatMoney(montos.amountInCurrency, metodo.currency),
-              salida: formatCaracasDateTime24(salida.departsAt),
-            },
-          });
-        }
-
-        return {
-          reservationId: reserva.id,
-          code,
-          publicToken,
-          totalUsd: montos.totalUsd.toString(),
-          status: estado,
-        };
-      });
+      return await prisma.$transaction((tx) =>
+        createReservationInTx(tx, input, { channel: "APP" }),
+      );
     } catch (error) {
       // Solo se reintenta si el serial chocó; cualquier otro error sube tal cual.
       const esChoqueDeSerial =

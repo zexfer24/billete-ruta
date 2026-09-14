@@ -408,6 +408,10 @@ async function main(): Promise<void> {
     };
   }
 
+  // Marca las dos primeras reservas pagadas con método físico como vendidas
+  // en taquilla, para ver ese canal en el panel sin crear flujos nuevos.
+  let ventasEnTaquillaMarcadas = 0;
+
   for (const salida of todas) {
     const operador = operadoresPorAgencia.get(salida.agencyId);
     if (!operador) continue;
@@ -485,6 +489,12 @@ async function main(): Promise<void> {
       // La tasa de salida del terminal se cobra al momento de saldar la reserva.
       if (paidAt && paidAt > ahora) paidAt = new Date(ahora.getTime() - entero(1, 120) * 60_000);
 
+      // Las dos primeras reservas pagadas con método físico se marcan como
+      // vendidas en taquilla, para ver ese canal en el panel sin más flujos.
+      const ventaEnTaquilla =
+        status === "PAGADA" && metodo.kind === "FISICO" && ventasEnTaquillaMarcadas < 2;
+      if (ventaEnTaquilla) ventasEnTaquillaMarcadas += 1;
+
       reservas.push({
         id: reservationId,
         code,
@@ -493,6 +503,8 @@ async function main(): Promise<void> {
         departureId: salida.id,
         paymentMethodId: metodo.id,
         status,
+        salesChannel: ventaEnTaquilla ? "TAQUILLA" : "APP",
+        soldByPanelUserId: ventaEnTaquilla ? operador : null,
         passengerCount: pax,
         policiesAcceptedAt: creada,
         fareUsd: salida.fareUsd,

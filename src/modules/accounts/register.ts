@@ -25,6 +25,8 @@ export interface RegisterAccountInput {
 }
 
 export interface CreateCounterAccountInput {
+  /** Id de la cuenta a usar. Hace falta para guardar los archivos en `documentos/<accountId>/` antes de la transacción. */
+  id?: string;
   idNumber: string;
   givenNames: string;
   surnames: string;
@@ -211,6 +213,7 @@ export async function createCounterAccount(
 
   const cuenta = await tx.passengerAccount.create({
     data: {
+      id: input.id,
       idNumber: datos.idNumber,
       givenNames: datos.givenNames,
       surnames: datos.surnames,

@@ -12,11 +12,12 @@ export {
 } from "./state-machine";
 export { getAvailability, getAvailabilityMap } from "./availability";
 export type { Availability } from "./availability";
-export { createReservation } from "./create-reservation";
+export { createReservation, createReservationInTx } from "./create-reservation";
 export type {
   CompanionInput,
   CreateReservationInput,
   CreateReservationResult,
+  ReservationChannelOptions,
 } from "./create-reservation";
 export { transitionReservation } from "./transition";
 export type { TransitionActor, TransitionEffects, TransitionInput } from "./transition";

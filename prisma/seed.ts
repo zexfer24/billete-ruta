@@ -108,6 +108,20 @@ async function main(): Promise<void> {
         details: { nota: "Paga en la taquilla del terminal antes de abordar." },
         sortOrder: 6,
       },
+      {
+        name: "Pesos en efectivo",
+        kind: "FISICO",
+        currency: "COP",
+        details: { nota: "Pago en efectivo en la taquilla de la agencia" },
+        sortOrder: 7,
+      },
+      {
+        name: "USDT en taquilla",
+        kind: "FISICO",
+        currency: "USDT",
+        details: { nota: "Transferencia USDT confirmada en la taquilla" },
+        sortOrder: 8,
+      },
     ],
   });
 

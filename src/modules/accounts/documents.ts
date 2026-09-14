@@ -1,4 +1,4 @@
-import type { DocumentType } from "@prisma/client";
+import type { Prisma, DocumentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertImageBuffer, MAX_IMAGE_BYTES, saveUpload } from "@/lib/storage";
 import { writeAudit } from "@/modules/audit";
@@ -9,6 +9,45 @@ export interface UploadDocumentInput {
   type: DocumentType;
   originalName: string;
   data: Buffer;
+}
+
+/** Quién carga el documento: el propio pasajero o un operador en la taquilla. */
+export type DocumentActor = { type: "PANEL"; panelUserId: string } | { type: "PASAJERO" };
+
+export interface CreateDocumentInTxInput {
+  accountId: string;
+  type: DocumentType;
+  filePath: string;
+  originalName: string;
+  actor: DocumentActor;
+}
+
+/**
+ * Crea la fila del documento y su auditoría, dentro de la transacción que le
+ * pase el llamador. El archivo ya debe estar guardado en disco.
+ */
+export async function createDocumentInTx(
+  tx: Prisma.TransactionClient,
+  input: CreateDocumentInTxInput,
+): Promise<{ documentId: string; filePath: string }> {
+  const documento = await tx.passengerDocument.create({
+    data: {
+      accountId: input.accountId,
+      type: input.type,
+      filePath: input.filePath,
+      originalName: input.originalName,
+    },
+  });
+  await writeAudit(tx, {
+    actorType: input.actor.type,
+    actorPanelUserId: input.actor.type === "PANEL" ? input.actor.panelUserId : undefined,
+    actorAccountId: input.actor.type === "PASAJERO" ? input.accountId : null,
+    entityType: "PassengerDocument",
+    entityId: documento.id,
+    action: "DOCUMENTO_CARGADO",
+    after: { type: input.type, originalName: input.originalName },
+  });
+  return { documentId: documento.id, filePath: input.filePath };
 }
 
 /**
@@ -33,25 +72,15 @@ export async function uploadDocument(
     input.data,
   );
 
-  return prisma.$transaction(async (tx) => {
-    const documento = await tx.passengerDocument.create({
-      data: {
-        accountId: input.accountId,
-        type: input.type,
-        filePath,
-        originalName: input.originalName,
-      },
-    });
-    await writeAudit(tx, {
-      actorType: "PASAJERO",
-      actorAccountId: input.accountId,
-      entityType: "PassengerDocument",
-      entityId: documento.id,
-      action: "DOCUMENTO_CARGADO",
-      after: { type: input.type, originalName: input.originalName },
-    });
-    return { documentId: documento.id, filePath };
-  });
+  return prisma.$transaction((tx) =>
+    createDocumentInTx(tx, {
+      accountId: input.accountId,
+      type: input.type,
+      filePath,
+      originalName: input.originalName,
+      actor: { type: "PASAJERO" },
+    }),
+  );
 }
 
 export async function listDocuments(accountId: string) {
