@@ -101,10 +101,21 @@ export type CounterSaleState =
       };
     };
 
+/**
+ * Año de nacimiento coaccionado desde texto: entero, sin `NaN`. Zod trata un
+ * valor que no coacciona a número (por ejemplo "abcd") como su propio tipo
+ * `"nan"`, distinto de `"number"`, así que `invalid_type_error` ya lo cubre.
+ * Se reutiliza para el titular y cada acompañante, con el mensaje que
+ * corresponda a cada uno.
+ */
+function birthYearSchema(message: string) {
+  return z.coerce.number({ invalid_type_error: message }).int(message);
+}
+
 const companionSchema = z.object({
   fullName: z.string().min(1, "Cada acompañante necesita su nombre completo."),
   idNumber: z.string().min(1, "Cada acompañante necesita su cédula."),
-  birthYear: z.coerce.number().int("El año de nacimiento de cada acompañante debe ser un número."),
+  birthYear: birthYearSchema("El año de nacimiento de cada acompañante debe ser un número."),
 });
 
 const saleSchema = z.object({
@@ -114,7 +125,7 @@ const saleSchema = z.object({
   holderGivenNames: z.string().optional(),
   holderSurnames: z.string().optional(),
   holderPhone: z.string().optional(),
-  holderBirthYear: z.string().optional(),
+  holderBirthYear: birthYearSchema("El año de nacimiento del titular no es válido.").optional(),
   companions: z.array(companionSchema).max(5, "Puedes añadir hasta 5 acompañantes."),
   policiesAccepted: z
     .string()
@@ -172,10 +183,6 @@ export async function sellAtCounterAction(
     };
   }
 
-  const holderBirthYear = parsed.data.holderBirthYear
-    ? Number.parseInt(parsed.data.holderBirthYear, 10)
-    : undefined;
-
   try {
     const cedula = await readOptionalUpload(formData, "cedula");
     const travelPermit = await readOptionalUpload(formData, "travelPermit");
@@ -190,7 +197,7 @@ export async function sellAtCounterAction(
         givenNames: parsed.data.holderGivenNames,
         surnames: parsed.data.holderSurnames,
         phone: parsed.data.holderPhone,
-        birthYear: holderBirthYear,
+        birthYear: parsed.data.holderBirthYear,
       },
       companions: parsed.data.companions,
       documents: { cedula, travelPermit },

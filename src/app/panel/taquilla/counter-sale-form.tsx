@@ -230,6 +230,18 @@ function Wizard({
     setCompanions((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
   }
 
+  /**
+   * Cambiar de método de pago puede cambiar la moneda: el "Recibido" que haya
+   * escrito el operador queda en la moneda anterior, así que se limpia aquí
+   * mismo (no en un efecto sobre `quote`, que también recarga al cambiar la
+   * cantidad de acompañantes con el mismo método y no debería borrar lo que
+   * el operador ya escribió).
+   */
+  function selectPaymentMethod(id: string) {
+    setPaymentMethodId(id);
+    setReceivedAmount("");
+  }
+
   if (state.status === "success") {
     return <SaleResult sale={state.sale} onReset={onReset} />;
   }
@@ -303,7 +315,7 @@ function Wizard({
         <StepPayment
           paymentMethods={paymentMethods}
           selectedId={paymentMethodId}
-          onSelect={setPaymentMethodId}
+          onSelect={selectPaymentMethod}
           quote={quote}
           quotePending={quotePending}
           quoteError={quoteError}
