@@ -95,7 +95,7 @@ export function FleetBlock({
             {relevantes.length > MAX_FILAS ? (
               <Link
                 href="/panel/flota?vista=choferes"
-                className="text-sm font-medium text-[var(--color-acento)] hover:underline"
+                className="rounded-sm text-sm font-medium text-[var(--color-acento)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)]"
               >
                 Ver los {relevantes.length} choferes
               </Link>

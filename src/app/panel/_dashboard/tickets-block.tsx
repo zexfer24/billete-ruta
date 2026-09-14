@@ -38,7 +38,7 @@ export function TicketsBlock({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Link
                     href={`/panel/pasajeros?vista=pagadas&reserva=${ticket.reservationId}`}
-                    className="tabular font-medium text-[var(--color-acento)] hover:underline"
+                    className="tabular rounded-sm font-medium text-[var(--color-acento)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)]"
                   >
                     {ticket.code}
                   </Link>

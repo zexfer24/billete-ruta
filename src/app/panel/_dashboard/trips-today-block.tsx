@@ -61,7 +61,14 @@ export function TripsTodayBlock({
                   className="border-b border-[var(--color-borde)] last:border-0"
                 >
                   <td className="tabular px-4 py-3">{formatCaracasTime24(salida.departsAt)}</td>
-                  <td className="px-4 py-3">{salida.routeName}</td>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/panel/salidas/${salida.id}`}
+                      className="rounded-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)]"
+                    >
+                      {salida.routeName}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3">
                     {salida.vehiclePlate} · {salida.driverName}
                   </td>
