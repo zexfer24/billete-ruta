@@ -517,4 +517,49 @@ Ronda ejecutada como **ronda 4** (la "ronda 3" ya la usó la sesión de fallas d
 
 ### Verificación final
 
-Pendiente de la verificación del orquestador.
+Hecha por el orquestador el 2026-09-14 sobre `971e1f9`.
+
+**Revisión final de la rama (opus, `528b09c..d0f27d4`).** Veredicto: lista para merge con correcciones. No hubo hallazgos críticos; hubo cuatro importantes:
+- **I1.** El reintento de una venta de taquilla fallida se rompía por el reinicio automático del formulario en React 19.
+- **I2.** Un método físico en VES o COP sin tasa vigente tumbaba la taquilla.
+- **I3.** No se verificaba que el método de pago fuera del terminal o de la agencia.
+- **I4.** El aviso de cobro quedaba tapado dentro del panel de la reserva.
+
+El triage añadió un test de aislamiento del cobro por `reservationId` de otra agencia.
+
+**Verificación visual.** Sesión de operador creada por script y navegador a 375 px y 1280 px:
+- Las seis pantallas responden 200.
+- Las redirecciones de las rutas viejas funcionan.
+- Ninguna pantalla desborda horizontalmente.
+
+Aparecieron tres defectos:
+- **V1.** "Salidas · Hoy" contaba solo hasta la hora actual.
+- **V2.** La flota mostraba horas sin fecha para salidas de días anteriores.
+- **V3.** La tabla de embarques del día quedaba apretada en media columna.
+
+**Ola única de corrección (`971e1f9`).** Resolvió I1 a I4, el test de aislamiento y V1 a V3. La re-revisión acotada los dio a todos por resueltos, sin roturas nuevas. En el navegador se confirmó:
+- "Salidas · Hoy: 6";
+- "sale 11/09 20:00" en la flota;
+- la tabla de embarques a ancho completo tras reiniciar `pnpm dev`, porque la caché de Tailwind no tomaba la clase nueva.
+
+**Resultados:**
+
+```
+pnpm typecheck        → limpio
+pnpm lint             → limpio
+pnpm test             → 29 archivos, 341 tests en verde
+pnpm test:integration → 18 archivos, 171 tests en verde
+```
+
+**No realizado:** las tres mutaciones manuales del plan (quitar el `FOR UPDATE`, volver a convertir con `exchangeRateUsed` y quitar el filtro de agencia de la bitácora). Tampoco se probó en el navegador el reintento de venta de taquilla (I1) ni el aviso dentro del panel de reserva (I4). Ambas pruebas implican ventas y cobros reales en la base de desarrollo, y quedaron verificadas por lectura y re-revisión.
+
+**Menores de la revisión final que quedan abiertos:**
+- **M1.** Cobrar por serial una reserva ya pagada muestra "Cobro registrado".
+- **M2.** Si `issueTicket` falla después de confirmar la venta, la pantalla muestra error aunque la venta existe.
+- **M3.** No hay chequeo de tamaño de archivo en el cliente de taquilla.
+- **M5.** `DOCUMENTO_CARGADO` no tiene frase en la bitácora.
+- **M6.** El texto de `MissingDocumentsError` en taquilla está dirigido al pasajero.
+- **M7.** Queda pendiente:
+  - revisar la cuenta inactiva en taquilla;
+  - un `?salida=` que no es UUID da 500 en `/panel/pasajeros`;
+  - las redirecciones de error del tablero pierden `periodo`.
