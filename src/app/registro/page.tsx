@@ -12,6 +12,7 @@ export default function RegistroPage() {
       />
       <main className="mx-auto max-w-md px-4 py-6">
         <RegisterForm />
+        <p className="mt-4 text-center text-sm text-tinta-suave">¿Te registraron en la taquilla de tu agencia? Usa aquí la misma cédula, teléfono y año de nacimiento para activar tu cuenta y elegir tu contraseña.</p>
       </main>
     </div>
   );

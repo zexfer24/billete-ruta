@@ -13,6 +13,7 @@ export const ALL_PERMISSIONS = [
   "terminal.agencies",
   "terminal.rates",
   "terminal.messages",
+  "sales.counter",
 ] as const;
 
 export type Permission = (typeof ALL_PERMISSIONS)[number];
@@ -39,6 +40,7 @@ const MATRIX: Record<PanelRole, readonly Permission[]> = {
     "boarding.manage",
     "trips.manage",
     "agency.reports",
+    "sales.counter",
   ],
 };
 

@@ -23,15 +23,45 @@ export interface RegisterAccountInput {
   now?: Date;
 }
 
+export interface CreateCounterAccountInput {
+  idNumber: string;
+  givenNames: string;
+  surnames: string;
+  phone: string;
+  birthYear: number;
+  panelUserId: string;
+  country?: "VE" | "CO";
+  now?: Date;
+}
+
+interface DatosValidados {
+  idNumber: string;
+  givenNames: string;
+  surnames: string;
+  phone: string;
+  birthYear: number;
+  fullName: string;
+}
+
 /** Recorta los espacios de los extremos y colapsa los espacios internos. */
 function normalizeSpaces(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
-/** La cédula es la credencial de acceso, por eso debe ser única y normalizada. */
-export async function registerAccount(
-  input: RegisterAccountInput,
-): Promise<{ accountId: string }> {
+/**
+ * Valida y normaliza cédula, nombres, apellidos, teléfono y año de nacimiento.
+ * La reutilizan `registerAccount` y `createCounterAccount` para no duplicar
+ * las reglas ni los mensajes de error.
+ */
+function validarDatosDeCuenta(input: {
+  idNumber: string;
+  givenNames: string;
+  surnames: string;
+  phone: string;
+  birthYear: number;
+  country?: "VE" | "CO";
+  now?: Date;
+}): DatosValidados {
   const ahora = input.now ?? new Date();
   const idNumber = normalizeIdNumber(input.idNumber);
   const phone = normalizePhone(input.phone, input.country ?? "VE");
@@ -53,23 +83,66 @@ export async function registerAccount(
   if (!isValidBirthYear(input.birthYear, ahora)) {
     throw new ValidationError("El año de nacimiento no es válido.");
   }
+
+  return { idNumber, givenNames, surnames, phone, birthYear: input.birthYear, fullName: `${givenNames} ${surnames}` };
+}
+
+/** La cédula es la credencial de acceso, por eso debe ser única y normalizada. */
+export async function registerAccount(
+  input: RegisterAccountInput,
+): Promise<{ accountId: string }> {
+  const datos = validarDatosDeCuenta(input);
+
   if (input.password.length < 8) {
     throw new ValidationError("La contraseña debe tener al menos 8 caracteres.");
   }
 
+  const existente = await prisma.passengerAccount.findUnique({ where: { idNumber: datos.idNumber } });
+
+  if (existente && existente.passwordHash !== null) {
+    throw new ValidationError(
+      `Ya existe una cuenta con la cédula ${datos.idNumber}. Intenta ingresar en vez de registrarte.`,
+    );
+  }
+
   const passwordHash = await hashPassword(input.password);
-  const fullName = `${givenNames} ${surnames}`;
+
+  if (existente) {
+    // Cuenta creada en la taquilla, todavía sin contraseña: se activa solo si
+    // los datos que aporta el pasajero coinciden con los que registró el operador.
+    if (existente.phone !== datos.phone || existente.birthYear !== datos.birthYear) {
+      throw new ValidationError(
+        "Esta cédula tiene una cuenta creada en taquilla y los datos no coinciden. Acércate a la taquilla de tu agencia.",
+      );
+    }
+
+    return prisma.$transaction(async (tx) => {
+      await tx.passengerAccount.update({
+        where: { id: existente.id },
+        data: { passwordHash },
+      });
+      await writeAudit(tx, {
+        actorType: "PASAJERO",
+        actorAccountId: existente.id,
+        entityType: "PassengerAccount",
+        entityId: existente.id,
+        action: "CUENTA_ACTIVADA",
+        after: { idNumber: datos.idNumber },
+      });
+      return { accountId: existente.id };
+    });
+  }
 
   try {
     return await prisma.$transaction(async (tx) => {
       const cuenta = await tx.passengerAccount.create({
         data: {
-          idNumber,
-          givenNames,
-          surnames,
-          fullName,
-          phone,
-          birthYear: input.birthYear,
+          idNumber: datos.idNumber,
+          givenNames: datos.givenNames,
+          surnames: datos.surnames,
+          fullName: datos.fullName,
+          phone: datos.phone,
+          birthYear: datos.birthYear,
           passwordHash,
         },
       });
@@ -80,7 +153,7 @@ export async function registerAccount(
         entityId: cuenta.id,
         action: "CUENTA_CREADA",
         after: {
-          idNumber,
+          idNumber: datos.idNumber,
           givenNames: cuenta.givenNames,
           surnames: cuenta.surnames,
           fullName: cuenta.fullName,
@@ -91,11 +164,54 @@ export async function registerAccount(
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new ValidationError(
-        `Ya existe una cuenta con la cédula ${idNumber}. Intenta ingresar en vez de registrarte.`,
+        `Ya existe una cuenta con la cédula ${datos.idNumber}. Intenta ingresar en vez de registrarte.`,
       );
     }
     throw error;
   }
+}
+
+/**
+ * Crea, desde la taquilla, una cuenta de pasajero sin contraseña. El
+ * pasajero la activa después desde `/registro` con la misma cédula,
+ * teléfono y año de nacimiento.
+ *
+ * No captura `P2002`: el llamador busca la cédula antes de invocar esta
+ * función, y si de todos modos hay una carrera, el error dentro de la
+ * transacción la aborta igual, así que no hace falta traducirlo aquí.
+ */
+export async function createCounterAccount(
+  tx: Prisma.TransactionClient,
+  input: CreateCounterAccountInput,
+): Promise<{ accountId: string }> {
+  const datos = validarDatosDeCuenta(input);
+
+  const cuenta = await tx.passengerAccount.create({
+    data: {
+      idNumber: datos.idNumber,
+      givenNames: datos.givenNames,
+      surnames: datos.surnames,
+      fullName: datos.fullName,
+      phone: datos.phone,
+      birthYear: datos.birthYear,
+      passwordHash: null,
+      createdByPanelUserId: input.panelUserId,
+    },
+  });
+  await writeAudit(tx, {
+    actorType: "PANEL",
+    actorPanelUserId: input.panelUserId,
+    entityType: "PassengerAccount",
+    entityId: cuenta.id,
+    action: "CUENTA_CREADA_EN_TAQUILLA",
+    after: {
+      idNumber: datos.idNumber,
+      givenNames: cuenta.givenNames,
+      surnames: cuenta.surnames,
+      fullName: cuenta.fullName,
+    },
+  });
+  return { accountId: cuenta.id };
 }
 
 /** Devuelve el token de sesión si las credenciales son correctas. */
@@ -108,6 +224,7 @@ export async function loginAccount(
     where: { idNumber: normalizeIdNumber(idNumber) },
   });
   if (!cuenta || !cuenta.active) return null;
+  if (cuenta.passwordHash === null) return null;
   if (!(await verifyPassword(cuenta.passwordHash, password))) return null;
 
   const sesion = await createPassengerSession(cuenta.id, now);

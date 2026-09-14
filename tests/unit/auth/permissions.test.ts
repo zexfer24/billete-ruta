@@ -23,6 +23,7 @@ describe("matriz de permisos", () => {
       "departures.manage",
       "boarding.manage",
       "trips.manage",
+      "sales.counter",
     ] as const) {
       expect(can("ADMIN", permiso)).toBe(false);
     }
@@ -37,9 +38,15 @@ describe("matriz de permisos", () => {
       "boarding.manage",
       "trips.manage",
       "agency.reports",
+      "sales.counter",
     ] as const) {
       expect(can("OPERADOR", permiso)).toBe(true);
     }
+  });
+
+  it("el operador vende en taquilla y el admin no", () => {
+    expect(can("OPERADOR", "sales.counter")).toBe(true);
+    expect(can("ADMIN", "sales.counter")).toBe(false);
   });
 
   it("el operador no accede a nada del terminal", () => {

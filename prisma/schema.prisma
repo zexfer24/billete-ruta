@@ -89,6 +89,12 @@ enum ActorType {
   SISTEMA
 }
 
+/// Canal de venta de una reserva: por la app del pasajero o en la taquilla de la agencia.
+enum SalesChannel {
+  APP
+  TAQUILLA
+}
+
 // ---------------------------------------------------------------------------
 // Identidad
 // ---------------------------------------------------------------------------
@@ -102,7 +108,10 @@ model PassengerAccount {
   fullName     String
   phone        String
   birthYear    Int
-  passwordHash String
+  /// Nulo mientras una cuenta creada en la taquilla no se activa con una contraseña.
+  passwordHash String?
+  /// Operador que creó la cuenta en la taquilla; nulo si el pasajero se registró por su cuenta.
+  createdByPanelUserId String? @db.Uuid
   active       Boolean  @default(true)
   lastLoginAt  DateTime? @db.Timestamptz(3)
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
@@ -347,6 +356,8 @@ model Reservation {
   departureId           String              @db.Uuid
   paymentMethodId       String              @db.Uuid
   status                ReservationStatus   @default(PENDIENTE_PAGO)
+  /// Canal por el que se vendió la reserva: la app del pasajero o la taquilla de la agencia.
+  salesChannel          SalesChannel        @default(APP)
   passengerCount        Int
   policiesAcceptedAt    DateTime            @db.Timestamptz(3)
   fareUsd               Decimal             @db.Decimal(10, 2)
@@ -367,6 +378,8 @@ model Reservation {
   cancelledAt           DateTime?           @db.Timestamptz(3)
   cancellationReason    String?
   manualContactRequired Boolean             @default(false)
+  /// Operador que vendió la reserva en la taquilla; nulo si la venta fue por la app.
+  soldByPanelUserId     String?             @db.Uuid
   createdAt             DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime            @updatedAt @db.Timestamptz(3)
 
