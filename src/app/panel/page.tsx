@@ -180,7 +180,9 @@ export default async function PanelPage({
         <FleetBlock fleet={flota} now={now} registrarChoferHref={registrarHref("chofer")} />
         <TicketsBlock tickets={tickets} periodLabel={periodLabel} now={now} />
         <TripsTodayBlock departures={salidasHoy} registrarSalidaHref={registrarHref("salida")} />
-        <ActivityBlock activity={actividad} periodLabel={periodLabel} now={now} />
+        <div className="lg:col-span-2">
+          <ActivityBlock activity={actividad} periodLabel={periodLabel} now={now} />
+        </div>
       </div>
 
       {registrar === "cobro" ? (

@@ -4,7 +4,7 @@ import { formatMoney, round2, toDecimal, ZERO } from "@/lib/decimal";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { writeAudit } from "@/modules/audit";
 import { balanceUsd, statusAfterPayment, toUsd } from "@/modules/catalog/pricing";
-import { getCurrentExchangeRate } from "@/modules/catalog/rates";
+import { getCurrentExchangeRate, missingExchangeRateMessage } from "@/modules/catalog/rates";
 import { enqueueMessage } from "@/modules/messaging";
 import { ForbiddenError } from "@/modules/auth/permissions";
 import { NotOwnerError, ValidationError } from "@/modules/booking/errors";
@@ -12,13 +12,6 @@ import { transitionReservation } from "@/modules/booking/transition";
 
 /** Estados en los que el pasajero todavía puede subir un comprobante. */
 const CAN_SUBMIT_PROOF = ["PENDIENTE_PAGO", "ABONADA", "EN_VALIDACION", "PAGO_EN_SITIO"] as const;
-
-const CURRENCY_LABELS: Record<Currency, string> = {
-  USD: "USD",
-  USDT: "USDT",
-  VES: "VES",
-  COP: "COP",
-};
 
 /**
  * Convierte un pago a dólares. Si llega en la moneda de la reserva se usa la
@@ -48,9 +41,7 @@ async function paymentAmountUsd(
   }
   const tasaVigente = await getCurrentExchangeRate(currency, now, tx);
   if (tasaVigente === null) {
-    throw new ValidationError(
-      `No hay una tasa de cambio vigente para ${CURRENCY_LABELS[currency]}. El administrador debe cargarla.`,
-    );
+    throw new ValidationError(missingExchangeRateMessage(currency));
   }
   return toUsd(amount, currency, tasaVigente);
 }

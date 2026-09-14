@@ -5,6 +5,7 @@ export {
   getCurrentExchangeRate,
   listDepartureTaxes,
   listExchangeRates,
+  missingExchangeRateMessage,
   setDepartureTax,
   setExchangeRate,
 } from "./rates";

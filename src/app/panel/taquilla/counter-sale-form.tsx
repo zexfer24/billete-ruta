@@ -1,6 +1,15 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition, type RefObject } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+  type RefObject,
+} from "react";
 import type { Currency } from "@prisma/client";
 import type { CounterHolderLookup } from "@/modules/counter";
 import { isMinor, isValidBirthYear } from "@/lib/identity";
@@ -80,6 +89,7 @@ function Wizard({
   const [state, formAction, pending] = useActionState(sellAtCounterAction, INITIAL_STATE);
 
   const [step, setStep] = useState<Step>(1);
+  const formRef = useRef<HTMLFormElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
@@ -117,6 +127,16 @@ function Wizard({
   useEffect(() => {
     if (state.status === "error") {
       errorRef.current?.focus();
+      // Defensa adicional: si el operador ya había elegido un archivo antes de
+      // reintentar, `hasCedulaFile`/`hasTravelPermitFile` deben reflejar lo que
+      // de verdad quedó en los `<input type="file">`, no lo que se marcó antes
+      // del envío fallido.
+      const cedulaInput = formRef.current?.querySelector<HTMLInputElement>('input[name="cedula"]');
+      const travelPermitInput = formRef.current?.querySelector<HTMLInputElement>(
+        'input[name="travelPermit"]',
+      );
+      setHasCedulaFile((cedulaInput?.files?.length ?? 0) > 0);
+      setHasTravelPermitFile((travelPermitInput?.files?.length ?? 0) > 0);
     }
   }, [state]);
 
@@ -242,6 +262,21 @@ function Wizard({
     setReceivedAmount("");
   }
 
+  /**
+   * Envía con `FormData` propio en vez de `<form action={formAction}>`: React
+   * 19 ejecuta `form.reset()` al terminar la acción, también cuando devuelve
+   * `{status:"error"}`, y eso vacía los `<input type="file">` y desmarca los
+   * radios de salida y método de pago antes de que el operador pueda
+   * reintentar (ver hallazgo I1 de la ronda 4).
+   */
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    startTransition(() => {
+      formAction(fd);
+    });
+  }
+
   if (state.status === "success") {
     return <SaleResult sale={state.sale} onReset={onReset} />;
   }
@@ -255,7 +290,7 @@ function Wizard({
   );
 
   return (
-    <form action={formAction} className="flex flex-col gap-6 pb-4">
+    <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-6 pb-4">
       <input type="hidden" name="holderIdNumber" value={holderIdNumber} />
       <input type="hidden" name="holderGivenNames" value={lookupResult?.found ? "" : holderGivenNames} />
       <input type="hidden" name="holderSurnames" value={lookupResult?.found ? "" : holderSurnames} />

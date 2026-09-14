@@ -95,10 +95,10 @@ describe("listCounterOptions", () => {
     const { salida: propia } = await createDepartureFixture({ agencyId: agencia.id, capacity: 5 });
     const { salida: llena } = await createDepartureFixture({ agencyId: agencia.id, capacity: 0 });
     const otraAgencia = await createAgencyFixture();
-    await createDepartureFixture({ agencyId: otraAgencia.id, capacity: 5 });
+    const { salida: ajena } = await createDepartureFixture({ agencyId: otraAgencia.id, capacity: 5 });
 
     const fisico = await createPaymentMethodFixture({ kind: "FISICO", currency: "USD" });
-    await createPaymentMethodFixture({ kind: "DIGITAL", currency: "USD" });
+    const digital = await createPaymentMethodFixture({ kind: "DIGITAL", currency: "USD" });
     const fisicoInactivo = await createPaymentMethodFixture({ kind: "FISICO", currency: "VES" });
     await prisma.paymentMethod.update({ where: { id: fisicoInactivo.id }, data: { active: false } });
 
@@ -106,9 +106,10 @@ describe("listCounterOptions", () => {
 
     expect(opciones.departures.map((d) => d.id)).toContain(propia.id);
     expect(opciones.departures.map((d) => d.id)).not.toContain(llena.id);
+    expect(opciones.departures.map((d) => d.id)).not.toContain(ajena.id);
     expect(opciones.paymentMethods.map((m) => m.id)).toContain(fisico.id);
     expect(opciones.paymentMethods.map((m) => m.id)).not.toContain(fisicoInactivo.id);
-    expect(opciones.paymentMethods.every((m) => m.currency !== undefined)).toBe(true);
+    expect(opciones.paymentMethods.map((m) => m.id)).not.toContain(digital.id);
   });
 
   it("da la tasa de cambio vigente para VES y null para USD", async () => {
@@ -123,6 +124,17 @@ describe("listCounterOptions", () => {
     const ves = opciones.paymentMethods.find((m) => m.id === fisicoVes.id);
     expect(usd?.rateFromUsd).toBeNull();
     expect(ves?.rateFromUsd).toBe("36.7412");
+  });
+
+  it("excluye un método físico en COP sin tasa de cambio vigente", async () => {
+    const agencia = await createAgencyFixture();
+    await createDepartureFixture({ agencyId: agencia.id, capacity: 5 });
+    const fisicoCop = await createPaymentMethodFixture({ kind: "FISICO", currency: "COP" });
+    await prisma.exchangeRate.deleteMany({ where: { currency: "COP" } });
+
+    const opciones = await listCounterOptions(agencia.id);
+
+    expect(opciones.paymentMethods.map((m) => m.id)).not.toContain(fisicoCop.id);
   });
 });
 
@@ -197,5 +209,54 @@ describe("quoteCounterSale", () => {
         passengerCount: 7,
       }),
     ).rejects.toThrow("La cantidad de pasajeros debe estar entre 1 y 6.");
+  });
+
+  it("rechaza un método físico COP sin tasa de cambio vigente", async () => {
+    const { agencia, salida } = await createDepartureFixture({});
+    const metodo = await createPaymentMethodFixture({ kind: "FISICO", currency: "COP" });
+    await prisma.exchangeRate.deleteMany({ where: { currency: "COP" } });
+
+    await expect(
+      quoteCounterSale({
+        agencyId: agencia.id,
+        departureId: salida.id,
+        paymentMethodId: metodo.id,
+        passengerCount: 1,
+      }),
+    ).rejects.toThrow(
+      "No hay una tasa de cambio vigente para COP. El administrador debe cargarla.",
+    );
+  });
+
+  it("rechaza un método de pago de otra agencia; uno del terminal sí cotiza", async () => {
+    const { agencia, salida } = await createDepartureFixture({});
+    const otraAgencia = await createAgencyFixture();
+    const metodoAjeno = await createPaymentMethodFixture({
+      kind: "FISICO",
+      currency: "USD",
+      agencyId: otraAgencia.id,
+    });
+
+    await expect(
+      quoteCounterSale({
+        agencyId: agencia.id,
+        departureId: salida.id,
+        paymentMethodId: metodoAjeno.id,
+        passengerCount: 1,
+      }),
+    ).rejects.toThrow("Ese método de pago no está disponible.");
+
+    const metodoTerminal = await createPaymentMethodFixture({
+      kind: "FISICO",
+      currency: "USD",
+      agencyId: null,
+    });
+    const cotizacion = await quoteCounterSale({
+      agencyId: agencia.id,
+      departureId: salida.id,
+      paymentMethodId: metodoTerminal.id,
+      passengerCount: 1,
+    });
+    expect(cotizacion.currency).toBe("USD");
   });
 });

@@ -10,6 +10,7 @@ import {
 } from "@/modules/booking";
 import {
   createAccountFixture,
+  createAgencyFixture,
   createDepartureFixture,
   createPaymentMethodFixture,
   seedRatesFixture,
@@ -253,6 +254,60 @@ describe("createReservation", () => {
     expect(resultados.filter((r) => r === "ok")).toHaveLength(10);
     expect(await prisma.reservation.count({ where: { departureId: salida.id } })).toBe(10);
     expect((await getAvailability(salida.id)).available).toBe(0);
+  });
+
+  it("un método digital COP sin tasa de cambio vigente: rechaza", async () => {
+    const { salida } = await createDepartureFixture();
+    const metodo = await createPaymentMethodFixture({ kind: "DIGITAL", currency: "COP" });
+    await prisma.exchangeRate.deleteMany({ where: { currency: "COP" } });
+    const cuenta = await createAccountFixture();
+
+    await expect(
+      createReservation({
+        accountId: cuenta.id,
+        departureId: salida.id,
+        paymentMethodId: metodo.id,
+        companions: [],
+        policiesAccepted: true,
+      }),
+    ).rejects.toThrow(
+      "No hay una tasa de cambio vigente para COP. El administrador debe cargarla.",
+    );
+  });
+
+  it("un método de pago de otra agencia: rechaza; uno del terminal sí reserva", async () => {
+    const { salida } = await createDepartureFixture();
+    const otraAgencia = await createAgencyFixture();
+    const metodoAjeno = await createPaymentMethodFixture({
+      kind: "DIGITAL",
+      currency: "USD",
+      agencyId: otraAgencia.id,
+    });
+    const cuenta = await createAccountFixture();
+
+    await expect(
+      createReservation({
+        accountId: cuenta.id,
+        departureId: salida.id,
+        paymentMethodId: metodoAjeno.id,
+        companions: [],
+        policiesAccepted: true,
+      }),
+    ).rejects.toThrow("Ese método de pago no está disponible.");
+
+    const metodoTerminal = await createPaymentMethodFixture({
+      kind: "DIGITAL",
+      currency: "USD",
+      agencyId: null,
+    });
+    const resultado = await createReservation({
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: metodoTerminal.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+    expect(resultado.code).toMatch(RESERVATION_CODE_PATTERN);
   });
 
   it("deja rastro en la bitácora", async () => {

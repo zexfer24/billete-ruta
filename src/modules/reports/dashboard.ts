@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { round2, ZERO } from "@/lib/decimal";
+import { caracasDayRange } from "@/lib/time";
 import { revenueByRoute } from "./agency";
 
 export interface AgencyDashboard {
@@ -25,6 +26,14 @@ const OPEN_DEPARTURE_STATUSES = ["PROGRAMADA", "MANIFIESTO_CERRADO"] as const;
  * Indicadores del tablero del operador: la cola de tickets pendientes (en
  * vivo, sin depender del rango), las salidas del período, la recaudación y
  * los mensajes fallidos.
+ *
+ * Las salidas se cuentan hasta el **fin del día en Caracas** de `range.to`,
+ * no hasta `range.to` mismo: para el período "hoy" (`range.to` = `now`),
+ * usar `range.to` a secas dejaba fuera las salidas ya programadas más tarde
+ * en el mismo día (a las 00:22, por ejemplo, el tablero mostraba 0 salidas
+ * "hoy" aunque hubiera varias programadas para esa noche). La recaudación sí
+ * sigue usando `range.to` tal cual: solo cuenta pagos ya recibidos, y un pago
+ * no puede existir "en el futuro" del instante en que se consulta.
  */
 export async function agencyDashboard(
   agencyId: string,
@@ -41,6 +50,8 @@ export async function agencyDashboard(
     departure: { route: { agencyId }, status: { in: [...OPEN_DEPARTURE_STATUSES] } },
   } satisfies Prisma.ReservationWhereInput;
 
+  const topeSalidas = caracasDayRange(range.to).to;
+
   const [total, proofsToReview, payOnSite, agrupadoSalidas, porRuta, failedMessages] =
     await Promise.all([
       prisma.reservation.count({ where: pendingWhere }),
@@ -50,7 +61,7 @@ export async function agencyDashboard(
         by: ["status"],
         where: {
           route: { agencyId },
-          departsAt: { gte: range.from, lte: range.to },
+          departsAt: { gte: range.from, lte: topeSalidas },
           status: { not: "CANCELADA" },
         },
         _count: { _all: true },

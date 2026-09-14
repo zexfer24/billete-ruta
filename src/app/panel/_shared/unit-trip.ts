@@ -1,5 +1,17 @@
 import type { UnitDeparture } from "@/modules/reports";
-import { formatCaracas, formatCaracasTime24 } from "@/lib/time";
+import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
+
+/**
+ * Hora en formato de 24 horas si `date` cae en el mismo día que `now` (en
+ * Caracas); si no, además de la hora antepone la fecha corta (`dd/MM`), para
+ * no mostrar "sale 20:00" o "Salió 09:00" de una salida de otro día sin
+ * ninguna pista de a qué día corresponde (ver hallazgo V2 de la ronda 4).
+ */
+function formatInstant(date: Date, now: Date): string {
+  return formatCaracasDate(date) === formatCaracasDate(now)
+    ? formatCaracasTime24(date)
+    : formatCaracas(date, "dd/MM HH:mm");
+}
 
 /**
  * Descripción textual del viaje en curso o próximas salidas de una unidad
@@ -14,28 +26,28 @@ import { formatCaracas, formatCaracasTime24 } from "@/lib/time";
  *   próxima, con "· +N más" si hay más de una.
  * - Sin nada que mostrar: `null`.
  *
- * `now` se mantiene en la firma por simetría con `unitStateOf` (que ya
- * calculó `current`/`upcoming` a partir de esa misma referencia de tiempo),
- * aunque esta función no lo necesita: solo da formato a lo que ya llega.
+ * `now` se usa para decidir si una hora mostrada ("sale" o "Salió") lleva
+ * también la fecha: la de una salida de otro día se muestra con `dd/MM
+ * HH:mm`, nunca solo la hora (ver hallazgo V2 de la ronda 4).
  */
 export function describeUnitTrip(
   unit: { current: UnitDeparture | null; upcoming: UnitDeparture[] },
   now: Date,
 ): { title: string; detail: string } | null {
-  void now;
   const { current, upcoming } = unit;
 
   if (current?.status === "EN_RUTA") {
+    const salioInstant = current.departedAt ?? current.departsAt;
     const detail = current.estimatedArrivalAt
-      ? `Salió ${formatCaracasTime24(current.departedAt ?? current.departsAt)} · llegada estimada ${formatCaracasTime24(current.estimatedArrivalAt)}`
-      : `Salió ${formatCaracasTime24(current.departedAt ?? current.departsAt)}`;
+      ? `Salió ${formatInstant(salioInstant, now)} · llegada estimada ${formatInstant(current.estimatedArrivalAt, now)}`
+      : `Salió ${formatInstant(salioInstant, now)}`;
     return { title: current.routeName, detail };
   }
 
   if (current?.status === "MANIFIESTO_CERRADO") {
     return {
       title: current.routeName,
-      detail: `Embarcando · sale ${formatCaracasTime24(current.departsAt)}`,
+      detail: `Embarcando · sale ${formatInstant(current.departsAt, now)}`,
     };
   }
 

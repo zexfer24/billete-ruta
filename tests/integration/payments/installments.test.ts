@@ -346,6 +346,35 @@ describe("abonos parciales", () => {
     const antes = await getAvailability(salida.id);
     expect(antes.available).toBe(5);
   });
+
+  it("un operador de otra agencia no puede cobrar en efectivo y no crea el CashPayment", async () => {
+    const { salida } = await createDepartureFixture({ capacity: 20 });
+    const metodo = await createPaymentMethodFixture({ kind: "FISICO", currency: "USD" });
+    const cuenta = await createAccountFixture();
+    const reserva = await createReservation({
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: metodo.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+    const otraAgencia = await createAgencyFixture();
+    const intruso = await createPanelUserFixture({ agencyId: otraAgencia.id });
+
+    await expect(
+      registerCashPayment({
+        reservationId: reserva.reservationId,
+        panelUserId: intruso.id,
+        agencyId: otraAgencia.id,
+        amount: "47.50",
+        currency: "USD",
+      }),
+    ).rejects.toThrow(ForbiddenError);
+
+    expect(
+      await prisma.cashPayment.count({ where: { reservationId: reserva.reservationId } }),
+    ).toBe(0);
+  });
 });
 
 describe("conversión de moneda y cobro sin pagos previos", () => {

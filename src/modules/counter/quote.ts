@@ -2,7 +2,12 @@ import type { Currency } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ForbiddenError } from "@/modules/auth";
 import { ValidationError } from "@/modules/booking";
-import { computeAmounts, getCurrentDepartureTax, getCurrentExchangeRate } from "@/modules/catalog";
+import {
+  computeAmounts,
+  getCurrentDepartureTax,
+  getCurrentExchangeRate,
+  missingExchangeRateMessage,
+} from "@/modules/catalog";
 
 export interface QuoteCounterSaleInput {
   agencyId: string;
@@ -51,9 +56,18 @@ export async function quoteCounterSale(
   if (metodo.kind !== "FISICO") {
     throw new ValidationError("La venta en taquilla requiere un método de pago en efectivo.");
   }
+  // El método debe ser del terminal (`agencyId: null`) o de la agencia de la
+  // salida, y debe seguir activo: la taquilla no ofrece métodos ajenos ni
+  // desactivados (ver hallazgo I3 de la ronda 4).
+  if (!metodo.active || (metodo.agencyId !== null && metodo.agencyId !== salida.route.agencyId)) {
+    throw new ValidationError("Ese método de pago no está disponible.");
+  }
 
   const tasaSalida = await getCurrentDepartureTax(ahora);
   const tasaCambio = await getCurrentExchangeRate(metodo.currency, ahora);
+  if ((metodo.currency === "VES" || metodo.currency === "COP") && tasaCambio === null) {
+    throw new ValidationError(missingExchangeRateMessage(metodo.currency));
+  }
 
   const montos = computeAmounts({
     fareUsd: salida.route.fareUsd,

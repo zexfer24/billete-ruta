@@ -30,14 +30,27 @@ export async function listCounterOptions(
   // `listActivePaymentMethods` ya ordena por `sortOrder`; aquí solo se filtran los físicos.
   const fisicos = (await listActivePaymentMethods(agencyId)).filter((m) => m.kind === "FISICO");
 
-  const paymentMethods: CounterPaymentMethod[] = await Promise.all(
+  const conTasa = await Promise.all(
     fisicos.map(async (metodo) => ({
+      metodo,
+      rateFromUsd: await getCurrentExchangeRate(metodo.currency, now),
+    })),
+  );
+
+  // Un método físico en VES o COP sin tasa vigente rompería la cotización
+  // (ver `quoteCounterSale`, hallazgo I2 de la ronda 4): el asistente de
+  // taquilla no debe ofrecerlo.
+  const paymentMethods: CounterPaymentMethod[] = conTasa
+    .filter(
+      ({ metodo, rateFromUsd }) =>
+        metodo.currency === "USD" || metodo.currency === "USDT" || rateFromUsd !== null,
+    )
+    .map(({ metodo, rateFromUsd }) => ({
       id: metodo.id,
       name: metodo.name,
       currency: metodo.currency,
-      rateFromUsd: (await getCurrentExchangeRate(metodo.currency, now))?.toString() ?? null,
-    })),
-  );
+      rateFromUsd: rateFromUsd?.toString() ?? null,
+    }));
 
   return { departures, paymentMethods };
 }

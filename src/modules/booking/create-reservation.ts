@@ -7,7 +7,11 @@ import { formatMoney } from "@/lib/decimal";
 import { ForbiddenError } from "@/modules/auth/permissions";
 import { writeAudit } from "@/modules/audit";
 import { computeAmounts } from "@/modules/catalog/pricing";
-import { getCurrentDepartureTax, getCurrentExchangeRate } from "@/modules/catalog/rates";
+import {
+  getCurrentDepartureTax,
+  getCurrentExchangeRate,
+  missingExchangeRateMessage,
+} from "@/modules/catalog/rates";
 import { enqueueMessage } from "@/modules/messaging";
 import { UNPAID_EXPIRY_MINUTES } from "@/modules/scheduler";
 import { getAvailability } from "./availability";
@@ -130,6 +134,9 @@ export async function createReservationInTx(
 
   const tasaCambio = await getCurrentExchangeRate(metodo.currency, ahora, tx);
   const tasaSalida = await getCurrentDepartureTax(ahora, tx);
+  if ((metodo.currency === "VES" || metodo.currency === "COP") && tasaCambio === null) {
+    throw new ValidationError(missingExchangeRateMessage(metodo.currency));
+  }
 
   // Serializa a los compradores de esta salida antes de contar puestos.
   await tx.$queryRaw`SELECT id FROM "Departure" WHERE id = ${input.departureId}::uuid FOR UPDATE`;
@@ -141,6 +148,12 @@ export async function createReservationInTx(
 
   if (options.channel === "TAQUILLA" && salida.route.agencyId !== options.agencyId) {
     throw new ForbiddenError("OPERADOR", "sales.counter");
+  }
+
+  // El método de pago debe ser del terminal (`agencyId: null`) o de la
+  // agencia de la salida; nunca de otra agencia (ver hallazgo I3 de la ronda 4).
+  if (metodo.agencyId !== null && metodo.agencyId !== salida.route.agencyId) {
+    throw new ValidationError("Ese método de pago no está disponible.");
   }
 
   if (salida.status !== "PROGRAMADA") {

@@ -22,10 +22,12 @@ export function ReservationDetailPanel({
   detail,
   hidden,
   error,
+  ok,
 }: {
   detail: AgencyReservationDetail;
   hidden: Record<string, string>;
   error?: string;
+  ok?: string;
 }) {
   const { reservation, departure, passengers, ticket, pendingProofs, history, canRegisterCash } = detail;
   const seLibera =
@@ -35,7 +37,7 @@ export function ReservationDetailPanel({
 
   return (
     <div className="flex flex-col gap-6">
-      <PanelFeedback error={error} />
+      <PanelFeedback error={error} ok={ok} />
 
       <section>
         <div className="flex flex-wrap items-center gap-2">

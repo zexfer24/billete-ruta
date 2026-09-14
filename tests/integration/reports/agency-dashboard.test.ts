@@ -4,6 +4,7 @@ import { createReservation } from "@/modules/booking";
 import { approveProof, registerCashPayment, submitProof } from "@/modules/payments";
 import { agencyDashboard, listRecentTickets } from "@/modules/reports";
 import { issueTicket } from "@/modules/tickets";
+import { caracasPeriodRange } from "@/lib/time";
 import {
   createAccountFixture,
   createDepartureFixture,
@@ -145,6 +146,33 @@ describe("agencyDashboard: departures", () => {
       enRuta: 1,
       finalizadas: 1,
     });
+  });
+});
+
+describe("agencyDashboard: departures cuenta hasta el fin del día, no solo hasta ahora", () => {
+  it('una salida más tarde el mismo día cuenta en "hoy"; una de mañana no', async () => {
+    // 00:22 hora de Caracas (UTC-4) del 13/09/2026.
+    const ahora = new Date("2026-09-13T04:22:00Z");
+    const rango = caracasPeriodRange("hoy", ahora);
+
+    const { salida: masTarde, agencia } = await createDepartureFixture({});
+    await prisma.departure.update({
+      where: { id: masTarde.id },
+      // 20:00 hora de Caracas, más tarde el mismo día que `ahora`.
+      data: { status: "PROGRAMADA", departsAt: new Date("2026-09-14T00:00:00Z") },
+    });
+
+    const { salida: manana } = await createDepartureFixture({ agencyId: agencia.id });
+    await prisma.departure.update({
+      where: { id: manana.id },
+      // Ya es el día siguiente en Caracas.
+      data: { status: "PROGRAMADA", departsAt: new Date("2026-09-14T12:00:00Z") },
+    });
+
+    const resumen = await agencyDashboard(agencia.id, rango, ahora);
+
+    expect(resumen.departures.total).toBe(1);
+    expect(resumen.departures.programadas).toBe(1);
   });
 });
 

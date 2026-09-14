@@ -5,6 +5,7 @@ import { createReservation } from "@/modules/booking";
 import { rejectProof, submitProof } from "@/modules/payments";
 import {
   createAccountFixture,
+  createAgencyFixture,
   createDepartureFixture,
   createPanelUserFixture,
   createPaymentMethodFixture,
@@ -257,6 +258,37 @@ describe("cashPaymentAction", () => {
     );
 
     expect(url.searchParams.get("error")).toBe("Indica la reserva a cobrar.");
+  });
+
+  it("con reservationId de una reserva de otra agencia redirige con error y no crea el cobro", async () => {
+    const { fisico, salida } = await escenario();
+    const cuenta = await createAccountFixture();
+    const reserva = await createReservation({
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: fisico.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+
+    const otraAgencia = await createAgencyFixture();
+    const intruso = await createPanelUserFixture({ agencyId: otraAgencia.id });
+    currentUser = operatorSession(otraAgencia.id, intruso.id);
+
+    const url = await captureRedirectUrl(
+      cashPaymentAction(
+        buildFormData({
+          reservationId: reserva.reservationId,
+          amount: "47.50",
+          currency: "USD",
+        }),
+      ),
+    );
+
+    expect(url.pathname).toBe("/panel/pasajeros");
+    expect(url.searchParams.get("reserva")).toBe(reserva.reservationId);
+    expect(url.searchParams.get("error")).toBeTruthy();
+    expect(await prisma.cashPayment.count()).toBe(0);
   });
 });
 

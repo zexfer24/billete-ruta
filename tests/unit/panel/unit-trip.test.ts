@@ -56,6 +56,29 @@ describe("describeUnitTrip", () => {
     });
   });
 
+  it("en ruta, de otro día: la hora lleva la fecha", () => {
+    const current = unidad({
+      status: "EN_RUTA",
+      departedAt: new Date("2026-09-12T13:00:00Z"),
+      estimatedArrivalAt: new Date("2026-09-12T17:00:00Z"),
+    });
+    expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
+      title: "Caracas - Maracaibo",
+      detail: "Salió 12/09 09:00 · llegada estimada 12/09 13:00",
+    });
+  });
+
+  it("embarcando, de otro día: la hora lleva la fecha", () => {
+    const current = unidad({
+      status: "MANIFIESTO_CERRADO",
+      departsAt: new Date("2026-09-14T15:00:00Z"),
+    });
+    expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
+      title: "Caracas - Maracaibo",
+      detail: "Embarcando · sale 14/09 11:00",
+    });
+  });
+
   it("sin viaje en curso, con una sola próxima salida", () => {
     const proxima = unidad({ status: "PROGRAMADA", departsAt: new Date("2026-09-14T12:00:00Z") });
     expect(describeUnitTrip({ current: null, upcoming: [proxima] }, NOW)).toEqual({

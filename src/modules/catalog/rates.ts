@@ -88,6 +88,15 @@ export async function setDepartureTax(input: {
   });
 }
 
+/**
+ * Mensaje de error cuando falta la tasa de cambio vigente de una moneda física
+ * (VES o COP). Se comparte entre pagos, taquilla y reservas para no repetir
+ * el mismo texto en cada validación (ver hallazgo I2 de la ronda 4).
+ */
+export function missingExchangeRateMessage(currency: Currency): string {
+  return `No hay una tasa de cambio vigente para ${currency}. El administrador debe cargarla.`;
+}
+
 export async function listExchangeRates(currency?: Currency) {
   return prisma.exchangeRate.findMany({
     where: currency ? { currency } : undefined,

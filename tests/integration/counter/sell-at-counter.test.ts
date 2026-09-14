@@ -8,6 +8,7 @@ import {
   DepartureClosedError,
   MissingDocumentsError,
   NoSeatsAvailableError,
+  ValidationError,
   createReservation,
 } from "@/modules/booking";
 import { sellAtCounter } from "@/modules/counter";
@@ -405,5 +406,72 @@ describe("sellAtCounter", () => {
     });
     expect(reserva.status).toBe("PAGADA");
     expect(reserva.paidUsd.toString()).toBe(reserva.totalUsd.toString());
+  });
+
+  it("un método físico COP sin tasa vigente: rechaza y no persiste nada", async () => {
+    const { agencia, operador, salida } = await escenario();
+    const metodoCop = await createPaymentMethodFixture({ kind: "FISICO", currency: "COP" });
+    await prisma.exchangeRate.deleteMany({ where: { currency: "COP" } });
+    const cuenta = await createAccountFixture();
+
+    await expect(
+      sellAtCounter({
+        panelUserId: operador.id,
+        agencyId: agencia.id,
+        departureId: salida.id,
+        paymentMethodId: metodoCop.id,
+        holder: { idNumber: cuenta.idNumber },
+        companions: [],
+        documents: {},
+        policiesAccepted: true,
+      }),
+    ).rejects.toThrow(
+      "No hay una tasa de cambio vigente para COP. El administrador debe cargarla.",
+    );
+
+    expect(await prisma.reservation.count({ where: { departureId: salida.id } })).toBe(0);
+    expect(await prisma.cashPayment.count()).toBe(0);
+  });
+
+  it("un método de pago de otra agencia: rechaza; uno del terminal sí vende", async () => {
+    const { agencia, operador, salida } = await escenario();
+    const otraAgencia = await createAgencyFixture();
+    const metodoAjeno = await createPaymentMethodFixture({
+      kind: "FISICO",
+      currency: "USD",
+      agencyId: otraAgencia.id,
+    });
+    const cuenta = await createAccountFixture();
+
+    await expect(
+      sellAtCounter({
+        panelUserId: operador.id,
+        agencyId: agencia.id,
+        departureId: salida.id,
+        paymentMethodId: metodoAjeno.id,
+        holder: { idNumber: cuenta.idNumber },
+        companions: [],
+        documents: {},
+        policiesAccepted: true,
+      }),
+    ).rejects.toThrow(ValidationError);
+    expect(await prisma.reservation.count({ where: { departureId: salida.id } })).toBe(0);
+
+    const metodoTerminal = await createPaymentMethodFixture({
+      kind: "FISICO",
+      currency: "USD",
+      agencyId: null,
+    });
+    const resultado = await sellAtCounter({
+      panelUserId: operador.id,
+      agencyId: agencia.id,
+      departureId: salida.id,
+      paymentMethodId: metodoTerminal.id,
+      holder: { idNumber: cuenta.idNumber },
+      companions: [],
+      documents: {},
+      policiesAccepted: true,
+    });
+    expect(resultado.reservationId).toBeDefined();
   });
 });

@@ -260,8 +260,13 @@ export default async function PasajerosPage({
         }
       />
 
+      {/*
+        Con un panel lateral abierto, el aviso de éxito de esta cabecera queda
+        detrás del fondo del modal: se pasa a `ReservationDetailPanel`, que lo
+        pinta dentro del propio panel (ver hallazgo I4 de la ronda 4).
+      */}
       <PanelFeedback
-        ok={params.ok ? OK_LABELS[params.ok] : undefined}
+        ok={panelAbierto ? undefined : params.ok ? OK_LABELS[params.ok] : undefined}
         error={panelAbierto ? undefined : params.error}
       />
 
@@ -507,6 +512,7 @@ export default async function PasajerosPage({
             detail={detail}
             hidden={{ ...hiddenFiltros, reservaId: detail.reservation.id }}
             error={params.error}
+            ok={params.ok ? OK_LABELS[params.ok] : undefined}
           />
         </SidePanel>
       ) : null}

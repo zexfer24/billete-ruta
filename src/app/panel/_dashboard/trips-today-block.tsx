@@ -22,71 +22,80 @@ export function TripsTodayBlock({
   registrarSalidaHref: string;
 }) {
   return (
-    <SectionCard
-      title="Embarques y desembarques de hoy"
-      action={
-        <Link href="/panel/salidas" className={panelButtonClass("secundario", "sm")}>
-          Ver salidas
-        </Link>
-      }
-    >
-      {departures.length === 0 ? (
-        <EmptyState
-          title="No hay salidas programadas para hoy."
-          action={
-            <Link href={registrarSalidaHref} scroll={false} className={panelButtonClass("primario", "sm")}>
-              Crear salida
-            </Link>
-          }
-        />
-      ) : (
-        <TableShell>
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-[var(--color-borde)] text-[var(--color-texto-suave)]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Hora</th>
-                <th className="px-4 py-3 font-medium">Ruta</th>
-                <th className="px-4 py-3 font-medium">Unidad y chofer</th>
-                <th className="px-4 py-3 font-medium">Estado</th>
-                <th className="px-4 py-3 font-medium">Embarque</th>
-                <th className="px-4 py-3 font-medium">Salida</th>
-                <th className="px-4 py-3 font-medium">Llegada</th>
-              </tr>
-            </thead>
-            <tbody>
-              {departures.map((salida) => (
-                <ClickableRow
-                  key={salida.id}
-                  href={`/panel/salidas/${salida.id}`}
-                  className="border-b border-[var(--color-borde)] last:border-0"
-                >
-                  <td className="tabular px-4 py-3">{formatCaracasTime24(salida.departsAt)}</td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/panel/salidas/${salida.id}`}
-                      className="rounded-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)]"
-                    >
-                      {salida.routeName}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    {salida.vehiclePlate} · {salida.driverName}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge
-                      label={departureStatusLabel(salida.status)}
-                      tone={departureStatusTone(salida.status)}
-                    />
-                  </td>
-                  <td className="tabular px-4 py-3">{hora(salida.boardingStartedAt)}</td>
-                  <td className="tabular px-4 py-3">{hora(salida.departedAt)}</td>
-                  <td className="tabular px-4 py-3">{hora(salida.arrivedAt)}</td>
-                </ClickableRow>
-              ))}
-            </tbody>
-          </table>
-        </TableShell>
-      )}
-    </SectionCard>
+    // Ocupa las dos columnas de la rejilla desde `lg`: con una sola columna la
+    // tabla (siete columnas propias) quedaba apretada a la mitad del ancho
+    // (ver hallazgo V3 de la ronda 4).
+    <div className="lg:col-span-2">
+      <SectionCard
+        title="Embarques y desembarques de hoy"
+        action={
+          <Link href="/panel/salidas" className={panelButtonClass("secundario", "sm")}>
+            Ver salidas
+          </Link>
+        }
+      >
+        {departures.length === 0 ? (
+          <EmptyState
+            title="No hay salidas programadas para hoy."
+            action={
+              <Link
+                href={registrarSalidaHref}
+                scroll={false}
+                className={panelButtonClass("primario", "sm")}
+              >
+                Crear salida
+              </Link>
+            }
+          />
+        ) : (
+          <TableShell>
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="border-b border-[var(--color-borde)] text-[var(--color-texto-suave)]">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Hora</th>
+                  <th className="px-4 py-3 font-medium">Ruta</th>
+                  <th className="px-4 py-3 font-medium">Unidad y chofer</th>
+                  <th className="px-4 py-3 font-medium">Estado</th>
+                  <th className="px-4 py-3 font-medium">Embarque</th>
+                  <th className="px-4 py-3 font-medium">Salida</th>
+                  <th className="px-4 py-3 font-medium">Llegada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {departures.map((salida) => (
+                  <ClickableRow
+                    key={salida.id}
+                    href={`/panel/salidas/${salida.id}`}
+                    className="border-b border-[var(--color-borde)] last:border-0"
+                  >
+                    <td className="tabular px-4 py-3">{formatCaracasTime24(salida.departsAt)}</td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/panel/salidas/${salida.id}`}
+                        className="rounded-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)]"
+                      >
+                        {salida.routeName}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      {salida.vehiclePlate} · {salida.driverName}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge
+                        label={departureStatusLabel(salida.status)}
+                        tone={departureStatusTone(salida.status)}
+                      />
+                    </td>
+                    <td className="tabular px-4 py-3">{hora(salida.boardingStartedAt)}</td>
+                    <td className="tabular px-4 py-3">{hora(salida.departedAt)}</td>
+                    <td className="tabular px-4 py-3">{hora(salida.arrivedAt)}</td>
+                  </ClickableRow>
+                ))}
+              </tbody>
+            </table>
+          </TableShell>
+        )}
+      </SectionCard>
+    </div>
   );
 }
