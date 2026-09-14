@@ -1,7 +1,13 @@
 import type { ReservationStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { toDecimal, ZERO } from "@/lib/decimal";
-import { PAYMENT_STATES, paymentStateFromSlug, paymentStateOf } from "@/modules/reports";
+import {
+  PAYMENT_STATES,
+  paymentStateFromSlug,
+  paymentStateOf,
+  RESERVATION_VIEWS,
+  reservationViewFromSlug,
+} from "@/modules/reports";
 
 describe("paymentStateOf", () => {
   it("Confirmado para PAGADA o ABORDADA, sin importar lo pagado", () => {
@@ -91,5 +97,26 @@ describe("paymentStateFromSlug", () => {
     for (const slug of invalidos) {
       expect(paymentStateFromSlug(slug)).toBeUndefined();
     }
+  });
+});
+
+describe("reservationViewFromSlug", () => {
+  it("traduce las cinco vistas válidas", () => {
+    expect(reservationViewFromSlug("por-revisar")).toBe("por-revisar");
+    expect(reservationViewFromSlug("por-cobrar")).toBe("por-cobrar");
+    expect(reservationViewFromSlug("pagadas")).toBe("pagadas");
+    expect(reservationViewFromSlug("sin-efecto")).toBe("sin-efecto");
+    expect(reservationViewFromSlug("todas")).toBe("todas");
+  });
+
+  it("devuelve undefined para valores ausentes, desconocidos o heredados de Object.prototype", () => {
+    const invalidos = [undefined, "", "POR-REVISAR", "constructor", "toString", "__proto__"] as const;
+    for (const slug of invalidos) {
+      expect(reservationViewFromSlug(slug)).toBeUndefined();
+    }
+  });
+
+  it("RESERVATION_VIEWS enumera las cinco vistas en orden", () => {
+    expect(RESERVATION_VIEWS).toEqual(["por-revisar", "por-cobrar", "pagadas", "sin-efecto", "todas"]);
   });
 });

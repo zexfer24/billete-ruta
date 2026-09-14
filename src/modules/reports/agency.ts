@@ -1,9 +1,10 @@
 import { Prisma } from "@prisma/client";
+import type { DepartureStatus, SalesChannel } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { round2, toDecimal, ZERO } from "@/lib/decimal";
 import { durationMinutes } from "@/lib/time";
-import { paymentStateOf, paymentStateWhere } from "./payment-state";
-import type { PaymentState } from "./payment-state";
+import { paymentStateOf, paymentStateWhere, reservationViewWhere, RESERVATION_VIEWS } from "./payment-state";
+import type { PaymentState, ReservationView } from "./payment-state";
 
 /** Ventana por defecto de los tableros: las últimas 24 horas. */
 export function last24h(now: Date = new Date()): { from: Date; to: Date } {
@@ -83,6 +84,10 @@ export interface AgencyPassengerRow {
   paidUsd: string;
   balanceUsd: string;
   paymentState: PaymentState;
+  hasPendingProof: boolean;
+  ticketIssuedAt: Date | null;
+  salesChannel: SalesChannel;
+  departureStatus: DepartureStatus;
 }
 
 export interface AgencyPassengersPage {
@@ -90,6 +95,29 @@ export interface AgencyPassengersPage {
   total: number;
   page: number;
   pageSize: number;
+}
+
+/**
+ * `where` base compartido por `listAgencyPassengers` y
+ * `countAgencyReservationViews`: agencia, salida y búsqueda. El estado de
+ * pago y la vista se agregan aparte porque cada función los combina distinto.
+ */
+function agencyPassengersBaseWhere(
+  agencyId: string,
+  filter: { departureId?: string; search?: string },
+): Prisma.ReservationWhereInput {
+  return {
+    departure: { route: { agencyId }, ...(filter.departureId ? { id: filter.departureId } : {}) },
+    ...(filter.search
+      ? {
+          OR: [
+            { code: { contains: filter.search.toUpperCase() } },
+            { account: { fullName: { contains: filter.search, mode: "insensitive" } } },
+            { account: { idNumber: { contains: filter.search.toUpperCase() } } },
+          ],
+        }
+      : {}),
+  };
 }
 
 /**
@@ -102,6 +130,7 @@ export async function listAgencyPassengers(
   filter: {
     departureId?: string;
     paymentState?: PaymentState;
+    view?: ReservationView;
     search?: string;
     page?: number;
     pageSize?: number;
@@ -110,25 +139,30 @@ export async function listAgencyPassengers(
   const page = Math.max(1, filter.page ?? 1);
   const pageSize = Math.min(500, Math.max(10, filter.pageSize ?? 50));
 
+  const condiciones: Prisma.ReservationWhereInput[] = [];
+  if (filter.paymentState) condiciones.push(paymentStateWhere(filter.paymentState));
+  if (filter.view) condiciones.push(reservationViewWhere(filter.view));
+
   const where = {
-      departure: { route: { agencyId }, ...(filter.departureId ? { id: filter.departureId } : {}) },
-      ...(filter.paymentState ? { AND: [paymentStateWhere(filter.paymentState)] } : {}),
-      ...(filter.search
-        ? {
-            OR: [
-              { code: { contains: filter.search.toUpperCase() } },
-              { account: { fullName: { contains: filter.search, mode: "insensitive" } } },
-              { account: { idNumber: { contains: filter.search.toUpperCase() } } },
-            ],
-          }
-        : {}),
+    ...agencyPassengersBaseWhere(agencyId, filter),
+    ...(condiciones.length > 0 ? { AND: condiciones } : {}),
   } satisfies Prisma.ReservationWhereInput;
+
+  const orderBy: Prisma.ReservationOrderByWithRelationInput[] =
+    filter.view === "por-cobrar"
+      ? [{ departure: { departsAt: "asc" } }, { createdAt: "desc" }]
+      : [{ createdAt: "desc" }];
 
   const [reservas, total] = await Promise.all([
     prisma.reservation.findMany({
       where,
-      include: { account: true, departure: { include: { route: true } } },
-      orderBy: { createdAt: "desc" },
+      include: {
+        account: true,
+        departure: { include: { route: true } },
+        proofs: { where: { status: "PENDIENTE" }, select: { id: true }, take: 1 },
+        ticket: { select: { issuedAt: true } },
+      },
+      orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -150,10 +184,37 @@ export async function listAgencyPassengers(
       paidUsd: r.paidUsd.toString(),
       balanceUsd: (saldo.isNegative() ? toDecimal(0) : saldo).toString(),
       paymentState: paymentStateOf(r.status, r.paidUsd),
+      hasPendingProof: r.proofs.length > 0,
+      ticketIssuedAt: r.ticket?.issuedAt ?? null,
+      salesChannel: r.salesChannel,
+      departureStatus: r.departure.status,
     };
   });
 
   return { rows, total, page, pageSize };
+}
+
+/**
+ * Cuántas reservas caen en cada vista de "Pasajeros y pagos", con el mismo
+ * filtro de salida y búsqueda que la lista. Usa el mismo `where` base para no
+ * duplicar el armado del filtro.
+ */
+export async function countAgencyReservationViews(
+  agencyId: string,
+  filter: { departureId?: string; search?: string } = {},
+): Promise<Record<ReservationView, number>> {
+  const base = agencyPassengersBaseWhere(agencyId, filter);
+
+  const conteos = await Promise.all(
+    RESERVATION_VIEWS.map((view) =>
+      prisma.reservation.count({ where: { ...base, AND: [reservationViewWhere(view)] } }),
+    ),
+  );
+
+  return Object.fromEntries(RESERVATION_VIEWS.map((view, i) => [view, conteos[i]])) as Record<
+    ReservationView,
+    number
+  >;
 }
 
 export interface DriverMovementRow {

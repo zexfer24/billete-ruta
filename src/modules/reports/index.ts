@@ -1,4 +1,5 @@
 export {
+  countAgencyReservationViews,
   driverMovements,
   last24h,
   listAgencyPassengers,
@@ -6,6 +7,7 @@ export {
 } from "./agency";
 export type {
   AgencyPassengerRow,
+  AgencyPassengersPage,
   DriverMovementRow,
   RouteRevenueRow,
 } from "./agency";
@@ -25,8 +27,18 @@ export {
   paymentStateFromSlug,
   paymentStateOf,
   paymentStateWhere,
+  RESERVATION_VIEWS,
+  RESERVATION_VIEW_LABELS,
+  reservationViewFromSlug,
+  reservationViewWhere,
 } from "./payment-state";
-export type { PaymentState } from "./payment-state";
+export type { PaymentState, ReservationView } from "./payment-state";
+export { describeActivity, listAgencyActivity } from "./activity";
+export type { ActivityEntry, ActivityRow } from "./activity";
+export { listPendingProofQueue } from "./proof-queue";
+export type { PendingProofRow } from "./proof-queue";
+export { getAgencyReservationDetail } from "./reservation-detail";
+export type { AgencyReservationDetail } from "./reservation-detail";
 export {
   agencyMovements,
   departureTaxByHour,

@@ -149,3 +149,10 @@ export async function getProofReview(
     history,
   };
 }
+
+/** Cuántos comprobantes pendientes de revisión tiene la agencia, para el contador del menú. */
+export async function countPendingProofs(agencyId: string): Promise<number> {
+  return prisma.paymentProof.count({
+    where: { status: "PENDIENTE", reservation: { departure: { route: { agencyId } } } },
+  });
+}

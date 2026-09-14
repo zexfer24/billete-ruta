@@ -72,3 +72,59 @@ export function paymentStateFromSlug(slug: string | undefined): PaymentState | u
   if (slug === undefined) return undefined;
   return SLUG_TO_PAYMENT_STATE.get(slug);
 }
+
+/**
+ * Vistas de la pantalla "Pasajeros y pagos": agrupan reservas por lo que el
+ * operador necesita hacer con ellas, no por el estado técnico de la reserva.
+ */
+export type ReservationView = "por-revisar" | "por-cobrar" | "pagadas" | "sin-efecto" | "todas";
+
+export const RESERVATION_VIEWS: readonly ReservationView[] = [
+  "por-revisar",
+  "por-cobrar",
+  "pagadas",
+  "sin-efecto",
+  "todas",
+];
+
+export const RESERVATION_VIEW_LABELS: Record<ReservationView, string> = {
+  "por-revisar": "Por revisar",
+  "por-cobrar": "Por cobrar",
+  pagadas: "Pagadas",
+  "sin-efecto": "Sin efecto",
+  todas: "Todas",
+};
+
+/** Traduce el slug de la URL (`?vista=`) a un `ReservationView`. Mismo criterio
+ * que `paymentStateFromSlug`: un `Map` para que ninguna clave heredada de
+ * `Object.prototype` cuele como vista válida. */
+const SLUG_TO_RESERVATION_VIEW = new Map<string, ReservationView>([
+  ["por-revisar", "por-revisar"],
+  ["por-cobrar", "por-cobrar"],
+  ["pagadas", "pagadas"],
+  ["sin-efecto", "sin-efecto"],
+  ["todas", "todas"],
+]);
+
+export function reservationViewFromSlug(slug: string | undefined): ReservationView | undefined {
+  if (slug === undefined) return undefined;
+  return SLUG_TO_RESERVATION_VIEW.get(slug);
+}
+
+/** El `where` de cada vista de "Pasajeros y pagos". */
+export function reservationViewWhere(view: ReservationView): Prisma.ReservationWhereInput {
+  switch (view) {
+    case "por-revisar":
+      return { proofs: { some: { status: "PENDIENTE" } } };
+    case "por-cobrar":
+      return { OR: [paymentStateWhere("Pendiente"), paymentStateWhere("Abonado")] };
+    case "pagadas":
+      return paymentStateWhere("Confirmado");
+    case "sin-efecto":
+      return paymentStateWhere("Sin efecto");
+    case "todas":
+      return {};
+  }
+  const exhaustivo: never = view;
+  throw new Error(`Vista de reserva desconocida: ${String(exhaustivo)}`);
+}
