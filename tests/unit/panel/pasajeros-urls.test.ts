@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pasajerosUrl } from "@/app/panel/pasajeros/urls";
+import { lastValidPage, pasajerosUrl } from "@/app/panel/pasajeros/urls";
 
 describe("pasajerosUrl", () => {
   it("sin parámetros devuelve solo la ruta", () => {
@@ -43,5 +43,27 @@ describe("pasajerosUrl", () => {
     expect(
       pasajerosUrl({ vista: "pagadas", reserva: "r-1", comprobante: "c-1", ok: "aprobado", error: "algo" }),
     ).toBe("/panel/pasajeros?vista=pagadas&reserva=r-1&comprobante=c-1&ok=aprobado&error=algo");
+  });
+});
+
+describe("lastValidPage", () => {
+  it("con total 0, la única página válida es la 1", () => {
+    expect(lastValidPage(0, 25, 1)).toBe(1);
+    expect(lastValidPage(0, 25, 3)).toBe(1);
+  });
+
+  it("dentro de rango, devuelve la misma página", () => {
+    expect(lastValidPage(120, 25, 3)).toBe(3);
+  });
+
+  it("fuera de rango, cae a la última página válida", () => {
+    // 120 elementos con 25 por página son 5 páginas (ceil(120/25) = 5).
+    expect(lastValidPage(120, 25, 9)).toBe(5);
+  });
+
+  it("con el total exacto a un múltiplo del tamaño de página, no sobra una página vacía", () => {
+    // 50 elementos con 25 por página son exactamente 2 páginas.
+    expect(lastValidPage(50, 25, 3)).toBe(2);
+    expect(lastValidPage(50, 25, 2)).toBe(2);
   });
 });

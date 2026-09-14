@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { ForbiddenError, requireAgencyUser } from "@/modules/auth";
 import { listAgencyDepartures } from "@/modules/catalog";
@@ -40,7 +41,7 @@ import { IconCash } from "@/components/icons";
 import { CashPaymentForm } from "@/app/panel/_forms/cash-payment-form";
 import { coverageBadge, ProofReviewPanel } from "./proof-review";
 import { ReservationDetailPanel } from "./reservation-detail";
-import { pasajerosUrl } from "./urls";
+import { lastValidPage, pasajerosUrl } from "./urls";
 
 /** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
 const OK_LABELS: Record<string, string> = {
@@ -198,6 +199,27 @@ export default async function PasajerosPage({
         })
       : Promise.resolve(null),
   ]);
+
+  // Si la página pedida quedó vacía (por ejemplo, tras aprobar o rechazar el
+  // último elemento de la última página), cae a la última página válida sin
+  // arrastrar el `error` de la acción que se acaba de completar.
+  const listadoActivo = esPorRevisar ? porRevisar : pasajeros;
+  const paginaValida = listadoActivo
+    ? lastValidPage(listadoActivo.total, listadoActivo.pageSize, paginaActual)
+    : paginaActual;
+  if (paginaValida !== paginaActual) {
+    redirect(
+      pasajerosUrl({
+        vista,
+        salida,
+        buscar,
+        pagina: paginaValida,
+        reserva: reservaIdParam,
+        comprobante: comprobanteIdParam,
+        ok: params.ok,
+      }),
+    );
+  }
 
   const reservaAbierta = detail !== null;
   const comprobanteAbierto = review !== null;

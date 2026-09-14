@@ -174,7 +174,8 @@ export async function cashPaymentAction(formData: FormData): Promise<void> {
 
   const reservationIdParsed = z.string().uuid().safeParse(formData.get("reservationId"));
   const reservationId = reservationIdParsed.success ? reservationIdParsed.data : undefined;
-  const code = formString(formData, "code");
+  const codeRaw = formData.get("code");
+  const hayCode = typeof codeRaw === "string" && codeRaw.trim().length > 0;
 
   function errorRedirect(mensaje: string): never {
     if (origen === "tablero") {
@@ -186,8 +187,23 @@ export async function cashPaymentAction(formData: FormData): Promise<void> {
     redirect(pasajerosUrl({ ...destino, registrar: "cobro", error: mensaje }));
   }
 
-  if (!reservationId && !code) {
+  if (!reservationId && !hayCode) {
     errorRedirect("Indica la reserva a cobrar.");
+  }
+
+  // El serial solo se valida (y recorta) cuando no viene un `reservationId`: con
+  // reserva ya fija no hace falta serial, y no debe rechazarse por su longitud.
+  let code: string | undefined;
+  if (!reservationId) {
+    const codeParsed = z
+      .string()
+      .trim()
+      .min(4, "Ingresa el serial del ticket.")
+      .safeParse(codeRaw);
+    if (!codeParsed.success) {
+      errorRedirect(codeParsed.error.issues[0]?.message ?? "Ingresa el serial del ticket.");
+    }
+    code = codeParsed.data;
   }
 
   const schema = z.object({

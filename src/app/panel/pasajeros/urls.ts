@@ -39,6 +39,19 @@ export function pasajerosUrl(params: PasajerosUrlParams): string {
 }
 
 /**
+ * Última página válida para un total y un tamaño de página dados. Con
+ * `total` en cero la única página válida es la 1 (no hay de dónde elegir);
+ * si `pagina` ya cae dentro del rango, se devuelve tal cual. Función pura,
+ * usada por la página para no quedarse en una página vacía tras aprobar o
+ * rechazar el último elemento de la página en la que estaba.
+ */
+export function lastValidPage(total: number, pageSize: number, pagina: number): number {
+  if (total <= 0) return 1;
+  const totalPaginas = Math.max(1, Math.ceil(total / pageSize));
+  return Math.min(Math.max(1, pagina), totalPaginas);
+}
+
+/**
  * Reconstruye los parámetros de contexto (vista, salida, buscar, página) a
  * partir de los campos ocultos de un formulario, para armar enlaces como "Ver
  * reserva completa" desde un panel que solo recibió esos campos como texto.

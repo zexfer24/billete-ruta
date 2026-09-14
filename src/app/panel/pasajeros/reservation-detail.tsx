@@ -200,7 +200,15 @@ export function ReservationDetailPanel({
               mode="reserva"
               reservationId={reservation.id}
               balanceUsd={reservation.balanceUsd.toString()}
-              currency="USD"
+              currency={reservation.currency}
+              amountInCurrencyHint={
+                reservation.currency !== "USD"
+                  ? `Total de la reserva en ${reservation.currency}: ${formatMoney(
+                      reservation.amountInCurrency,
+                      reservation.currency,
+                    )}.`
+                  : undefined
+              }
               hidden={hidden}
             />
           </div>

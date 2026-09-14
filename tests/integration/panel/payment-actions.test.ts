@@ -156,6 +156,43 @@ describe("cashPaymentAction", () => {
     expect(ticket).not.toBeNull();
   });
 
+  it("un serial con espacios alrededor cobra igual, sin el error de 'no existe'", async () => {
+    const { agencia, operador, fisico, salida } = await escenario();
+    const cuenta = await createAccountFixture();
+    const reserva = await createReservation({
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: fisico.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      cashPaymentAction(
+        buildFormData({ code: `  ${reserva.code}  `, amount: "47.50", currency: "USD" }),
+      ),
+    );
+
+    expect(url.searchParams.get("ok")).toBe("cobro-ticket");
+    const fila = await prisma.reservation.findUniqueOrThrow({
+      where: { id: reserva.reservationId },
+    });
+    expect(fila.status).toBe("PAGADA");
+  });
+
+  it("un serial de 2 caracteres da 'Ingresa el serial del ticket.'", async () => {
+    const { agencia, operador } = await escenario();
+    currentUser = operatorSession(agencia.id, operador.id);
+
+    const url = await captureRedirectUrl(
+      cashPaymentAction(buildFormData({ code: "AB", amount: "47.50", currency: "USD" })),
+    );
+
+    expect(url.searchParams.get("error")).toBe("Ingresa el serial del ticket.");
+    expect(await prisma.cashPayment.count()).toBe(0);
+  });
+
   it("con reservationId desde el panel de la reserva, vuelve a ese panel y emite el ticket", async () => {
     const { agencia, operador, fisico, salida } = await escenario();
     const cuenta = await createAccountFixture();
