@@ -29,6 +29,7 @@ Un operador solo ve y modifica datos de **su** agencia. El admin ve todo el term
 - Datos exigidos para concretar la venta: **foto de la cédula** (obligatoria) y **permisos de viaje** (opcional; se usa para menores de edad o casos especiales).
 - Puede reservar para acompañantes; de cada acompañante se pide nombre completo, cédula y año de nacimiento.
 - Puede **abonar parcialmente** una reserva y completar el pago después. El ticket se emite solo cuando el saldo llega a cero.
+- La cuenta también puede crearla un operador en la taquilla, sin contraseña. El pasajero la activa después en `/registro` con la misma cédula, teléfono y año de nacimiento; el intento se limita a 5 por 15 minutos por cédula. (ronda 4, 2026-09-13)
 
 ### 3.2 Operador
 
@@ -38,6 +39,7 @@ Un operador solo ve y modifica datos de **su** agencia. El admin ve todo el term
 - **Datos de sus vehículos**: tabla de solo lectura con placa, modelo, marca y número de asientos; la edición se hace en un panel lateral.
 - **Datos de sus choferes**: tabla de solo lectura con nombre, cédula completa (es personal que la propia agencia registró), total de embarques y total de desembarques; la edición se hace en un panel lateral.
 - **Lista de movimiento de sus choferes**: hora de embarque, tiempo de recorrido y hora de desembarque.
+- Vende en la taquilla con cobro en efectivo completo y ticket emitido en el acto, y ve la bitácora de actividad reciente de su agencia. (ronda 4, 2026-09-13)
 
 ### 3.3 Admin
 
@@ -120,7 +122,7 @@ Entidades. Todas con `id` UUID, `createdAt` y `updatedAt`.
 
 **Identidad y agencias**
 
-- `PassengerAccount`: `idNumber` único y normalizado, `givenNames`, `surnames`, `fullName` (composición de los dos anteriores), `phone`, `birthYear` (entero), `passwordHash`, `lastLoginAt`, `active`. La cédula es la credencial de acceso.
+- `PassengerAccount`: `idNumber` único y normalizado, `givenNames`, `surnames`, `fullName` (composición de los dos anteriores), `phone`, `birthYear` (entero), `passwordHash` (admite nulo mientras una cuenta creada en taquilla no se activa) (ronda 4, 2026-09-13), `createdByPanelUserId` (operador que la creó en taquilla; nulo si el pasajero se registró por su cuenta) (ronda 4, 2026-09-13), `lastLoginAt`, `active`. La cédula es la credencial de acceso.
 - `PassengerDocument`: `accountId`, `type`, `filePath`, `originalName`, `uploadedAt`, `verifiedAt`, `verifiedByPanelUserId`.
 - `Agency`: `name`, `taxId` (RIF) único, `contactPhone`, `contactEmail`, `active`.
 - `PanelUser`: `email` único, `passwordHash`, `name`, `role`, `agencyId` nulo solo para `ADMIN`, `active`. Un `OPERADOR` siempre tiene agencia.
@@ -142,7 +144,7 @@ Entidades. Todas con `id` UUID, `createdAt` y `updatedAt`.
 
 **Venta**
 
-- `Reservation`: `code` único (es el **serial del ticket**), `publicToken` único, `accountId`, `departureId`, `status`, `passengerCount`, `policiesAcceptedAt`, `fareUsd` (tarifa unitaria congelada), `fareTotalUsd`, `taxPerPassengerUsd`, `taxTotalUsd`, `totalUsd`, `paidUsd` (suma de pagos aprobados), `currency`, `exchangeRateUsed`, `amountInCurrency`, `paymentMethodId`, `reconfirmedAt`, `attendanceResponse`, `attendanceRespondedAt`, `boardedAt`, `cancelledAt`, `cancellationReason`, `manualContactRequired`, `expiresAt` (para la liberación por falta de pago). Índice `(departureId, status)`.
+- `Reservation`: `code` único (es el **serial del ticket**), `publicToken` único, `accountId`, `departureId`, `status`, `salesChannel` (`APP` o `TAQUILLA`) (ronda 4, 2026-09-13), `passengerCount`, `policiesAcceptedAt`, `fareUsd` (tarifa unitaria congelada), `fareTotalUsd`, `taxPerPassengerUsd`, `taxTotalUsd`, `totalUsd`, `paidUsd` (suma de pagos aprobados), `currency`, `exchangeRateUsed`, `amountInCurrency`, `paymentMethodId`, `reconfirmedAt`, `attendanceResponse`, `attendanceRespondedAt`, `boardedAt`, `cancelledAt`, `cancellationReason`, `manualContactRequired`, `soldByPanelUserId` (operador que vendió la reserva en taquilla; nulo si la venta fue por la app) (ronda 4, 2026-09-13), `expiresAt` (para la liberación por falta de pago). Índice `(departureId, status)`.
 - `Passenger`: `reservationId`, `fullName`, `idNumber`, `birthYear`, `isHolder`, `boardedAt`, `boardedByPanelUserId`.
 - `PaymentProof`: `reservationId`, `paymentMethodId`, `reference`, `imagePath`, `amount`, `currency`, `amountUsd` (convertido al declarar), `status`, `reviewedByPanelUserId`, `reviewedAt`, `rejectionReason`. Una reserva puede acumular varios comprobantes aprobados: eso son los abonos.
 - `CashPayment`: `reservationId`, `amount`, `currency`, `amountUsd`, `collectedByPanelUserId`, `collectedAt`.
@@ -176,11 +178,15 @@ ABONADA        → EN_VALIDACION   el pasajero sube otro comprobante
 ABONADA        → PAGADA          un cobro en sitio completa el saldo
 PAGO_EN_SITIO  → PAGADA          el operador registra el cobro completo
 PAGO_EN_SITIO  → LIBERADA        no reconfirmó 12 h antes de la salida
+PENDIENTE_PAGO → ABONADA         un cobro en efectivo del panel
+PENDIENTE_PAGO → PAGADA          un cobro en efectivo del panel
 PENDIENTE_PAGO → LIBERADA        expiró sin ningún pago
 PENDIENTE_PAGO | EN_VALIDACION | ABONADA | PAGO_EN_SITIO | PAGADA → CANCELADA
 PAGADA | PAGO_EN_SITIO → ABORDADA
 PAGADA → NO_SHOW                 la salida partió sin que abordara
 ```
+
+Las dos transiciones de `PENDIENTE_PAGO` a `ABONADA` o `PAGADA` por un cobro en efectivo del panel son nuevas de esta ronda. La venta en taquilla crea la reserva directamente en `PAGO_EN_SITIO` y la lleva a `PAGADA` dentro de la misma transacción. (ronda 4, 2026-09-13)
 
 Ocupan cupo: `PENDIENTE_PAGO`, `EN_VALIDACION`, `ABONADA`, `PAGADA`, `PAGO_EN_SITIO`, `ABORDADA`. Liberan cupo: `LIBERADA`, `CANCELADA`, `NO_SHOW`.
 
@@ -190,7 +196,7 @@ El ticket se emite **solo** al entrar en `PAGADA`. Toda transición pasa por una
 
 `disponible = Departure.capacity − Σ passengerCount de reservas en estados que ocupan cupo`.
 
-La creación de reserva y toda transición que vuelva a ocupar cupo se ejecutan en una transacción que bloquea la fila de `Departure` con `SELECT ... FOR UPDATE`, recalcula el disponible y aborta si el grupo no cabe. No hay bloqueo temporal durante el llenado del formulario.
+La creación de reserva y toda transición que vuelva a ocupar cupo se ejecutan en una transacción que bloquea la fila de `Departure` con `SELECT ... FOR UPDATE`, recalcula el disponible y aborta si el grupo no cabe. No hay bloqueo temporal durante el llenado del formulario. La venta en taquilla usa el mismo bloqueo dentro de su propia transacción. (ronda 4, 2026-09-13)
 
 ## 10. Serial del ticket
 
@@ -207,6 +213,8 @@ amountInCurrency  = redondeo2(totalUsd × tasa)
 
 Para `USD` y `USDT` la tasa es 1. Para `VES` y `COP` se toma la tasa vigente al crear la reserva y se congela en `exchangeRateUsed`. Cada comprobante o cobro guarda además su `amountUsd`, convertido con la tasa de la reserva, para que `paidUsd` sea siempre comparable con `totalUsd`.
 
+Un pago (comprobante o cobro en efectivo) en otra moneda se convierte con la tasa congelada de la reserva si su moneda coincide con la de la reserva, y con la tasa vigente de esa moneda si no coincide. USD y USDT van 1:1 en cualquier caso. (ronda 4, 2026-09-13)
+
 Saldo pendiente = `totalUsd − paidUsd`. Un pago que excede el saldo se acepta y deja la reserva `PAGADA`; el excedente se registra en la auditoría para devolución manual.
 
 ## 12. Flujo del pasajero
@@ -222,16 +230,16 @@ Saldo pendiente = `totalUsd − paidUsd`. Un pago que excede el saldo se acepta 
 
 Ruta base `/panel`, con login propio en `/panel/ingresar`.
 
-**Operador** (`/panel/...`, todo filtrado por su agencia):
+**Operador** (`/panel/...`, todo filtrado por su agencia) — mapa vigente desde la ronda 4 (2026-09-13):
 
-- `pagos`: tabla de comprobantes pendientes con serial, titular, salida, monto declarado, monto en dólares, total, saldo y tipo (abono parcial, pago completo o excede el saldo); cada fila abre un panel lateral con la imagen ampliable, las cuentas de la reserva y el historial de pagos previos. Aprobar y rechazar solo se hacen desde ese panel. Registro de cobros en sitio.
-- `pasajeros`: tabla con titular, serial del ticket, ruta, salida, cantidad, total, abonado, saldo y estado de pago. Filtros por salida y por estado de pago: Pendiente, Abonado, Confirmado o Sin efecto.
-- `vehiculos`: tabla de solo lectura con placa, marca, modelo y número de asientos; alta con formulario y edición en un panel lateral.
-- `choferes`: tabla de solo lectura con nombre, cédula completa y el total de embarques y desembarques de cada uno; el teléfono solo aparece en el panel lateral de edición; alta con formulario.
-- `movimientos`: lista de viajes de sus choferes con hora de embarque, duración del recorrido y hora de desembarque.
-- `salidas`: crear salidas asignando vehículo y chofer, ver ocupación, cerrar manifiesto, iniciar embarque, registrar salida y registrar llegada.
+- `/panel` (tablero): tres indicadores con selector de periodo Hoy / 7 días / 30 días — tickets pendientes, total de salidas y total de recaudación —, más flota en operación, tickets nuevos, embarques y desembarques de hoy, actividad reciente y una fila de registro rápido (venta en taquilla, cobro, salida, vehículo y chofer).
+- `taquilla`: asistente de cuatro pasos (salida, titular, acompañantes, cobro) para vender un pasaje en el mostrador, con cobro en efectivo completo y ticket con QR emitido en el acto.
+- `pasajeros` ("Pasajeros y pagos"): tabla con las cinco vistas Por revisar, Por cobrar, Pagadas, Sin efecto y Todas, filtros por salida y búsqueda; cada fila abre un panel lateral con el detalle de la reserva, la revisión de sus comprobantes y el registro de un cobro en efectivo.
+- `salidas`: crear salidas asignando vehículo y chofer, ver ocupación, y la hoja de la salida (`salidas/[id]`) con sus tres pasos: iniciar embarque, registrar salida y registrar llegada.
+- `flota`: vehículos y choferes en una sola página con pestañas, con su estado operativo.
+- `reportes`: recaudación y movimientos en una sola página con pestañas.
 - `abordaje/[departureId]`: pantalla móvil con lectura de código o QR y casillas por pasajero.
-- `recaudacion`: total recaudado por ruta en las últimas 24 horas, y por rango de fecha y hora (00 a 23).
+- Las rutas viejas `pagos`, `vehiculos`, `choferes`, `recaudacion` y `movimientos` redirigen a su página nueva, conservando los filtros y parámetros que tenían sentido en el destino.
 
 **Admin** (`/panel/admin/...`):
 
@@ -295,7 +303,9 @@ La base de datos de usuarios es información sensible. Reglas:
 
 - Solo el rol `ADMIN` accede a `/panel/admin/usuarios`, y cada consulta escribe una entrada de auditoría con el usuario que la hizo y el filtro aplicado.
 - El tablero del admin y el detalle de un viaje en Movimientos también quedan auditados: `CONSULTA_USUARIOS_NUEVOS` al listar los usuarios nuevos y `CONSULTA_PASAJEROS_VIAJE` al abrir el panel de un viaje. Las dos muestran la cédula completa y solo las ve el admin.
+- La consulta del titular en la taquilla también queda auditada (`CONSULTA_TITULAR_TAQUILLA`). (ronda 4, 2026-09-13)
 - El operador ve de sus pasajeros solo lo necesario para operar: nombre, cédula, serial y estado de pago. No ve la foto de la cédula salvo en la pantalla de abordaje de esa salida concreta.
+- La bitácora de actividad que ve el operador en el tablero nunca muestra cédulas ni teléfonos de sus pasajeros, solo el serial y el nombre. (ronda 4, 2026-09-13)
 - Las cédulas se muestran enmascaradas fuera del manifiesto y del módulo de usuarios del admin. Excepción: la cédula de un chofer se muestra completa a su propia agencia, porque es personal que esa agencia registró.
 - Los archivos subidos se sirven solo por rutas autenticadas que verifican la propiedad o el rol.
 - Los reportes son agregados por defecto.

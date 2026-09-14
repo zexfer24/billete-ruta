@@ -16,23 +16,21 @@ Guía para el personal del terminal y de las agencias. Todas las horas del siste
 | `ABORDADA` | Subió a la unidad | Sí |
 | `NO_SHOW` | Estaba pagada y no se presentó | No |
 
-Una reserva pagada **nunca** se libera automáticamente.
+Una reserva pagada **nunca** se libera automáticamente. Desde la ronda 4 (2026-09-13), `PENDIENTE_PAGO` también pasa directo a `ABONADA` o `PAGADA` con un cobro en efectivo registrado desde el panel, sin pasar por `EN_VALIDACION`.
 
 ## Rutina del operador de agencia
 
-**Durante el día, en Pagos.** Revisa la cola de comprobantes. Por cada uno compara el monto declarado con el saldo de la reserva y mira la imagen. Aprobar suma el abono; si el saldo llega a cero, el sistema emite el ticket solo. Rechazar exige un motivo, que le llega al pasajero para que cargue otro comprobante.
+**1. Tablero.** Es la primera pantalla al entrar. Muestra las cifras del día (o de 7 o 30 días, con el selector de periodo): tickets pendientes, salidas y recaudación, además de la flota en operación, los embarques y desembarques de hoy y la actividad reciente de la agencia. Desde ahí mismo, la fila de registro rápido abre en un panel lateral el cobro, el alta de salida, de vehículo o de chofer sin salir del tablero.
 
-**Cobros en taquilla.** En la misma pantalla, busca por serial y registra el monto y la moneda recibidos. Si el cobro completa el total, el ticket se emite en el acto.
+**2. Pasajeros y pagos.** Empieza por la pestaña "Por revisar": por cada comprobante compara el monto declarado con el saldo de la reserva y mira la imagen. Aprobar suma el abono; si el saldo llega a cero, el sistema emite el ticket solo. Rechazar exige un motivo, que le llega al pasajero para que cargue otro comprobante. Para cobrar en efectivo, abre el detalle de la reserva desde cualquier pestaña y usa su acción de cobro, o usa "Registrar cobro" con el serial cuando no tienes la reserva a la vista. Si el pasajero paga en una moneda distinta a la de su reserva, el sistema convierte con la tasa de cambio vigente en ese momento, no con la tasa congelada de la reserva.
 
-**Antes de cada salida, en Salidas.** Abre la salida y pulsa Iniciar embarque. Eso cierra el manifiesto y desde ese momento nadie más puede reservar en esa unidad.
+**3. Taquilla.** Para vender un pasaje en el mostrador: (1) elige la salida con cupo, (2) busca al titular por cédula — si no tiene cuenta, la creas ahí mismo sin contraseña, con foto de cédula si falta —, (3) agrega hasta 5 acompañantes, con el permiso de viaje si alguno es menor, y (4) cobra en efectivo el total en la moneda del método elegido. El ticket se emite en el acto con su QR. Si la cuenta se creó en la taquilla, el pasajero la activa después por su cuenta en `/registro`, con la misma cédula, teléfono y año de nacimiento.
 
-**En el andén, en Abordaje.** Pide el serial del titular o escanea el QR de su ticket. El sistema muestra el grupo completo. Marca a quienes suben y pulsa Abordar grupo. Un QR alterado se rechaza en el acto.
+**4. Salidas y hoja de salida.** Antes de cada salida, ábrela y pulsa Iniciar embarque: eso cierra el manifiesto y desde ese momento nadie más puede reservar en esa unidad. En el andén, en Abordaje, pide el serial del titular o escanea el QR de su ticket; el sistema muestra el grupo completo, marca a quienes suben y pulsa Abordar grupo (un QR alterado se rechaza en el acto). Al partir, pulsa Registrar salida: las reservas pagadas que no abordaron quedan como ausentes y las de pago en sitio que nunca pagaron se cancelan con su motivo. Al llegar a destino, pulsa Registrar llegada; con eso queda calculada la duración del recorrido.
 
-**Al partir.** Pulsa Registrar salida. Las reservas pagadas que no abordaron quedan como ausentes; las de pago en sitio que nunca pagaron se cancelan con su motivo.
+**5. Flota.** Vehículos y choferes en pestañas, con su estado operativo (en ruta, embarcando, asignado, disponible o fuera de servicio) y su próxima salida.
 
-**Al llegar a destino.** Pulsa Registrar llegada. Con eso queda calculada la duración del recorrido y el viaje entra en la lista de movimientos.
-
-**Al cierre.** Revisa Recaudación para ver cuánto entró por cada ruta en las últimas 24 horas, y Movimientos para el desempeño de los choferes.
+**6. Reportes, al cierre.** Revisa Recaudación para ver cuánto entró por cada ruta, con el mismo selector de periodo del tablero, y Movimientos para el desempeño de los choferes.
 
 ## Rutina del admin del terminal
 
@@ -58,7 +56,7 @@ Una reserva pagada **nunca** se libera automáticamente.
 
 ## Qué hacer cuando algo falla
 
-**Un pasajero dice que pagó y su reserva sigue pendiente.** Búscala por serial en Pasajeros. Si no hay comprobante cargado, el pasajero debe subirlo desde su cuenta. Si lo hay y sigue en validación, está en la cola de Pagos.
+**Un pasajero dice que pagó y su reserva sigue pendiente.** Búscala por serial en Pasajeros y pagos. Si no hay comprobante cargado, el pasajero debe subirlo desde su cuenta. Si lo hay y sigue en validación, está en la pestaña "Por revisar".
 
 **Se liberó un cupo por error.** Una reserva liberada no se puede revivir: el pasajero debe reservar de nuevo. Si había lista de espera, el cupo ya fue ofrecido al siguiente.
 
