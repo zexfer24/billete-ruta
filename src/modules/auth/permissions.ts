@@ -56,3 +56,12 @@ export function can(role: PanelRole, permission: Permission): boolean {
 export function assertCan(role: PanelRole, permission: Permission): void {
   if (!can(role, permission)) throw new ForbiddenError(role, permission);
 }
+
+/**
+ * Página de inicio del rol. Se usa para redirigir cuando un rol no tiene el
+ * permiso exigido o cae en una página que no le corresponde (por ejemplo, el
+ * admin en una página de agencia), en vez de mostrar un error.
+ */
+export function panelHomeFor(role: PanelRole): string {
+  return role === "ADMIN" ? "/panel/admin/tablero" : "/panel";
+}

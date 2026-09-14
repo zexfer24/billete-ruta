@@ -118,3 +118,12 @@ export function renderPreview(key: TemplateKey, params: Record<string, string>):
   }
   return definicion.preview.replace(/\{\{(\w+)\}\}/g, (_m, nombre: string) => params[nombre] ?? "");
 }
+
+/** Texto de un mensaje ya guardado: nunca lanza; los parámetros ausentes se sustituyen por "…". */
+export function renderStoredPreview(key: TemplateKey, params: Record<string, string>): string {
+  const definicion = TEMPLATES[key];
+  return definicion.preview.replace(/\{\{(\w+)\}\}/g, (_m, nombre: string) => {
+    const valor = params[nombre];
+    return valor !== undefined && valor !== "" ? valor : "…";
+  });
+}

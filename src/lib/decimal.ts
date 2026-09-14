@@ -25,4 +25,18 @@ export function formatMoney(value: Prisma.Decimal, currency: Currency): string {
   return `${PREFIJOS[currency]}${conMiles},${decimal}`;
 }
 
+/**
+ * Formatea un monto en USD recibido como `string` desde el cliente (por ejemplo,
+ * los montos de un ticket ya serializados), con coma decimal y separador de miles
+ * como en el resto de la app. Para montos en servidor con `Prisma.Decimal`, usa
+ * `formatMoney`.
+ */
+export function formatUsdString(value: string): string {
+  const formateado = new Intl.NumberFormat("es-VE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value));
+  return `$ ${formateado}`;
+}
+
 export const ZERO = new Prisma.Decimal(0);

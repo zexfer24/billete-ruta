@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { ProofStatus } from "@prisma/client";
-import { ForbiddenError, requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { ForbiddenError, requireAgencyUser } from "@/modules/auth";
 import { getProofReview, proofCoverage, type ProofCoverage, type ProofReview } from "@/modules/payments";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/decimal";
@@ -10,6 +10,7 @@ import { maskIdNumber } from "@/lib/identity";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { SidePanel } from "@/components/side-panel";
 import { ClickableRow } from "@/components/clickable-row";
+import { PanelFeedback } from "@/components/panel-feedback";
 import { approveProofAction, cashPaymentAction, rejectProofAction } from "./actions";
 
 /** Comprobantes por página: la cola se revisa de a poco, del más viejo al más nuevo. */
@@ -19,6 +20,14 @@ const ESTADO_COMPROBANTE_LABEL: Record<ProofStatus, string> = {
   PENDIENTE: "Pendiente",
   APROBADO: "Aprobado",
   RECHAZADO: "Rechazado",
+};
+
+/** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
+const OK_LABELS: Record<string, string> = {
+  aprobado: "Pago aprobado.",
+  rechazado: "Comprobante rechazado.",
+  cobro: "Cobro registrado.",
+  "cobro-ticket": "Cobro registrado. El saldo quedó en cero y se emitió el ticket.",
 };
 
 function coverageBadge(coverage: ProofCoverage): { text: string; className: string } {
@@ -38,11 +47,10 @@ function coverageBadge(coverage: ProofCoverage): { text: string; className: stri
 export default async function PagosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pagina?: string; comprobante?: string }>;
+  searchParams: Promise<{ pagina?: string; comprobante?: string; error?: string; ok?: string }>;
 }) {
-  const user = await requirePanelUser("payments.review");
-  const agencyId = requireAgencyScope(user);
-  const { pagina, comprobante } = await searchParams;
+  const { agencyId } = await requireAgencyUser("payments.review");
+  const { pagina, comprobante, error, ok } = await searchParams;
   const paginaActual = Math.max(1, Number.parseInt(pagina ?? "1", 10) || 1);
   const comprobanteParsed = z.string().uuid().safeParse(comprobante);
   const comprobanteId = comprobanteParsed.success ? comprobanteParsed.data : undefined;
@@ -103,6 +111,8 @@ export default async function PagosPage({
             : `${total} comprobante(s) por revisar`}
         </p>
       </div>
+
+      <PanelFeedback error={comprobanteId ? undefined : error} ok={ok ? OK_LABELS[ok] : undefined} />
 
       <section className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">Comprobantes pendientes</h2>
@@ -226,6 +236,7 @@ export default async function PagosPage({
       <section className="flex flex-col gap-4 border-t border-[var(--color-borde)] pt-8">
         <h2 className="text-lg font-semibold">Registrar cobro en efectivo</h2>
         <form action={cashPaymentAction} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="pagina" value={paginaActual} />
           <label className="flex flex-col gap-1 text-sm font-medium">
             Serial del ticket
             <input
@@ -268,7 +279,12 @@ export default async function PagosPage({
       </section>
 
       {review ? (
-        <PanelComprobante review={review} pagina={paginaActual} closeHref={buildHref()} />
+        <PanelComprobante
+          review={review}
+          pagina={paginaActual}
+          closeHref={buildHref()}
+          error={comprobanteId ? error : undefined}
+        />
       ) : null}
     </div>
   );
@@ -278,10 +294,12 @@ function PanelComprobante({
   review,
   pagina,
   closeHref,
+  error,
 }: {
   review: ProofReview;
   pagina: number;
   closeHref: string;
+  error?: string;
 }) {
   const { proof, reservation, coverage, history } = review;
   const badge = coverage ? coverageBadge(coverage) : null;
@@ -293,6 +311,7 @@ function PanelComprobante({
       closeHref={closeHref}
     >
       <div className="flex flex-col gap-6">
+        <PanelFeedback error={error} />
         {badge ? (
           <span
             className={`inline-block w-fit rounded-full px-3 py-1 text-sm font-medium ${badge.className}`}

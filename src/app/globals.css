@@ -11,6 +11,20 @@
   --exito: #15803d;
   --alerta: #b45309;
   --peligro: #b91c1c;
+
+  /* Lenguaje visual de la app del pasajero (Omio + Transit). */
+  --marca: #1e3a8a;
+  --marca-oscura: #172a63;
+  --marca-clara: #dbe6ff;
+  --ruta: #15803d;
+  --ruta-oscura: #166534;
+  --en-vivo: #16a34a;
+  --cta: #d93a4f;
+  --tinta: #0f172a;
+  --tinta-suave: #475569;
+  --lienzo: #eef2f7;
+  --radio-tarjeta: 20px;
+  --radio-pastilla: 999px;
 }
 
 @theme inline {
@@ -24,12 +38,26 @@
   --color-exito: var(--exito);
   --color-alerta: var(--alerta);
   --color-peligro: var(--peligro);
+
+  --color-marca: var(--marca);
+  --color-marca-oscura: var(--marca-oscura);
+  --color-marca-clara: var(--marca-clara);
+  --color-ruta: var(--ruta);
+  --color-ruta-oscura: var(--ruta-oscura);
+  --color-en-vivo: var(--en-vivo);
+  --color-cta: var(--cta);
+  --color-tinta: var(--tinta);
+  --color-tinta-suave: var(--tinta-suave);
+  --color-lienzo: var(--lienzo);
+  --radius-tarjeta: var(--radio-tarjeta);
+  --radius-pastilla: var(--radio-pastilla);
+  --font-sans: var(--font-rubik), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   background: var(--fondo);
   color: var(--texto);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-rubik), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 /* Las cifras de dinero, cupos y horas se leen mejor con dígitos de ancho fijo. */

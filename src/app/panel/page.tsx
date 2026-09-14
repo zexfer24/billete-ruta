@@ -1,10 +1,9 @@
-import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { requireAgencyUser } from "@/modules/auth";
 import { agencyDashboard } from "@/modules/reports";
 import { formatMoney } from "@/lib/decimal";
 
 export default async function PanelResumenPage() {
-  const user = await requirePanelUser("agency.reports");
-  const agencyId = requireAgencyScope(user);
+  const { user, agencyId } = await requireAgencyUser("agency.reports");
   const resumen = await agencyDashboard(agencyId);
 
   return (

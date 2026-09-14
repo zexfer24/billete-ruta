@@ -20,6 +20,7 @@ const proofSchema = z.object({
 
 export interface SubirComprobanteState {
   error: string | null;
+  success: boolean;
 }
 
 export async function subirComprobanteAction(
@@ -36,12 +37,15 @@ export async function subirComprobanteAction(
     reference: formData.get("reference"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisa los datos del comprobante." };
+    return {
+      error: parsed.error.issues[0]?.message ?? "Revisa los datos del comprobante.",
+      success: false,
+    };
   }
 
   const archivo = formData.get("image");
   if (!(archivo instanceof File) || archivo.size === 0) {
-    return { error: "Adjunta la imagen del comprobante." };
+    return { error: "Adjunta la imagen del comprobante.", success: false };
   }
 
   const reserva = await prisma.reservation.findUnique({
@@ -49,13 +53,13 @@ export async function subirComprobanteAction(
     select: { id: true, accountId: true, code: true },
   });
   if (!reserva || reserva.accountId !== pasajero.id) {
-    return { error: "Esta reserva no pertenece a tu cuenta." };
+    return { error: "Esta reserva no pertenece a tu cuenta.", success: false };
   }
 
   try {
     const data = Buffer.from(await archivo.arrayBuffer());
     if (data.length > MAX_IMAGE_BYTES) {
-      return { error: "La imagen no puede pesar más de 5 MB." };
+      return { error: "La imagen no puede pesar más de 5 MB.", success: false };
     }
     assertImageBuffer(data);
     const imagePath = await saveUpload("comprobantes", pasajero.id, archivo.name, data);
@@ -75,11 +79,11 @@ export async function subirComprobanteAction(
       error instanceof NotOwnerError ||
       error instanceof InvalidImageError
     ) {
-      return { error: error.message };
+      return { error: error.message, success: false };
     }
     throw error;
   }
 
   revalidatePath(`/mi/reservas/${reserva.code}`);
-  return { error: null };
+  return { error: null, success: true };
 }

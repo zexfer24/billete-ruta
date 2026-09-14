@@ -1,89 +1,87 @@
 import Link from "next/link";
-import { balanceUsd } from "@/modules/catalog";
 import { requirePassenger } from "@/modules/auth";
-import { formatMoney } from "@/lib/decimal";
-import { formatCaracasDateTime24 } from "@/lib/time";
+import { balanceUsd } from "@/modules/catalog";
 import { prisma } from "@/lib/prisma";
+import { splitByDeparture } from "@/lib/reservations";
+import { Card, buttonClass } from "@/components/ui";
+import { TicketCard, type TicketCardData } from "@/components/ticket-card";
 
-const ESTADOS: Record<string, string> = {
-  PENDIENTE_PAGO: "Pendiente de pago",
-  EN_VALIDACION: "En validación",
-  ABONADA: "Abonada",
-  PAGADA: "Pagada",
-  PAGO_EN_SITIO: "Pago en sitio",
-  LIBERADA: "Liberada",
-  CANCELADA: "Cancelada",
-  ABORDADA: "Abordada",
-  NO_SHOW: "No se presentó",
-};
-
-export default async function MisReservasPage() {
+export default async function MisReservasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ver?: string }>;
+}) {
   const pasajero = await requirePassenger();
+  const { ver } = await searchParams;
+  const vistaPasados = ver === "pasados";
+
   const reservas = await prisma.reservation.findMany({
     where: { accountId: pasajero.id },
-    include: { departure: { include: { route: true } } },
+    include: { departure: { include: { route: { include: { agency: true } } } } },
     orderBy: { createdAt: "desc" },
   });
 
+  const now = new Date();
+  const { proximas, pasadas } = splitByDeparture(reservas, now);
+  const listaActual = vistaPasados ? pasadas : proximas;
+
+  const datos: TicketCardData[] = listaActual.map((reserva) => ({
+    code: reserva.code,
+    origin: reserva.departure.route.origin,
+    destination: reserva.departure.route.destination,
+    departsAt: reserva.departure.departsAt,
+    agencyId: reserva.departure.route.agency.id,
+    agencyName: reserva.departure.route.agency.name,
+    status: reserva.status,
+    totalUsd: reserva.totalUsd.toString(),
+    paidUsd: reserva.paidUsd.toString(),
+    balanceUsd: balanceUsd(reserva.totalUsd, reserva.paidUsd).toString(),
+    passengerCount: reserva.passengerCount,
+  }));
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Mis reservas</h1>
-        <p className="mt-1 text-[var(--color-texto-suave)]">Historial de reservas de tu cuenta.</p>
+      <h1 className="text-2xl font-extrabold text-tinta">Mis viajes</h1>
+
+      <div className="flex gap-2" role="tablist" aria-label="Filtrar viajes por fecha">
+        <Link
+          href="/mi/reservas"
+          role="tab"
+          aria-current={!vistaPasados ? "page" : undefined}
+          aria-selected={!vistaPasados}
+          className={buttonClass(!vistaPasados ? "primario" : "secundario", "px-5")}
+        >
+          Próximos
+        </Link>
+        <Link
+          href="/mi/reservas?ver=pasados"
+          role="tab"
+          aria-current={vistaPasados ? "page" : undefined}
+          aria-selected={vistaPasados}
+          className={buttonClass(vistaPasados ? "primario" : "secundario", "px-5")}
+        >
+          Pasados
+        </Link>
       </div>
 
-      {reservas.length === 0 ? (
-        <p className="text-sm text-[var(--color-texto-suave)]">
-          Todavía no tienes reservas.{" "}
-          <Link href="/mi/reservar" className="font-medium text-[var(--color-acento)]">
-            Reserva tu puesto
+      {datos.length === 0 ? (
+        <Card className="flex flex-col items-center gap-3 text-center">
+          <p className="text-tinta-suave">
+            {vistaPasados
+              ? "Todavía no tienes viajes pasados."
+              : "Todavía no tienes viajes próximos."}
+          </p>
+          <Link href="/mi/reservar" className={buttonClass("primario")}>
+            Reservar un puesto
           </Link>
-          .
-        </p>
+        </Card>
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2">
-          {reservas.map((reserva) => {
-            const saldo = balanceUsd(reserva.totalUsd, reserva.paidUsd);
-            return (
-              <li
-                key={reserva.id}
-                className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-mono text-sm font-semibold">{reserva.code}</p>
-                  <span className="rounded-full bg-[var(--color-acento-suave)] px-3 py-1 text-xs font-medium text-[var(--color-acento)]">
-                    {ESTADOS[reserva.status] ?? reserva.status}
-                  </span>
-                </div>
-                <p className="mt-2 font-medium">
-                  {reserva.departure.route.origin} → {reserva.departure.route.destination}
-                </p>
-                <p className="tabular text-sm text-[var(--color-texto-suave)]">
-                  Salida: {formatCaracasDateTime24(reserva.departure.departsAt)}
-                </p>
-                <dl className="mt-3 grid grid-cols-3 gap-2 text-sm tabular">
-                  <div>
-                    <dt className="text-[var(--color-texto-suave)]">Total</dt>
-                    <dd>{formatMoney(reserva.totalUsd, "USD")}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[var(--color-texto-suave)]">Abonado</dt>
-                    <dd>{formatMoney(reserva.paidUsd, "USD")}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[var(--color-texto-suave)]">Saldo</dt>
-                    <dd>{formatMoney(saldo, "USD")}</dd>
-                  </div>
-                </dl>
-                <Link
-                  href={`/mi/reservas/${reserva.code}`}
-                  className="mt-4 inline-block rounded-lg bg-[var(--color-acento)] px-4 py-2 text-sm font-medium text-white"
-                >
-                  Ver detalle
-                </Link>
-              </li>
-            );
-          })}
+        <ul className="flex flex-col gap-4">
+          {datos.map((data) => (
+            <li key={data.code}>
+              <TicketCard data={data} size="compacta" href={`/mi/reservas/${data.code}`} />
+            </li>
+          ))}
         </ul>
       )}
     </div>

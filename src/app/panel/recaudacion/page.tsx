@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { requireAgencyUser } from "@/modules/auth";
 import { last24h, revenueByRoute } from "@/modules/reports";
 import type { RouteRevenueRow } from "@/modules/reports";
 import {
@@ -33,8 +33,7 @@ export default async function RecaudacionPage({
 }: {
   searchParams: Promise<{ desde?: string; hasta?: string; horaDesde?: string; horaHasta?: string }>;
 }) {
-  const user = await requirePanelUser("agency.reports");
-  const agencyId = requireAgencyScope(user);
+  const { agencyId } = await requireAgencyUser("agency.reports");
   const params = await searchParams;
 
   const defaults = last24h();

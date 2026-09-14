@@ -6,6 +6,7 @@ import { z } from "zod";
 import { loginAccount } from "@/modules/accounts";
 import { checkLoginRate, PASSENGER_COOKIE } from "@/modules/auth";
 import { normalizeIdNumber } from "@/lib/identity";
+import { safeNext } from "@/lib/safe-next";
 
 export interface IngresarFormState {
   error: string | null;
@@ -14,6 +15,7 @@ export interface IngresarFormState {
 const ingresarSchema = z.object({
   idNumber: z.string().min(1, "Ingresa tu cédula."),
   password: z.string().min(1, "Ingresa tu contraseña."),
+  next: z.string().optional(),
 });
 
 export async function ingresarAction(
@@ -23,6 +25,7 @@ export async function ingresarAction(
   const parsed = ingresarSchema.safeParse({
     idNumber: formData.get("idNumber"),
     password: formData.get("password"),
+    next: formData.get("next") ?? undefined,
   });
   if (!parsed.success) {
     return { error: "Ingresa tu cédula y tu contraseña." };
@@ -46,5 +49,5 @@ export async function ingresarAction(
     path: "/",
   });
 
-  redirect("/mi/reservar");
+  redirect(safeNext(parsed.data.next) ?? "/mi");
 }

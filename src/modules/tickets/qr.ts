@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import QRCode from "qrcode";
 import { getEnv } from "@/lib/env";
 
 const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -45,4 +46,9 @@ export function verifyTicketQr(payload: string): { valid: boolean; code: string 
   const recibida = Buffer.from(firma);
   if (esperada.length !== recibida.length) return { valid: false, code: null };
   return timingSafeEqual(esperada, recibida) ? { valid: true, code } : { valid: false, code: null };
+}
+
+/** Imagen PNG del QR como data URL, para mostrarla en pantalla sin abrir el PDF. */
+export async function renderQrDataUrl(payload: string): Promise<string> {
+  return QRCode.toDataURL(payload, { margin: 1, width: 320, errorCorrectionLevel: "M" });
 }

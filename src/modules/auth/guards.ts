@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ForbiddenError, assertCan, type Permission } from "./permissions";
+import { ForbiddenError, can, panelHomeFor, type Permission } from "./permissions";
 import {
   PANEL_COOKIE,
   PASSENGER_COOKIE,
@@ -10,12 +10,16 @@ import {
   type PassengerSessionUser,
 } from "./sessions";
 
-/** Usuario de panel con el permiso exigido, o redirección al acceso. */
+/**
+ * Usuario de panel con el permiso exigido. Sin sesión, redirige al acceso.
+ * Con sesión pero sin el permiso, redirige al inicio de su propio rol en vez
+ * de lanzar: un acceso cruzado entre roles no debe romper la pantalla.
+ */
 export async function requirePanelUser(permission: Permission): Promise<PanelSessionUser> {
   const store = await cookies();
   const usuario = await resolvePanelSession(store.get(PANEL_COOKIE)?.value);
   if (!usuario) redirect("/panel/ingresar");
-  assertCan(usuario.role, permission);
+  if (!can(usuario.role, permission)) redirect(panelHomeFor(usuario.role));
   return usuario;
 }
 
@@ -51,4 +55,20 @@ export function requireAgencyScope(user: PanelSessionUser): string {
     return user.agencyId;
   }
   throw new ForbiddenError(user.role, "payments.review");
+}
+
+/**
+ * Igual que `requirePanelUser` seguido de `requireAgencyScope`, pero para
+ * páginas de agencia: si el rol no es OPERADOR (por ejemplo, el admin entra a
+ * una página de agencia con `agency.reports`), redirige al inicio de su rol
+ * en vez de lanzar. Un operador sin agencia sigue lanzando, porque es un
+ * error de configuración y no un acceso cruzado.
+ */
+export async function requireAgencyUser(
+  permission: Permission,
+): Promise<{ user: PanelSessionUser; agencyId: string }> {
+  const user = await requirePanelUser(permission);
+  if (user.role !== "OPERADOR") redirect(panelHomeFor(user.role));
+  if (!user.agencyId) throw new Error("El operador no tiene agencia asignada");
+  return { user, agencyId: user.agencyId };
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { requireAgencyUser } from "@/modules/auth";
 import { listAgencyDepartures } from "@/modules/catalog";
 import { listAgencyPassengers, paymentStateFromSlug } from "@/modules/reports";
 import type { AgencyPassengerRow } from "@/modules/reports";
@@ -53,8 +53,7 @@ export default async function PasajerosPage({
     pagina?: string;
   }>;
 }) {
-  const user = await requirePanelUser("agency.reports");
-  const agencyId = requireAgencyScope(user);
+  const { agencyId } = await requireAgencyUser("agency.reports");
   const params = await searchParams;
 
   const paginaActual = Math.max(1, Number.parseInt(params.pagina ?? "1", 10) || 1);

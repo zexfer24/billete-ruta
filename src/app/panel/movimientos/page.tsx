@@ -1,4 +1,4 @@
-import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { requireAgencyUser } from "@/modules/auth";
 import { driverMovements, last24h } from "@/modules/reports";
 import {
   caracasDayEnd,
@@ -14,8 +14,7 @@ export default async function MovimientosPage({
 }: {
   searchParams: Promise<{ desde?: string; hasta?: string }>;
 }) {
-  const user = await requirePanelUser("agency.reports");
-  const agencyId = requireAgencyScope(user);
+  const { agencyId } = await requireAgencyUser("agency.reports");
   const params = await searchParams;
 
   const defaults = last24h();

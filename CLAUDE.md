@@ -49,6 +49,7 @@ Contexto geográfico: Venezuela y corredor hacia Colombia. Monedas: USD, VES, CO
 - Entrega inmediata: **MVP en localhost**, no Docker de la aplicación. Solo PostgreSQL en contenedor, puerto 5434 para desarrollo y 5435 para test. Los puertos 5432 y 5433 están ocupados en esta máquina.
 - Módulos en `src/modules/*`, cada uno exporta su API pública desde `index.ts`. Nadie importa internos de otro módulo. Alias `@/` a `src/`.
 - Dinero siempre con `Prisma.Decimal`, nunca `number`.
+- **Interfaz del pasajero**: `/`, `/ingresar`, `/registro`, `/mi/*` y `/lista-espera/*` usan el lenguaje visual de app móvil (tokens `--marca`, `--ruta`, `--cta`, `--tinta`, `--lienzo` en `globals.css`, fuente Rubik, iconos SVG propios sin dependencias, barra inferior de navegación). Los paneles de operador y admin conservan los tokens `--acento` originales. La portada (`/`) muestra las próximas salidas sin necesidad de sesión, por tratarse de datos de catálogo (ruta, hora, precio, cupos), no personales.
 
 ## Comandos
 
@@ -74,32 +75,52 @@ Cada carpeta de `src/modules/` expone su API pública en `index.ts`. Nadie impor
 | `accounts` | Cuentas de pasajero y sus documentos | `registerAccount` (recibe `givenNames` y `surnames`, no `fullName`), `loginAccount`, `uploadDocument`, `missingDocuments` |
 | `agencies` | Agencias, vehículos y choferes | `createAgencyWithOperator`, `listAgencies`, `createVehicle`, `listDrivers` (trae embarques y desembarques) |
 | `audit` | Bitácora de solo inserción | `writeAudit` |
-| `auth` | Dos ámbitos de sesión y matriz de permisos | `requirePanelUser`, `requirePassenger`, `requireAgencyScope`, `can`, `hashPassword` |
+| `auth` | Dos ámbitos de sesión y matriz de permisos | `requirePanelUser`, `requirePassenger`, `requireAgencyScope`, `requireAgencyUser` (guarda de páginas de agencia que redirige al inicio del rol), `panelHomeFor`, `can`, `hashPassword` |
 | `booking` | Reservas, cupos, estados y lista de espera | `createReservation`, `transitionReservation`, `getAvailability`, `processWaitlist`, `canTransition` |
 | `catalog` | Rutas, salidas, tasas y precios | `listBookableDepartures`, `createDeparture`, `getManifest`, `computeAmounts`, `getCurrentDepartureTax` |
-| `messaging` | Canal de mensajes con proveedor intercambiable | `enqueueMessage`, `deliverPendingMessages`, `getWhatsAppProvider`, `renderPreview` |
+| `messaging` | Canal de mensajes con proveedor intercambiable | `enqueueMessage`, `deliverPendingMessages`, `getWhatsAppProvider`, `renderPreview`, `renderStoredPreview` (texto de un mensaje ya guardado, nunca lanza), `listMessagesForPhone` (bandeja de mensajes del pasajero, texto ya renderizado) |
+| `notices` | Avisos derivados del estado del pasajero | `buildNotices` (función pura de reglas: documento faltante, reserva por liberar, comprobante rechazado o en validación, pago en sitio por reconfirmar, ticket listo), `listNoticesForAccount` (avisos vigentes de una cuenta, consulta con Prisma) |
 | `payments` | Abonos, comprobantes y cobros en efectivo | `submitProof`, `approveProof`, `rejectProof`, `registerCashPayment`, `proofCoverage` (abono parcial, pago completo o excedente), `getProofReview` (comprobante, reserva, cobertura e historial, con aislamiento por agencia) |
 | `reports` | Agregados de agencia y de terminal | `revenueByRoute`, `driverMovements`, `departureTaxRevenue`, `agencyMovements`, `listAccounts`, `listTerminalTrips` (recorridos del tablero), `listNewAccounts` (usuarios nuevos, escribe auditoría), `getTripDetail` (viaje con pasajeros a bordo, escribe auditoría), `listAgencyPassengers` (filtra por `paymentState`), `paymentStateOf`, `paymentStateWhere`, `PAYMENT_STATES` |
 | `scheduler` | Ventanas de tiempo de los barridos | `dueForReminder24h`, `dueForRelease12h`, `nextRetryDelayMinutes` |
-| `tickets` | PDF con QR firmado | `issueTicket`, `signTicketCode`, `verifyTicketQr` |
-| `trips` | Embarque, desembarque y abordaje | `startBoarding`, `registerDeparture`, `registerArrival`, `findForBoarding`, `confirmBoarding` |
+| `tickets` | PDF con QR firmado | `issueTicket`, `signTicketCode`, `verifyTicketQr`, `renderQrDataUrl` (imagen PNG del QR como data URL, para mostrarlo en pantalla sin abrir el PDF) |
+| `trips` | Embarque, desembarque y abordaje | `startBoarding`, `registerDeparture`, `registerArrival`, `findForBoarding`, `confirmBoarding`, `availableTripActions` (qué botones de embarque, salida y llegada aplican según el estado; función pura) |
 
 | Archivo de `src/lib/` | Para qué sirve |
 |---|---|
 | `prisma.ts` | Cliente único de base de datos |
 | `env.ts` | Configuración validada con zod |
-| `decimal.ts` | `toDecimal`, `round2`, `formatMoney` |
-| `time.ts` | Hora de Caracas y formato de 24 horas, duración de recorridos, ventanas por hora (`caracasHourStart`, `caracasHourEnd`, `caracasHourValue`) |
+| `decimal.ts` | `toDecimal`, `round2`, `formatMoney`, `formatUsdString` |
+| `time.ts` | Hora de Caracas y formato de 24 horas, duración de recorridos, ventanas por hora (`caracasHourStart`, `caracasHourEnd`, `caracasHourValue`), tiempo relativo de salida (`minutesUntil`, `formatRelativeDeparture`: "Sale ahora", "Sale en N min", "Sale a las HH:mm", "Salió") |
 | `identity.ts` | Cédulas, teléfonos, edad, enmascarado y primer nombre o apellido (`firstNamePart`) |
 | `storage.ts` | Archivos subidos y verificación por firma de bytes |
+| `brand.ts` | Colores e iniciales de bloque de agencia: `agencyColor(agencyId)`, `agencyColorIndex(agencyId)`, `agencyInitials(name)`, `AGENCY_COLORS` (derivados del id, sin tocar el esquema de base de datos) |
+| `labels.ts` | Traducciones y tonos de estado: `RESERVATION_STATUS_LABELS`, `reservationStatusLabel`, `reservationStatusTone`, `PROOF_STATUS_LABELS`, `MESSAGE_STATUS_LABELS`, `messageStatusTone`, tipo `StatusTone` |
+| `safe-next.ts` | `safeNext(value)`: valida una ruta de retorno interna tras ingresar o registrarse (rechaza vacío, `//`, `\` y URLs absolutas) |
+| `reservations.ts` | `splitByDeparture(reservas, now)`: separa una lista de reservas en "próximas" y "pasadas" según `departure.departsAt`, para "Mis viajes" |
 
 | Componente de `src/components/` | Para qué sirve |
 |---|---|
 | `side-panel.tsx` | `SidePanel`: panel lateral controlado por la URL |
 | `close-on-escape.tsx` | `CloseOnEscape`: foco, bloqueo del desplazamiento y cierre con Escape |
 | `clickable-row.tsx` | `ClickableRow`: fila de tabla que navega al hacer clic |
+| `icons.tsx` | Set de 22 iconos SVG propios de trazo (componente de servidor), con `IconBase` interno para el estilo y la accesibilidad comunes |
+| `ui.tsx` | Piezas base de la app del pasajero: `buttonClass(variant, extra?)`, `Card`, `Field`, `Pill`, `SectionTitle` |
+| `app-header.tsx` | `AppHeader`: cabecera azul de la app del pasajero, con botón de volver, título, subtítulo y acciones |
+| `bottom-nav.tsx` | `BottomNav`: barra de navegación inferior de cuatro destinos, con contador de avisos pendientes |
+| `search-card.tsx` | `SearchCard`: buscador de origen y destino con intercambio, variantes `azul` (portada) y `verde` (reservar) |
+| `agency-badge.tsx` | `AgencyBadge`: bloque de color con las iniciales de la agencia |
+| `departure-row.tsx` | `DepartureRow`: fila de salida en línea de tiempo, exporta `DepartureRowData` |
+| `departure-board.tsx` | `DepartureBoard`: tablero de bloques de color por agencia para las próximas salidas |
+| `notice-card.tsx` | `NoticeCard`: tarjeta de aviso por nivel (`alerta`, `info`, `exito`) |
+| `ticket-card.tsx` | `TicketCard`: tarjeta de ticket compacta o grande, con QR en pantalla o barra de progreso de pago, exporta `TicketCardData` |
+| `sticky-actions.tsx` | `StickyActions`: barra fija de botones de avance y retroceso del asistente de reserva |
+| `details-view.tsx` | `DetailsView`: muestra un valor JSON arbitrario (datos de cobro de un método de pago) como pares clave-valor, exporta el tipo `JsonValue` |
+| `panel-feedback.tsx` | `PanelFeedback`: aviso rojo o verde para las acciones del panel de agencia, según `error` u `ok` |
 
 `src/worker/sweeps.ts` contiene los seis barridos programados y `src/worker/index.ts` el proceso que los ejecuta.
+
+`src/app/panel/feedback.ts` (sin `"use server"`, porque ese archivo solo exporta funciones asíncronas) expone `userFacingMessage(error)` (traduce un error conocido del dominio a un mensaje en español, o devuelve `null` para que la acción lo relance) y `panelFeedbackUrl(path, params)` (arma la URL de retorno omitiendo valores vacíos). Las acciones del panel de agencia (`pagos`, `salidas`, `flota`) siguen el patrón: `safeParse` con mensajes en español, `try/catch` alrededor de la llamada al dominio, y `redirect` fuera del `try` hacia `?error=<mensaje>` o `?ok=<código corto>`; la página traduce el código de éxito a texto con un `Record` y muestra ambos con `<PanelFeedback>`.
 
 ## Glosario de documentación (`Documentación/`)
 
@@ -113,4 +134,3 @@ Cada carpeta de `src/modules/` expone su API pública en `index.ts`. Nadie impor
 ## Notas operativas
 
 - Los nombres de los PDF llevan acentos y la herramienta `Read` falla con ellos por normalización Unicode. Solución: copiarlos al scratchpad con nombres ASCII mediante PowerShell y leer la copia.
-- El glosario de módulos de `src/` se añade aquí al cerrar la tarea 12 del plan.

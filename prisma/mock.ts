@@ -15,6 +15,8 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient, Prisma } from "@prisma/client";
 import type { Currency, PaymentMethod, ReservationStatus } from "@prisma/client";
 import argon2 from "argon2";
+import { formatMoney } from "@/lib/decimal";
+import { formatCaracasDateTime24 } from "@/lib/time";
 
 const prisma = new PrismaClient();
 
@@ -214,6 +216,7 @@ async function main(): Promise<void> {
     capacity: number;
     fareUsd: Prisma.Decimal;
     estimatedMinutes: number;
+    meetingPoint: string;
     pasada: boolean;
   }
 
@@ -250,6 +253,7 @@ async function main(): Promise<void> {
         capacity: vehiculo.seatCount,
         fareUsd: ruta.fareUsd,
         estimatedMinutes: ruta.estimatedMinutes,
+        meetingPoint: ruta.meetingPoint,
         pasada: true,
       });
     }
@@ -294,6 +298,7 @@ async function main(): Promise<void> {
       capacity: d.capacity,
       fareUsd: d.route.fareUsd,
       estimatedMinutes: d.route.estimatedMinutes,
+      meetingPoint: d.route.meetingPoint,
       pasada: false,
     })),
   ];
@@ -628,7 +633,12 @@ async function main(): Promise<void> {
           reservationId,
           phone: cuenta.phone,
           templateKey: "ticket_emitido",
-          payload: { nombre: cuenta.fullName, serial: code, salida: "", punto: "" },
+          payload: {
+            nombre: cuenta.fullName,
+            serial: code,
+            salida: formatCaracasDateTime24(salida.departsAt),
+            punto: salida.meetingPoint,
+          },
           status: "ENTREGADO",
           providerMessageId: `mock-${randomUUID()}`,
           attempts: 1,
@@ -643,7 +653,15 @@ async function main(): Promise<void> {
         reservationId,
         phone: cuenta.phone,
         templateKey: metodo.kind === "FISICO" ? "reserva_condicional" : "solicitud_recibida",
-        payload: { nombre: cuenta.fullName, serial: code },
+        payload:
+          metodo.kind === "FISICO"
+            ? {
+                nombre: cuenta.fullName,
+                serial: code,
+                monto: formatMoney(m.amountInCurrency, metodo.currency),
+                salida: formatCaracasDateTime24(salida.departsAt),
+              }
+            : { nombre: cuenta.fullName, pasajeros: String(pax), serial: code },
         status: salida.pasada ? "LEIDO" : "ENTREGADO",
         providerMessageId: `mock-${randomUUID()}`,
         attempts: 1,

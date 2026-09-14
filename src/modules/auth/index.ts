@@ -3,6 +3,7 @@ export {
   ForbiddenError,
   assertCan,
   can,
+  panelHomeFor,
 } from "./permissions";
 export type { Permission } from "./permissions";
 export { hashPassword, verifyPassword } from "./passwords";
@@ -24,6 +25,7 @@ export {
   currentPanelUser,
   currentPassenger,
   requireAgencyScope,
+  requireAgencyUser,
   requirePanelUser,
   requirePassenger,
 } from "./guards";

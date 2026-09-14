@@ -1,37 +1,42 @@
 import Link from "next/link";
 import { requirePassenger } from "@/modules/auth";
-import { maskIdNumber } from "@/lib/identity";
+import { listNoticesForAccount } from "@/modules/notices";
+import { firstNamePart, maskIdNumber } from "@/lib/identity";
+import { AppHeader } from "@/components/app-header";
+import { BottomNav } from "@/components/bottom-nav";
+import { IconDocument, IconLogout } from "@/components/icons";
 
 export default async function MiLayout({ children }: { children: React.ReactNode }) {
   const pasajero = await requirePassenger();
+  const avisos = await listNoticesForAccount(pasajero.id);
+  const noticeCount = avisos.filter((aviso) => aviso.level === "alerta").length;
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-[var(--color-borde)] bg-[var(--color-superficie)]">
-        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <div>
-            <p className="font-semibold">{pasajero.fullName}</p>
-            <p className="tabular text-sm text-[var(--color-texto-suave)]">
-              {maskIdNumber(pasajero.idNumber)}
-            </p>
-          </div>
-          <nav className="flex flex-wrap items-center gap-4 text-sm font-medium">
-            <Link href="/mi/reservar" className="hover:text-[var(--color-acento)]">
-              Reservar
+    <div className="min-h-screen bg-lienzo">
+      <AppHeader
+        title={`Hola, ${firstNamePart(pasajero.fullName)}`}
+        subtitle={maskIdNumber(pasajero.idNumber)}
+        right={
+          <>
+            <Link
+              href="/mi/documentos"
+              aria-label="Mis documentos"
+              className="flex h-11 w-11 items-center justify-center rounded-pastilla bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <IconDocument aria-hidden="true" />
             </Link>
-            <Link href="/mi/reservas" className="hover:text-[var(--color-acento)]">
-              Mis reservas
-            </Link>
-            <Link href="/mi/documentos" className="hover:text-[var(--color-acento)]">
-              Documentos
-            </Link>
-            <a href="/salir" className="text-[var(--color-peligro)]">
-              Salir
+            <a
+              href="/salir"
+              aria-label="Salir"
+              className="flex h-11 w-11 items-center justify-center rounded-pastilla bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <IconLogout aria-hidden="true" />
             </a>
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto max-w-4xl px-6 py-8">{children}</main>
+          </>
+        }
+      />
+      <BottomNav noticeCount={noticeCount} />
+      <main className="mx-auto w-full max-w-md px-4 pb-28 pt-4 md:max-w-2xl md:pb-12">{children}</main>
     </div>
   );
 }

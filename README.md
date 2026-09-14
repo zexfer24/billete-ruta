@@ -6,7 +6,7 @@ Sistema de reservas y control de pasajeros para un **terminal terrestre** que al
 
 | Actor | Entra por | Qué hace |
 |---|---|---|
-| **Pasajero** | `/ingresar` con su cédula | Reserva puestos, sube sus documentos, paga o abona, descarga su ticket |
+| **Pasajero** | `/` o `/ingresar` con su cédula | Ve sus avisos en Inicio, reserva puestos, sube sus documentos, paga o abona, y muestra su ticket con QR en pantalla o lo descarga en PDF |
 | **Operador** | `/panel/ingresar` | Confirma pagos, gestiona vehículos, choferes y salidas, controla el abordaje, ve su recaudación |
 | **Admin del terminal** | `/panel/ingresar` | Ve la tasa de salida recaudada, los recorridos, la base de usuarios y los movimientos de todas las agencias |
 
@@ -62,13 +62,15 @@ Genera unas 1500 cuentas de pasajero, doce días de viajes ya cumplidos con sus 
 
 ## Recorrido sugerido para probarlo
 
-1. Entra como pasajero, sube la foto de cédula en Documentos.
-2. Reserva tres puestos en cualquier salida. Verás el desglose de tarifa más tasa de salida.
-3. Sube un comprobante por una parte del total. La reserva queda en validación.
-4. Entra como el operador de esa agencia y aprueba el comprobante en Pagos. La reserva queda abonada con su saldo.
-5. Vuelve como pasajero, sube un segundo comprobante por el saldo, y que el operador lo apruebe. Se emite el ticket con su QR.
-6. En el panel del operador, abre la salida, inicia el embarque, aborda el grupo por su serial, registra la salida y luego la llegada.
-7. Entra como admin y mira el tablero: la tasa de salida recaudada, el recorrido registrado y los usuarios.
+1. Abre `/` sin sesión y mira las próximas salidas; busca una ruta con el buscador de la portada y deja que te lleve a ingresar.
+2. Entra como pasajero, sube la foto de cédula en Documentos.
+3. Reserva tres puestos en cualquier salida. Verás el desglose de tarifa más tasa de salida.
+4. Sube un comprobante por una parte del total. La reserva queda en validación.
+5. Entra como el operador de esa agencia y aprueba el comprobante en Pagos. La reserva queda abonada con su saldo.
+6. Vuelve como pasajero, sube un segundo comprobante por el saldo, y que el operador lo apruebe. Se emite el ticket con su QR.
+7. En el panel del operador, abre la salida, inicia el embarque, aborda el grupo por su serial, registra la salida y luego la llegada.
+8. Entra como admin y mira el tablero: la tasa de salida recaudada, el recorrido registrado y los usuarios.
+9. Como pasajero, abre Inicio para ver tus avisos, revisa Mis viajes y entra al detalle de una reserva con ticket para ver el QR en pantalla.
 
 Los mensajes de WhatsApp no salen a la red en esta versión: quedan registrados y se leen en el panel del admin, en Mensajes.
 

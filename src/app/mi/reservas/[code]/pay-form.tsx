@@ -1,15 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Card, Field, buttonClass } from "@/components/ui";
+import { DetailsView, type JsonValue } from "@/components/details-view";
+import { IconCheck } from "@/components/icons";
 import { subirComprobanteAction, type SubirComprobanteState } from "../actions";
-
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: JsonValue }
-  | JsonValue[];
 
 export interface MetodoVM {
   id: string;
@@ -18,8 +13,17 @@ export interface MetodoVM {
   details: JsonValue;
 }
 
-const initialState: SubirComprobanteState = { error: null };
+const initialState: SubirComprobanteState = { error: null, success: false };
 
+/** Estilo de caja compartido por el `<select>` de método y el `<input type="file">`. */
+const BOX_CLASS =
+  "min-h-11 rounded-xl border border-borde px-4 text-base focus:border-marca focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca motion-reduce:transition-none";
+
+/**
+ * Formulario de comprobante de una reserva. Envuelve `UploadForm` con una
+ * `key` numérica: al pulsar "Enviar otro comprobante" se incrementa y todo el
+ * subárbol (incluido el estado de `useActionState`) se remonta desde cero.
+ */
 export default function PayForm({
   reservationId,
   paymentMethods,
@@ -27,29 +31,64 @@ export default function PayForm({
   reservationId: string;
   paymentMethods: MetodoVM[];
 }) {
-  const [state, formAction, pending] = useActionState(subirComprobanteAction, initialState);
-  const [selectedId, setSelectedId] = useState(paymentMethods[0]?.id ?? "");
-  const metodo = paymentMethods.find((m) => m.id === selectedId) ?? null;
+  const [formKey, setFormKey] = useState(0);
 
   if (paymentMethods.length === 0) {
     return (
-      <p className="text-sm text-[var(--color-texto-suave)]">
+      <p className="text-sm text-tinta-suave">
         No hay métodos de pago digitales disponibles en este momento. Contacta a la agencia.
       </p>
     );
   }
 
   return (
-    <form action={formAction} encType="multipart/form-data" className="flex flex-col gap-4">
+    <UploadForm
+      key={formKey}
+      reservationId={reservationId}
+      paymentMethods={paymentMethods}
+      onReset={() => setFormKey((k) => k + 1)}
+    />
+  );
+}
+
+function UploadForm({
+  reservationId,
+  paymentMethods,
+  onReset,
+}: {
+  reservationId: string;
+  paymentMethods: MetodoVM[];
+  onReset: () => void;
+}) {
+  const [state, formAction, pending] = useActionState(subirComprobanteAction, initialState);
+  const [selectedId, setSelectedId] = useState(paymentMethods[0]?.id ?? "");
+  const metodo = paymentMethods.find((m) => m.id === selectedId) ?? null;
+
+  if (state.success) {
+    return (
+      <Card className="flex flex-col items-start gap-3 border border-exito">
+        <p className="flex items-center gap-2 font-semibold text-exito">
+          <IconCheck aria-hidden="true" />
+          Comprobante enviado. La agencia lo revisará y te avisaremos por WhatsApp.
+        </p>
+        <button type="button" onClick={onReset} className={buttonClass("fantasma")}>
+          Enviar otro comprobante
+        </button>
+      </Card>
+    );
+  }
+
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="reservationId" value={reservationId} />
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Método de pago</span>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-tinta">Método de pago</span>
         <select
           name="paymentMethodId"
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          className="rounded-lg border border-[var(--color-borde)] px-3 py-2"
+          className={BOX_CLASS}
         >
           {paymentMethods.map((m) => (
             <option key={m.id} value={m.id}>
@@ -60,72 +99,45 @@ export default function PayForm({
       </label>
 
       {metodo ? (
-        <div className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-acento-suave)] p-3 text-sm">
-          <p className="font-medium">Datos de cobro</p>
+        <Card className="bg-marca-clara text-sm">
+          <p className="font-semibold text-tinta">Datos de cobro</p>
           <DetailsView value={metodo.details} />
           <input type="hidden" name="currency" value={metodo.currency} />
-        </div>
+        </Card>
       ) : null}
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Monto pagado</span>
-        <input
-          type="number"
-          name="amount"
-          min="0.01"
-          step="0.01"
-          required
-          className="rounded-lg border border-[var(--color-borde)] px-3 py-2"
-        />
-      </label>
+      <Field
+        label="Monto pagado"
+        name="amount"
+        type="number"
+        inputMode="decimal"
+        min="0.01"
+        step="0.01"
+        required
+      />
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Referencia</span>
-        <input
-          type="text"
-          name="reference"
-          minLength={4}
-          required
-          className="rounded-lg border border-[var(--color-borde)] px-3 py-2"
-        />
-      </label>
+      <Field label="Referencia" name="reference" type="text" minLength={4} required />
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Imagen del comprobante</span>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-tinta">Imagen del comprobante</span>
         <input
           type="file"
           name="image"
           accept="image/jpeg,image/png,image/webp"
           required
-          className="rounded-lg border border-[var(--color-borde)] px-3 py-2"
+          className={BOX_CLASS}
         />
       </label>
 
-      {state.error ? <p className="text-sm text-[var(--color-peligro)]">{state.error}</p> : null}
+      {state.error ? (
+        <p role="alert" className="text-sm font-medium text-peligro">
+          {state.error}
+        </p>
+      ) : null}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-[var(--color-acento)] px-5 py-3 font-medium text-white disabled:opacity-60"
-      >
-        {pending ? "Enviando..." : "Enviar comprobante"}
+      <button type="submit" disabled={pending} className={buttonClass("primario", "w-full")}>
+        {pending ? "Enviando…" : "Enviar comprobante"}
       </button>
     </form>
   );
-}
-
-function DetailsView({ value }: { value: JsonValue }) {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return (
-      <dl className="mt-1 grid grid-cols-1 gap-1">
-        {Object.entries(value).map(([key, val]) => (
-          <div key={key} className="flex justify-between gap-2">
-            <dt className="text-[var(--color-texto-suave)]">{key}</dt>
-            <dd className="font-medium">{String(val)}</dd>
-          </div>
-        ))}
-      </dl>
-    );
-  }
-  return <p>{String(value)}</p>;
 }

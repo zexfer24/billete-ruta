@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { requireAgencyUser } from "@/modules/auth";
 import { listAgencyDepartures, listRoutes } from "@/modules/catalog";
 import { listDrivers, listVehicles } from "@/modules/agencies";
 import { formatCaracasDateTime24 } from "@/lib/time";
+import { PanelFeedback } from "@/components/panel-feedback";
 import { createDepartureAction } from "./actions";
 
 /** Horas de salida en formato de 24 horas, cada media hora. */
@@ -12,14 +13,18 @@ const HORAS = Array.from({ length: 48 }, (_, i) => {
   return `${h}:${m}`;
 });
 
+/** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
+const OK_LABELS: Record<string, string> = {
+  "salida-creada": "Salida creada con éxito.",
+};
+
 export default async function SalidasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ver?: string }>;
+  searchParams: Promise<{ ver?: string; error?: string; ok?: string }>;
 }) {
-  const user = await requirePanelUser("departures.manage");
-  const agencyId = requireAgencyScope(user);
-  const { ver } = await searchParams;
+  const { agencyId } = await requireAgencyUser("departures.manage");
+  const { ver, error, ok } = await searchParams;
   const historial = ver === "historial";
 
   const ahora = new Date();
@@ -64,6 +69,8 @@ export default async function SalidasPage({
           ? "Viajes de los últimos 30 días, del más reciente al más antiguo."
           : `${salidas.length} salida(s) programada(s) de aquí en adelante.`}
       </p>
+
+      <PanelFeedback error={error} ok={ok ? OK_LABELS[ok] : undefined} />
 
       <div className="overflow-x-auto rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)]">
         <table className="w-full min-w-[900px] text-left text-sm">

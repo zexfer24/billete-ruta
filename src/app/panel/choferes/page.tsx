@@ -1,20 +1,26 @@
 import Link from "next/link";
 import { z } from "zod";
-import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { requireAgencyUser } from "@/modules/auth";
 import { listDrivers } from "@/modules/agencies";
 import { SidePanel } from "@/components/side-panel";
 import { ClickableRow } from "@/components/clickable-row";
+import { PanelFeedback } from "@/components/panel-feedback";
 import { createDriverAction, updateDriverAction } from "../flota/actions";
+
+/** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
+const OK_LABELS: Record<string, string> = {
+  "chofer-creado": "Chofer registrado con éxito.",
+  "chofer-actualizado": "Chofer actualizado con éxito.",
+};
 
 export default async function ChoferesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ editar?: string }>;
+  searchParams: Promise<{ editar?: string; error?: string; ok?: string }>;
 }) {
-  const user = await requirePanelUser("fleet.manage");
-  const agencyId = requireAgencyScope(user);
+  const { agencyId } = await requireAgencyUser("fleet.manage");
   const choferes = await listDrivers(agencyId);
-  const { editar } = await searchParams;
+  const { editar, error, ok } = await searchParams;
   const editarParsed = z.string().uuid().safeParse(editar);
   const chofer = editarParsed.success
     ? choferes.find((c) => c.id === editarParsed.data)
@@ -23,6 +29,8 @@ export default async function ChoferesPage({
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold tracking-tight">Choferes</h1>
+
+      <PanelFeedback error={editar ? undefined : error} ok={ok ? OK_LABELS[ok] : undefined} />
 
       <section className="overflow-x-auto rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)]">
         <table className="w-full min-w-[820px] text-left text-sm">
@@ -126,6 +134,7 @@ export default async function ChoferesPage({
           closeHref="/panel/choferes"
         >
           <form action={updateDriverAction} className="flex flex-col gap-4">
+            <PanelFeedback error={error} />
             <input type="hidden" name="driverId" value={chofer.id} />
             <label className="flex flex-col gap-1 text-sm font-medium">
               Nombre completo

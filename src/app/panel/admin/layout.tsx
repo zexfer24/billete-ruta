@@ -39,12 +39,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               {item.label}
             </Link>
           ))}
-          <Link
+          <a
             href="/panel/salir"
             className="ml-auto rounded-md px-3 py-1.5 text-sm font-medium text-[var(--color-peligro)] hover:bg-red-50"
           >
             Salir
-          </Link>
+          </a>
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>

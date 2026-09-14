@@ -1,19 +1,30 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
-import { ForbiddenError, requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { ForbiddenError, requireAgencyUser } from "@/modules/auth";
 import { getManifest } from "@/modules/catalog";
+import { availableTripActions } from "@/modules/trips";
 import { durationMinutes, formatCaracasDateTime24, formatDuration } from "@/lib/time";
+import { PanelFeedback } from "@/components/panel-feedback";
 import { registerArrivalAction, registerDepartureAction, startBoardingAction } from "../actions";
+
+/** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
+const OK_LABELS: Record<string, string> = {
+  embarque: "Embarque iniciado.",
+  salida: "Salida registrada.",
+  llegada: "Llegada registrada.",
+};
 
 export default async function ManifiestoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
-  const user = await requirePanelUser("trips.manage");
-  const agencyId = requireAgencyScope(user);
+  const { agencyId } = await requireAgencyUser("trips.manage");
   const { id } = await params;
+  const { error, ok } = await searchParams;
 
   const salida = await getManifest(id, agencyId).catch((error: unknown) => {
     if (error instanceof ForbiddenError) notFound();
@@ -27,6 +38,15 @@ export default async function ManifiestoPage({
     salida.tripLog?.departedAt && salida.tripLog?.arrivedAt
       ? formatDuration(durationMinutes(salida.tripLog.departedAt, salida.tripLog.arrivedAt))
       : null;
+
+  const acciones = availableTripActions({
+    status: salida.status,
+    boardingStartedAt: salida.tripLog?.boardingStartedAt ?? null,
+    departedAt: salida.tripLog?.departedAt ?? null,
+    arrivedAt: salida.tripLog?.arrivedAt ?? null,
+  });
+  const sinAcciones =
+    !acciones.startBoarding && !acciones.registerDeparture && !acciones.registerArrival;
 
   return (
     <div className="flex flex-col gap-8">
@@ -44,6 +64,8 @@ export default async function ManifiestoPage({
           Ir a la pantalla de abordaje
         </Link>
       </div>
+
+      <PanelFeedback error={error} ok={ok ? OK_LABELS[ok] : undefined} />
 
       <section className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">
         <h2 className="text-lg font-semibold">Recorrido</h2>
@@ -63,59 +85,71 @@ export default async function ManifiestoPage({
         </dl>
 
         <div className="mt-5 flex flex-wrap gap-3">
-          <details>
-            <summary className="inline-block cursor-pointer rounded-lg bg-[var(--color-acento)] px-4 py-2 text-sm font-medium text-white">
-              Iniciar embarque
-            </summary>
-            <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-borde)] p-3 text-sm">
-              <p>¿Confirmas iniciar el embarque de esta salida?</p>
-              <form action={startBoardingAction}>
-                <input type="hidden" name="departureId" value={salida.id} />
-                <button
-                  type="submit"
-                  className="rounded-md bg-[var(--color-exito)] px-3 py-1.5 font-medium text-white"
-                >
-                  Sí, iniciar
-                </button>
-              </form>
-            </div>
-          </details>
+          {acciones.startBoarding ? (
+            <details>
+              <summary className="inline-block cursor-pointer rounded-lg bg-[var(--color-acento)] px-4 py-2 text-sm font-medium text-white">
+                Iniciar embarque
+              </summary>
+              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-borde)] p-3 text-sm">
+                <p>¿Confirmas iniciar el embarque de esta salida?</p>
+                <form action={startBoardingAction}>
+                  <input type="hidden" name="departureId" value={salida.id} />
+                  <button
+                    type="submit"
+                    className="rounded-md bg-[var(--color-exito)] px-3 py-1.5 font-medium text-white"
+                  >
+                    Sí, iniciar
+                  </button>
+                </form>
+              </div>
+            </details>
+          ) : null}
 
-          <details>
-            <summary className="inline-block cursor-pointer rounded-lg bg-[var(--color-acento)] px-4 py-2 text-sm font-medium text-white">
-              Registrar salida
-            </summary>
-            <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-borde)] p-3 text-sm">
-              <p>¿Confirmas registrar la salida? Las reservas sin abordaje quedarán sin efecto.</p>
-              <form action={registerDepartureAction}>
-                <input type="hidden" name="departureId" value={salida.id} />
-                <button
-                  type="submit"
-                  className="rounded-md bg-[var(--color-exito)] px-3 py-1.5 font-medium text-white"
-                >
-                  Sí, registrar salida
-                </button>
-              </form>
-            </div>
-          </details>
+          {acciones.registerDeparture ? (
+            <details>
+              <summary className="inline-block cursor-pointer rounded-lg bg-[var(--color-acento)] px-4 py-2 text-sm font-medium text-white">
+                Registrar salida
+              </summary>
+              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-borde)] p-3 text-sm">
+                <p>¿Confirmas registrar la salida? Las reservas sin abordaje quedarán sin efecto.</p>
+                <form action={registerDepartureAction}>
+                  <input type="hidden" name="departureId" value={salida.id} />
+                  <button
+                    type="submit"
+                    className="rounded-md bg-[var(--color-exito)] px-3 py-1.5 font-medium text-white"
+                  >
+                    Sí, registrar salida
+                  </button>
+                </form>
+              </div>
+            </details>
+          ) : null}
 
-          <details>
-            <summary className="inline-block cursor-pointer rounded-lg bg-[var(--color-acento)] px-4 py-2 text-sm font-medium text-white">
-              Registrar llegada
-            </summary>
-            <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-borde)] p-3 text-sm">
-              <p>¿Confirmas registrar la llegada de la unidad?</p>
-              <form action={registerArrivalAction}>
-                <input type="hidden" name="departureId" value={salida.id} />
-                <button
-                  type="submit"
-                  className="rounded-md bg-[var(--color-exito)] px-3 py-1.5 font-medium text-white"
-                >
-                  Sí, registrar llegada
-                </button>
-              </form>
-            </div>
-          </details>
+          {acciones.registerArrival ? (
+            <details>
+              <summary className="inline-block cursor-pointer rounded-lg bg-[var(--color-acento)] px-4 py-2 text-sm font-medium text-white">
+                Registrar llegada
+              </summary>
+              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-borde)] p-3 text-sm">
+                <p>¿Confirmas registrar la llegada de la unidad?</p>
+                <form action={registerArrivalAction}>
+                  <input type="hidden" name="departureId" value={salida.id} />
+                  <button
+                    type="submit"
+                    className="rounded-md bg-[var(--color-exito)] px-3 py-1.5 font-medium text-white"
+                  >
+                    Sí, registrar llegada
+                  </button>
+                </form>
+              </div>
+            </details>
+          ) : null}
+
+          {sinAcciones ? (
+            <p className="text-sm text-[var(--color-texto-suave)]">
+              {salida.status === "CANCELADA" ? "Salida cancelada." : "Recorrido cerrado."}
+            </p>
+          ) : null}
         </div>
       </section>
 

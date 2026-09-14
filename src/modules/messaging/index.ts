@@ -3,6 +3,7 @@ export {
   TEMPLATE_KEYS,
   isTemplateKey,
   renderPreview,
+  renderStoredPreview,
   templateButtons,
   templateParams,
 } from "./templates";
@@ -18,3 +19,5 @@ export { enqueueMessage } from "./enqueue";
 export type { EnqueueInput } from "./enqueue";
 export { deliverPendingMessages } from "./deliver";
 export type { DeliveryResult } from "./deliver";
+export { listMessagesForPhone } from "./queries";
+export type { PassengerMessage } from "./queries";

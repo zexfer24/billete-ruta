@@ -1,6 +1,9 @@
 import { listDocuments } from "@/modules/accounts";
 import { requirePassenger } from "@/modules/auth";
 import { formatCaracasDateTime24 } from "@/lib/time";
+import type { StatusTone } from "@/lib/labels";
+import { buttonClass, Card, Pill } from "@/components/ui";
+import { IconDocument } from "@/components/icons";
 import { subirDocumentoAction } from "./actions";
 
 const ETIQUETAS: Record<string, string> = {
@@ -17,130 +20,120 @@ export default async function DocumentosPage({
   const params = await searchParams;
   const documentos = await listDocuments(pasajero.id);
 
-  const tieneCedula = documentos.some((d) => d.type === "CEDULA");
-  const tienePermiso = documentos.some((d) => d.type === "PERMISO_VIAJE");
+  const cedula = documentos.find((doc) => doc.type === "CEDULA") ?? null;
+  const permiso = documentos.find((doc) => doc.type === "PERMISO_VIAJE") ?? null;
 
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Mis documentos</h1>
-        <p className="mt-1 text-[var(--color-texto-suave)]">
-          La foto de tu cédula es obligatoria para concretar una reserva. El permiso de viaje
-          solo hace falta si en el grupo viaja un menor de edad.
+        <h1 className="text-2xl font-extrabold text-tinta">Mis documentos</h1>
+        <p className="mt-1 text-tinta-suave">
+          La foto de tu cédula es obligatoria para concretar una reserva. El permiso de viaje solo
+          hace falta si en el grupo viaja un menor de edad.
         </p>
       </div>
 
       {params.error ? (
-        <p className="rounded-lg border border-[var(--color-peligro)] bg-[var(--color-superficie)] px-4 py-3 text-sm text-[var(--color-peligro)]">
+        <div role="alert" className="rounded-tarjeta border border-peligro bg-white p-5 text-peligro shadow-sm">
           {params.error}
-        </p>
+        </div>
       ) : null}
       {params.ok ? (
-        <p className="rounded-lg border border-[var(--color-exito)] bg-[var(--color-superficie)] px-4 py-3 text-sm text-[var(--color-exito)]">
+        <div role="status" className="rounded-tarjeta border border-exito bg-white p-5 text-exito shadow-sm">
           Documento cargado correctamente.
-        </p>
+        </div>
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2">
-        <TarjetaEstado titulo="Foto de cédula" obligatorio cargado={tieneCedula} />
-        <TarjetaEstado titulo="Permiso de viaje" obligatorio={false} cargado={tienePermiso} />
+        <TarjetaEstado titulo="Foto de cédula" obligatorio documento={cedula} />
+        <TarjetaEstado titulo="Permiso de viaje" obligatorio={false} documento={permiso} />
       </section>
 
-      <section className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-6">
-        <h2 className="font-semibold">Cargar documento</h2>
-        <form
-          action={subirDocumentoAction}
-          encType="multipart/form-data"
-          className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end"
-        >
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="font-medium">Tipo de documento</span>
+      <Card>
+        <h2 className="font-bold text-tinta">Cargar documento</h2>
+        <form action={subirDocumentoAction} className="mt-4 flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-tinta">Tipo de documento</span>
             <select
               name="type"
               required
-              className="rounded-lg border border-[var(--color-borde)] px-3 py-2"
               defaultValue="CEDULA"
+              className="min-h-11 rounded-xl border border-borde bg-white px-4 text-base text-tinta focus:border-marca focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca motion-reduce:transition-none"
             >
               <option value="CEDULA">Foto de cédula</option>
               <option value="PERMISO_VIAJE">Permiso de viaje</option>
             </select>
           </label>
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="font-medium">Archivo (imagen)</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-tinta">Archivo</span>
             <input
               type="file"
               name="file"
               accept="image/jpeg,image/png,image/webp"
               required
-              className="rounded-lg border border-[var(--color-borde)] px-3 py-2"
+              className="min-h-11 rounded-xl border border-borde px-4 py-2 text-base text-tinta file:mr-3 file:rounded-pastilla file:border-0 file:bg-marca-clara file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-marca-oscura focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca motion-reduce:transition-none"
             />
+            <span className="text-sm text-tinta-suave">JPG, PNG o WebP de hasta 5 MB</span>
           </label>
-          <button
-            type="submit"
-            className="rounded-lg bg-[var(--color-acento)] px-5 py-2 font-medium text-white"
-          >
-            Cargar
+          <button type="submit" className={buttonClass("primario")}>
+            Cargar documento
           </button>
         </form>
-      </section>
+      </Card>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-semibold">Documentos cargados</h2>
-        {documentos.length === 0 ? (
-          <p className="text-sm text-[var(--color-texto-suave)]">
-            Todavía no has cargado documentos.
-          </p>
-        ) : (
-          <ul className="grid gap-4 sm:grid-cols-2">
+      {documentos.length > 0 ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-tinta-suave">
+            Documentos cargados
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
             {documentos.map((doc) => (
-              <li
-                key={doc.id}
-                className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-4"
-              >
-                <p className="font-medium">{ETIQUETAS[doc.type] ?? doc.type}</p>
-                <p className="tabular text-sm text-[var(--color-texto-suave)]">
+              <Card key={doc.id} className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <IconDocument aria-hidden="true" className="shrink-0 text-marca" />
+                  <p className="font-bold text-tinta">{ETIQUETAS[doc.type] ?? doc.type}</p>
+                </div>
+                <p className="text-sm text-tinta-suave">
                   Cargado el {formatCaracasDateTime24(doc.uploadedAt)}
-                </p>
-                <p className="mt-1 text-sm">
-                  Estado: {doc.verifiedAt ? "Verificado" : "Pendiente de verificación"}
                 </p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`/api/archivos/${doc.filePath}`}
                   alt={ETIQUETAS[doc.type] ?? doc.type}
-                  className="mt-3 max-h-48 w-full rounded-lg border border-[var(--color-borde)] object-contain"
+                  className="mt-1 max-h-48 w-full rounded-xl border border-borde object-contain"
                 />
-              </li>
+              </Card>
             ))}
-          </ul>
-        )}
-      </section>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function TarjetaEstado({
-  titulo,
-  obligatorio,
-  cargado,
-}: {
+interface TarjetaEstadoProps {
   titulo: string;
   obligatorio: boolean;
-  cargado: boolean;
-}) {
+  documento: { uploadedAt: Date } | null;
+}
+
+/** Tarjeta de estado de un tipo de documento, con borde e icono según si falta o está cargado. */
+function TarjetaEstado({ titulo, obligatorio, documento }: TarjetaEstadoProps) {
+  const cargado = documento !== null;
+  const borde = cargado ? "border-exito" : obligatorio ? "border-alerta" : "border-transparent";
+  const tono: StatusTone = cargado ? "exito" : obligatorio ? "alerta" : "neutro";
+  const etiqueta = cargado ? "Cargado" : obligatorio ? "Obligatorio" : "Opcional";
+
   return (
-    <div className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-4">
-      <p className="font-medium">{titulo}</p>
-      <p className="text-sm text-[var(--color-texto-suave)]">
-        {obligatorio ? "Obligatorio" : "Opcional (solo si viaja un menor de edad)"}
-      </p>
-      <p
-        className={`mt-2 text-sm font-medium ${
-          cargado ? "text-[var(--color-exito)]" : "text-[var(--color-alerta)]"
-        }`}
-      >
-        {cargado ? "Cargado" : "Falta cargar"}
-      </p>
-    </div>
+    <Card className={`flex flex-col gap-2 border-2 ${borde}`}>
+      <div className="flex items-center gap-3">
+        <IconDocument aria-hidden="true" className="shrink-0 text-marca" />
+        <p className="font-bold text-tinta">{titulo}</p>
+      </div>
+      <Pill tone={tono}>{etiqueta}</Pill>
+      {cargado && documento ? (
+        <p className="text-sm text-tinta-suave">Cargado el {formatCaracasDateTime24(documento.uploadedAt)}</p>
+      ) : null}
+    </Card>
   );
 }

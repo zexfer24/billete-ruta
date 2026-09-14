@@ -98,3 +98,21 @@ export function formatDuration(minutes: number): string {
   if (restante === 0) return `${horas} h`;
   return `${horas} h ${restante} min`;
 }
+
+/** Minutos completos que faltan para `date`; negativo si ya pasó. */
+export function minutesUntil(date: Date, now: Date = new Date()): number {
+  return Math.floor((date.getTime() - now.getTime()) / 60_000);
+}
+
+/** Texto de salida relativa para la línea de tiempo del pasajero. */
+export function formatRelativeDeparture(date: Date, now: Date = new Date()): string {
+  const diffMs = date.getTime() - now.getTime();
+  if (diffMs < 0) return "Salió";
+  if (diffMs < 60_000) return "Sale ahora";
+  const minutos = minutesUntil(date, now);
+  if (minutos < 60) return `Sale en ${minutos} min`;
+  if (formatCaracasDate(date) === formatCaracasDate(now)) {
+    return `Sale a las ${formatCaracasTime24(date)}`;
+  }
+  return formatCaracas(date, "dd/MM HH:mm");
+}

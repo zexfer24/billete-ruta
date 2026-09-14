@@ -4,6 +4,7 @@ import {
   TEMPLATE_KEYS,
   isTemplateKey,
   renderPreview,
+  renderStoredPreview,
   templateButtons,
   templateParams,
 } from "@/modules/messaging/templates";
@@ -72,5 +73,30 @@ describe("renderPreview", () => {
     });
     expect(texto).toContain("$ 50,00");
     expect(texto).toContain("$ 92,50");
+  });
+});
+
+describe("renderStoredPreview", () => {
+  it("nunca lanza y rellena los parámetros ausentes con puntos suspensivos", () => {
+    const texto = renderStoredPreview("reserva_condicional", {
+      nombre: "Ana",
+      serial: "TR-0001",
+    });
+    expect(texto).toContain("Ana");
+    expect(texto).toContain("TR-0001");
+    expect(texto).toContain("…");
+    expect(texto).not.toContain("{{");
+  });
+
+  it("con parámetros completos devuelve lo mismo que renderPreview", () => {
+    const params = {
+      nombre: "Ana",
+      serial: "TR-0001",
+      monto: "$ 50,00",
+      salida: "13/09/2026 22:00",
+    };
+    expect(renderStoredPreview("reserva_condicional", params)).toBe(
+      renderPreview("reserva_condicional", params),
+    );
   });
 });

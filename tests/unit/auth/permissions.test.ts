@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_PERMISSIONS, ForbiddenError, assertCan, can } from "@/modules/auth/permissions";
+import { ALL_PERMISSIONS, ForbiddenError, assertCan, can, panelHomeFor } from "@/modules/auth/permissions";
 
 describe("matriz de permisos", () => {
   it("el admin del terminal supervisa y configura", () => {
@@ -63,5 +63,15 @@ describe("assertCan", () => {
 
   it("no lanza cuando el permiso existe", () => {
     expect(() => assertCan("OPERADOR", "payments.review")).not.toThrow();
+  });
+});
+
+describe("panelHomeFor", () => {
+  it("el admin va a su tablero", () => {
+    expect(panelHomeFor("ADMIN")).toBe("/panel/admin/tablero");
+  });
+
+  it("el operador va al resumen del panel", () => {
+    expect(panelHomeFor("OPERADOR")).toBe("/panel");
   });
 });

@@ -9,6 +9,8 @@ import {
   formatCaracasDateTime24,
   formatCaracasTime24,
   formatDuration,
+  formatRelativeDeparture,
+  minutesUntil,
 } from "@/lib/time";
 
 describe("formato en hora de Caracas", () => {
@@ -83,5 +85,62 @@ describe("duración", () => {
     expect(formatDuration(45)).toBe("45 min");
     expect(formatDuration(120)).toBe("2 h");
     expect(formatDuration(0)).toBe("0 min");
+  });
+});
+
+describe("minutesUntil", () => {
+  const now = new Date("2026-09-10T14:00:00Z");
+
+  it("devuelve un número positivo cuando la fecha está por venir", () => {
+    expect(minutesUntil(new Date("2026-09-10T14:15:00Z"), now)).toBe(15);
+  });
+
+  it("devuelve un número negativo cuando la fecha ya pasó", () => {
+    expect(minutesUntil(new Date("2026-09-10T13:50:00Z"), now)).toBe(-10);
+  });
+
+  it("devuelve cero cuando la fecha es el mismo instante", () => {
+    expect(minutesUntil(now, now)).toBe(0);
+  });
+});
+
+describe("formatRelativeDeparture", () => {
+  // now = 10:00 en Caracas del 10/09/2026 (UTC-4).
+  const now = new Date("2026-09-10T14:00:00Z");
+
+  it("dice 'Salió' cuando la diferencia es negativa", () => {
+    expect(formatRelativeDeparture(new Date("2026-09-10T13:50:00Z"), now)).toBe("Salió");
+  });
+
+  it("dice 'Sale ahora' cuando falta menos de un minuto", () => {
+    expect(formatRelativeDeparture(new Date("2026-09-10T14:00:30Z"), now)).toBe("Sale ahora");
+  });
+
+  it("dice 'Sale en N min' cuando faltan menos de 60 minutos", () => {
+    expect(formatRelativeDeparture(new Date("2026-09-10T14:15:00Z"), now)).toBe("Sale en 15 min");
+  });
+
+  it("dice 'Sale a las HH:mm' cuando es el mismo día en Caracas", () => {
+    // 13:00 en Caracas del mismo 10/09/2026, 3 h después de `now`.
+    expect(formatRelativeDeparture(new Date("2026-09-10T17:00:00Z"), now)).toBe(
+      "Sale a las 13:00",
+    );
+  });
+
+  it("dice 'dd/MM HH:mm' cuando es otro día", () => {
+    // 12:00 en Caracas del 11/09/2026, más de 60 min después y otro día.
+    expect(formatRelativeDeparture(new Date("2026-09-11T16:00:00Z"), now)).toBe("11/09 12:00");
+  });
+
+  it("con `now` a las 23:50 en Caracas y salida a las 00:20 del día siguiente, cae en 'Sale en 30 min'", () => {
+    const nowTarde = new Date("2026-09-11T03:50:00Z"); // 23:50 Caracas del 10/09/2026
+    const salida = new Date("2026-09-11T04:20:00Z"); // 00:20 Caracas del 11/09/2026
+    expect(formatRelativeDeparture(salida, nowTarde)).toBe("Sale en 30 min");
+  });
+
+  it("con `now` a las 23:00 en Caracas y salida a la 01:00 del día siguiente, cae en 'dd/MM HH:mm'", () => {
+    const nowTarde = new Date("2026-09-11T03:00:00Z"); // 23:00 Caracas del 10/09/2026
+    const salida = new Date("2026-09-11T05:00:00Z"); // 01:00 Caracas del 11/09/2026
+    expect(formatRelativeDeparture(salida, nowTarde)).toBe("11/09 01:00");
   });
 });

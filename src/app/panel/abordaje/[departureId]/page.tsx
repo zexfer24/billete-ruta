@@ -1,4 +1,4 @@
-import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
+import { requireAgencyUser } from "@/modules/auth";
 import { AbordajeScanner } from "./scanner";
 
 export default async function AbordajePage({
@@ -6,8 +6,7 @@ export default async function AbordajePage({
 }: {
   params: Promise<{ departureId: string }>;
 }) {
-  const user = await requirePanelUser("boarding.manage");
-  requireAgencyScope(user);
+  await requireAgencyUser("boarding.manage");
   const { departureId } = await params;
 
   return (
