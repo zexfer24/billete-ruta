@@ -4,14 +4,19 @@ export interface AgencyColor {
   fg: string;
 }
 
-/** Paleta de bloques de agencia, estilo "línea 25 / 38 / B" de Transit. */
+/**
+ * Paleta de bloques de agencia (spec 3.5): rojo, azul, verde, naranja,
+ * turquesa y pizarra. Todos llevan texto blanco con contraste de 5.4:1 o más
+ * y ninguno se parece al morado de marca, para no confundir una agencia con
+ * la identidad del terminal.
+ */
 export const AGENCY_COLORS: readonly AgencyColor[] = [
-  { bg: "#d41f1f", fg: "#ffffff" },
-  { bg: "#0b62b5", fg: "#ffffff" },
-  { bg: "#2e8b3a", fg: "#ffffff" },
-  { bg: "#d9581d", fg: "#ffffff" },
-  { bg: "#6b3fa0", fg: "#ffffff" },
-  { bg: "#0e8a8a", fg: "#ffffff" },
+  { bg: "#C62828", fg: "#ffffff" },
+  { bg: "#0B5CAD", fg: "#ffffff" },
+  { bg: "#1E7A34", fg: "#ffffff" },
+  { bg: "#B3480C", fg: "#ffffff" },
+  { bg: "#0B7285", fg: "#ffffff" },
+  { bg: "#44546A", fg: "#ffffff" },
 ];
 
 /**

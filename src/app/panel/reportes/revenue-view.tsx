@@ -1,191 +1,153 @@
+import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import type { RouteRevenueRow } from "@/modules/reports";
-import {
-  DASHBOARD_PERIODS,
-  DASHBOARD_PERIOD_LABELS,
-  caracasDayInputValue,
-  caracasHourValue,
-  formatCaracasDateTime24,
-} from "@/lib/time";
 import { formatMoney, round2, ZERO } from "@/lib/decimal";
+import { IconCash, IconChart, IconRoute } from "@/components/icons";
 import {
   EmptyState,
-  PANEL_LABEL_CLASS,
-  PanelTabs,
+  MobileCard,
+  PANEL_TD_CLASS,
+  PANEL_TH_CLASS,
+  ProgressBar,
   StatCard,
   TableShell,
   panelButtonClass,
-  panelInputClass,
 } from "@/components/panel-ui";
+import { cx } from "@/components/ui-classes";
+import { plural } from "../_shared/day-label";
+import { ReportRangeLine } from "./report-range-line";
 import type { ReportRange } from "./range";
 
-/** Horas "00" a "23" para los <select> de filtro, en formato de 24 horas. */
-const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
-
-const BASE_HREF = "/panel/reportes?vista=recaudacion";
-
-function csvField(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
-}
-
-function buildCsv(filas: RouteRevenueRow[]): string {
-  const header = ["Ruta", "Origen", "Destino", "Total USD", "Pagos"];
-  const lines = filas.map((f) =>
-    [f.routeName, f.origin, f.destination, f.totalUsd.toString(), String(f.payments)]
-      .map(csvField)
-      .join(","),
-  );
-  return [header.join(","), ...lines].join("\n");
-}
-
-/** Porcentaje entero de `parte` sobre `total`, calculado con `Prisma.Decimal`. "—" si el total es cero. */
+/** Porcentaje entero de `parte` sobre `total`, calculado con `Prisma.Decimal`. `null` si el total es cero. */
 function sharePercent(parte: Prisma.Decimal, total: Prisma.Decimal): number | null {
   if (total.isZero()) return null;
   return parte.mul(100).div(total).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber();
 }
 
-/** Vista de recaudación por ruta: accesos de periodo, rango personalizado, indicadores y tabla. */
-export function RevenueView({ range, filas }: { range: ReportRange; filas: RouteRevenueRow[] }) {
+/** Barra de participación de una ruta en el total del periodo. */
+function Share({ percent }: { percent: number | null }) {
+  if (percent === null) return <span className="text-tinta-suave">Sin cobros</span>;
+  return <ProgressBar value={percent} max={100} label={`${percent} % del total`} />;
+}
+
+/**
+ * Recaudación por ruta: el rango aplicado, tres cifras del periodo y la tabla
+ * (tarjetas en el teléfono) con la participación de cada ruta. Sin cobros,
+ * solo un estado vacío que sugiere mirar un periodo más largo.
+ */
+export function RevenueView({
+  range,
+  filas,
+  downloadHref,
+}: {
+  range: ReportRange;
+  filas: RouteRevenueRow[];
+  downloadHref: string;
+}) {
+  if (filas.length === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        <ReportRangeLine range={range} />
+        <EmptyState
+          icon={<IconCash />}
+          title="No hubo cobros en este periodo"
+          description="Aquí se suman los comprobantes aprobados y los cobros en efectivo. Prueba con un periodo más largo."
+          action={
+            range.preset !== "30d" ? (
+              <Link href="/panel/reportes?vista=recaudacion&periodo=30d" className={panelButtonClass("secundario")}>
+                Ver los últimos 30 días
+              </Link>
+            ) : undefined
+          }
+        />
+      </div>
+    );
+  }
+
   const total = filas.reduce((acc, f) => round2(acc.add(f.totalUsd)), ZERO);
   const totalPagos = filas.reduce((acc, f) => acc + f.payments, 0);
-  const csv = buildCsv(filas);
-
-  const periodoTabs = [
-    { href: BASE_HREF, label: "Últimas 24 h", active: range.preset === "24h" },
-    ...DASHBOARD_PERIODS.map((periodo) => ({
-      href: `${BASE_HREF}&periodo=${periodo}`,
-      label: DASHBOARD_PERIOD_LABELS[periodo],
-      active: range.preset === periodo,
-    })),
-  ];
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PanelTabs label="Periodo" tabs={periodoTabs} />
-        <a
-          href={`data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`}
-          download="recaudacion.csv"
-          className={panelButtonClass("secundario")}
-        >
-          Exportar CSV
-        </a>
-      </div>
-
-      <form className="flex flex-wrap items-end gap-3" method="get">
-        <input type="hidden" name="vista" value="recaudacion" />
-        <label className={PANEL_LABEL_CLASS}>
-          Desde
-          <input
-            type="date"
-            name="desde"
-            defaultValue={caracasDayInputValue(range.from)}
-            className={panelInputClass()}
-          />
-        </label>
-        <label className={PANEL_LABEL_CLASS}>
-          Hora
-          <select
-            name="horaDesde"
-            defaultValue={caracasHourValue(range.from)}
-            className={panelInputClass()}
-          >
-            {HOURS.map((h) => (
-              <option key={h} value={h}>
-                {h}:00
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={PANEL_LABEL_CLASS}>
-          Hasta
-          <input
-            type="date"
-            name="hasta"
-            defaultValue={caracasDayInputValue(range.to)}
-            className={panelInputClass()}
-          />
-        </label>
-        <label className={PANEL_LABEL_CLASS}>
-          Hora
-          <select
-            name="horaHasta"
-            defaultValue={caracasHourValue(range.to)}
-            className={panelInputClass()}
-          >
-            {HOURS.map((h) => (
-              <option key={h} value={h}>
-                {h}:59
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className={panelButtonClass("secundario")}>
-          Aplicar rango
-        </button>
-      </form>
-
-      <p className="text-sm text-[var(--color-texto-suave)]">
-        Del {formatCaracasDateTime24(range.from)} al {formatCaracasDateTime24(range.to)}
-      </p>
+      <ReportRangeLine range={range} downloadHref={downloadHref} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Total recaudado" value={formatMoney(total, "USD")} />
-        <StatCard label="Pagos registrados" value={totalPagos} />
-        <StatCard label="Rutas con ingresos" value={filas.length} />
+        <StatCard
+          label="Total cobrado"
+          value={formatMoney(total, "USD")}
+          detail="Comprobantes aprobados y cobros en efectivo"
+          tone="marca"
+          icon={<IconCash />}
+        />
+        <StatCard label="Pagos registrados" value={totalPagos} detail="Cada abono cuenta por separado" icon={<IconChart />} />
+        <StatCard
+          label="Rutas con cobros"
+          value={filas.length}
+          detail={plural(filas.length, "ruta vendió en el periodo", "rutas vendieron en el periodo")}
+          icon={<IconRoute />}
+        />
       </div>
 
-      <TableShell>
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="border-b border-[var(--color-borde)] text-[var(--color-texto-suave)]">
+      <TableShell
+        mobile={
+          <ul className="flex flex-col gap-3">
+            {filas.map((f) => (
+              <MobileCard
+                key={f.routeId}
+                title={f.routeName}
+                subtitle={`${f.origin} → ${f.destination}`}
+                details={[
+                  { label: "Total cobrado", value: formatMoney(f.totalUsd, "USD") },
+                  { label: "Pagos", value: f.payments },
+                ]}
+                action={
+                  <div className="w-full">
+                    <Share percent={sharePercent(f.totalUsd, total)} />
+                  </div>
+                }
+              />
+            ))}
+          </ul>
+        }
+      >
+        <table className="w-full min-w-[680px]">
+          <thead className="border-b border-borde bg-lienzo">
             <tr>
-              <th className="px-4 py-3 font-medium">Ruta</th>
-              <th className="px-4 py-3 font-medium">Total USD</th>
-              <th className="px-4 py-3 font-medium">Pagos</th>
-              <th className="px-4 py-3 font-medium">Participación</th>
+              <th scope="col" className={PANEL_TH_CLASS}>Ruta</th>
+              <th scope="col" className={cx(PANEL_TH_CLASS, "text-right")}>Total cobrado</th>
+              <th scope="col" className={cx(PANEL_TH_CLASS, "text-right")}>Pagos</th>
+              <th scope="col" className={cx(PANEL_TH_CLASS, "w-64")}>Parte del total</th>
             </tr>
           </thead>
           <tbody>
-            {filas.map((f) => {
-              const porcentaje = sharePercent(f.totalUsd, total);
-              return (
-                <tr key={f.routeId} className="border-b border-[var(--color-borde)] last:border-0">
-                  <td className="px-4 py-3">
-                    {f.routeName} ({f.origin} → {f.destination})
-                  </td>
-                  <td className="tabular px-4 py-3">{formatMoney(f.totalUsd, "USD")}</td>
-                  <td className="tabular px-4 py-3">{f.payments}</td>
-                  <td className="px-4 py-3">
-                    {porcentaje === null ? (
-                      "—"
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span
-                          role="img"
-                          aria-label={`${porcentaje} % del total`}
-                          className="h-1 rounded-full bg-[var(--color-acento)]"
-                          style={{ width: `${porcentaje}%` }}
-                        />
-                        <span className="tabular">{porcentaje} %</span>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {filas.map((f) => (
+              <tr key={f.routeId} className="border-b border-borde last:border-0">
+                <td className={PANEL_TD_CLASS}>
+                  <p className="font-semibold">{f.routeName}</p>
+                  <p className="text-sm text-tinta-suave">
+                    {f.origin} → {f.destination}
+                  </p>
+                </td>
+                <td className={cx(PANEL_TD_CLASS, "tabular text-right font-semibold")}>{formatMoney(f.totalUsd, "USD")}</td>
+                <td className={cx(PANEL_TD_CLASS, "tabular text-right")}>{f.payments}</td>
+                <td className={PANEL_TD_CLASS}>
+                  <Share percent={sharePercent(f.totalUsd, total)} />
+                </td>
+              </tr>
+            ))}
           </tbody>
-          <tfoot>
-            <tr className="border-t border-[var(--color-borde)] font-semibold">
-              <td className="px-4 py-3">Total</td>
-              <td className="tabular px-4 py-3">{formatMoney(total, "USD")}</td>
-              <td className="tabular px-4 py-3">{totalPagos}</td>
-              <td className="px-4 py-3" />
+          <tfoot className="border-t-2 border-borde bg-lienzo">
+            <tr>
+              <th scope="row" className={cx(PANEL_TD_CLASS, "text-left font-bold")}>
+                Total
+              </th>
+              <td className={cx(PANEL_TD_CLASS, "tabular text-right font-bold")}>{formatMoney(total, "USD")}</td>
+              <td className={cx(PANEL_TD_CLASS, "tabular text-right font-bold")}>{totalPagos}</td>
+              <td className={PANEL_TD_CLASS} />
             </tr>
           </tfoot>
         </table>
       </TableShell>
-
-      {filas.length === 0 ? <EmptyState title="No hay pagos registrados en este rango." /> : null}
     </div>
   );
 }

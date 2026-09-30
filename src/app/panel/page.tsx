@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { requireAgencyUser } from "@/modules/auth";
 import { agencyDashboard, agencyFleetStatus, listAgencyActivity, listRecentTickets } from "@/modules/reports";
 import { listAgencyDepartures, listRoutes } from "@/modules/catalog";
 import { listDrivers, listVehicles } from "@/modules/agencies";
-import { formatMoney } from "@/lib/decimal";
+import { countPendingProofs } from "@/modules/payments";
+import { firstNamePart } from "@/lib/identity";
 import {
   caracasDayRange,
   caracasPeriodRange,
@@ -15,17 +17,25 @@ import {
 } from "@/lib/time";
 import { SidePanel } from "@/components/side-panel";
 import { PanelFeedback } from "@/components/panel-feedback";
-import { IconBus, IconCalendar, IconCash, IconStore, IconUsers, IconWarning } from "@/components/icons";
-import { PanelPageHeader, PanelTabs, StatCard, panelButtonClass } from "@/components/panel-ui";
+import { SkeletonText } from "@/components/skeleton";
+import { IconBus, IconCalendar, IconCash, IconRefresh, IconStore, IconUsers } from "@/components/icons";
+import { PanelPageHeader, PanelTabs, panelButtonClass } from "@/components/panel-ui";
 import { panelFeedbackUrl } from "./feedback";
 import { CashPaymentForm } from "./_forms/cash-payment-form";
 import { DepartureForm } from "./_forms/departure-form";
 import { VehicleForm } from "./_forms/vehicle-form";
 import { DriverForm } from "./_forms/driver-form";
+import { AttentionBlock } from "./_dashboard/attention-block";
+import { FiguresBlock } from "./_dashboard/figures-block";
 import { FleetBlock } from "./_dashboard/fleet-block";
 import { TicketsBlock } from "./_dashboard/tickets-block";
 import { TripsTodayBlock } from "./_dashboard/trips-today-block";
 import { ActivityBlock } from "./_dashboard/activity-block";
+import { Collapsible } from "./_dashboard/collapsible";
+import { AttentionSkeleton, FiguresSkeleton, ListRowsSkeleton, SectionSkeleton } from "./_dashboard/skeletons";
+import { errorMessage, firstParam, okMessage, type RawSearchParam } from "./_dashboard/search-params";
+
+export const metadata = { title: "Tablero" };
 
 /** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
 const OK_LABELS: Record<string, string> = {
@@ -36,6 +46,13 @@ const OK_LABELS: Record<string, string> = {
   "chofer-creado": "Chofer registrado con éxito.",
 };
 
+/** El periodo en palabras, para títulos y frases ("Resumen de hoy"). */
+const PERIOD_PHRASES: Record<DashboardPeriod, string> = {
+  hoy: "hoy",
+  "7d": "los últimos 7 días",
+  "30d": "los últimos 30 días",
+};
+
 type Registrar = "cobro" | "salida" | "vehiculo" | "chofer";
 
 const REGISTRAR_VALUES: readonly Registrar[] = ["cobro", "salida", "vehiculo", "chofer"];
@@ -44,174 +61,209 @@ function registrarFromSlug(slug: string | undefined): Registrar | undefined {
   return REGISTRAR_VALUES.find((valor) => valor === slug);
 }
 
+/**
+ * Marca la promesa como atendida para que Node no avise de un rechazo sin
+ * manejar mientras espera a que su bloque la lea; el bloque que la espera
+ * recibe el error igual y lo lleva a la página de error.
+ */
+function inBackground<T>(promise: Promise<T>): Promise<T> {
+  promise.catch(() => undefined);
+  return promise;
+}
+
+/** Formulario de "Crear salida" del registro rápido: carga rutas, buses y choferes solo al abrirse. */
+async function DeparturePanelContent({ agencyId, error }: { agencyId: string; error?: string }) {
+  const [rutas, vehiculos, choferes] = await Promise.all([
+    listRoutes(agencyId),
+    listVehicles(agencyId),
+    listDrivers(agencyId),
+  ]);
+  return (
+    <DepartureForm
+      routes={rutas}
+      vehicles={vehiculos.filter((v) => v.active)}
+      drivers={choferes.filter((d) => d.active)}
+      returnTo="tablero"
+      error={error}
+    />
+  );
+}
+
+/**
+ * Tablero del operador (spec 7.2). Arriba lo que necesita atención ahora y
+ * las cuatro cifras del periodo; debajo, las salidas del día, la flota, los
+ * tickets nuevos y, plegados, la actividad y el registro rápido. Cada bloque
+ * carga por su cuenta dentro de su `<Suspense>`: la cabecera y la acción
+ * principal aparecen al instante.
+ */
 export default async function PanelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; registrar?: string; ok?: string; error?: string }>;
+  searchParams: Promise<Record<string, RawSearchParam>>;
 }) {
   const { user, agencyId } = await requireAgencyUser("agency.reports");
   const params = await searchParams;
 
   const now = new Date();
-  const periodo: DashboardPeriod = periodFromSlug(params.periodo);
+  const periodo = periodFromSlug(firstParam(params.periodo));
   const periodoParam = periodo === "hoy" ? undefined : periodo;
-  const periodLabel = DASHBOARD_PERIOD_LABELS[periodo];
+  const periodPhrase = PERIOD_PHRASES[periodo];
   const range = caracasPeriodRange(periodo, now);
   const hoy = caracasDayRange(now);
-  const registrar = registrarFromSlug(params.registrar);
+  const registrar = registrarFromSlug(firstParam(params.registrar));
+  const error = errorMessage(params.error);
+  const ok = okMessage(OK_LABELS, params.ok);
 
-  const [resumen, flota, tickets, actividad, salidasHoy, datosSalida] = await Promise.all([
-    agencyDashboard(agencyId, range, now),
-    agencyFleetStatus(agencyId, now),
-    listRecentTickets(agencyId, { ...range, limit: 8 }),
-    listAgencyActivity(agencyId, { ...range, limit: 12 }),
-    listAgencyDepartures(agencyId, { from: hoy.from, to: hoy.to }),
-    registrar === "salida"
-      ? Promise.all([listRoutes(agencyId), listVehicles(agencyId), listDrivers(agencyId)])
-      : Promise.resolve(null),
-  ]);
+  // Las consultas arrancan juntas; cada bloque espera solo la suya.
+  const resumen = inBackground(agencyDashboard(agencyId, range, now));
+  const tickets = inBackground(listRecentTickets(agencyId, { ...range, limit: 5 }));
+  const salidasHoy = inBackground(listAgencyDepartures(agencyId, { from: hoy.from, to: hoy.to }));
+  const comprobantes = inBackground(countPendingProofs(agencyId));
+  const flota = inBackground(agencyFleetStatus(agencyId, now));
+  const actividad = inBackground(listAgencyActivity(agencyId, { ...range, limit: 12 }));
 
-  const [rutas, vehiculos, choferes] = datosSalida ?? [[], [], []];
-
-  const panelAbierto = Boolean(registrar);
   const closeHref = panelFeedbackUrl("/panel", { periodo: periodoParam });
 
   function registrarHref(tipo: Registrar): string {
     return panelFeedbackUrl("/panel", { registrar: tipo, periodo: periodoParam });
   }
 
+  const nombre = firstNamePart(user.name);
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <PanelPageHeader
-        title={`Tablero de ${user.agencyName ?? "la agencia"}`}
-        description={`Hora de Caracas · actualizado a las ${formatCaracasTime24(now)}`}
+        title={`Tablero de ${user.agencyName ?? "tu agencia"}`}
+        description={`${nombre ? `Hola, ${nombre}. ` : ""}Aquí ves lo que necesita tu atención y cómo va tu agencia.`}
         actions={
+          <>
+            <Link href="/panel/taquilla" className={panelButtonClass("primario", "lg")}>
+              <IconStore className="size-5" />
+              Vender un pasaje
+            </Link>
+            <Link href={registrarHref("cobro")} scroll={false} className={panelButtonClass("secundario", "lg")}>
+              <IconCash className="size-5" />
+              Registrar un cobro
+            </Link>
+          </>
+        }
+      />
+
+      {/* Con un panel lateral abierto, el error lo muestra el propio formulario. */}
+      <PanelFeedback error={registrar ? undefined : error} ok={ok} />
+
+      <section aria-labelledby="atencion-titulo" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h2 id="atencion-titulo" className="text-lg font-semibold text-tinta">
+            Lo que necesita tu atención
+          </h2>
+          <p className="flex flex-wrap items-center gap-x-2 text-sm text-tinta-suave">
+            <span className="tabular">Datos de las {formatCaracasTime24(now)}.</span>
+            <Link
+              href={closeHref}
+              scroll={false}
+              className="foco inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 font-semibold text-marca-700 hover:bg-marca-50"
+            >
+              <IconRefresh className="size-4" />
+              Actualizar
+            </Link>
+          </p>
+        </div>
+        <Suspense fallback={<AttentionSkeleton />}>
+          <AttentionBlock pendingProofs={comprobantes} departures={salidasHoy} now={now} />
+        </Suspense>
+      </section>
+
+      <section aria-labelledby="resumen-titulo" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <h2 id="resumen-titulo" className="text-lg font-semibold text-tinta">
+            Resumen de {periodPhrase}
+          </h2>
           <PanelTabs
-            label="Periodo del tablero"
+            label="Periodo del resumen"
             tabs={DASHBOARD_PERIODS.map((p) => ({
               href: p === "hoy" ? "/panel" : `/panel?periodo=${p}`,
               label: DASHBOARD_PERIOD_LABELS[p],
               active: periodo === p,
             }))}
           />
-        }
-      />
+        </div>
+        <Suspense key={periodo} fallback={<FiguresSkeleton />}>
+          <FiguresBlock summary={resumen} tickets={tickets} periodo={periodo} now={now} />
+        </Suspense>
+      </section>
 
-      <PanelFeedback
-        error={panelAbierto ? undefined : params.error}
-        ok={params.ok ? OK_LABELS[params.ok] : undefined}
-      />
+      <Suspense fallback={<SectionSkeleton rows={4} />}>
+        <TripsTodayBlock departures={salidasHoy} createDepartureHref={registrarHref("salida")} />
+      </Suspense>
 
-      <nav aria-label="Registro rápido" className="flex flex-wrap gap-2">
-        <Link href="/panel/taquilla" className={panelButtonClass("primario", "md", "min-h-11!")}>
-          <IconStore className="h-4 w-4" />
-          Vender en taquilla
-        </Link>
-        <Link
-          href={registrarHref("cobro")}
-          scroll={false}
-          className={panelButtonClass("secundario", "md", "min-h-11!")}
-        >
-          <IconCash className="h-4 w-4" />
-          Registrar cobro
-        </Link>
-        <Link
-          href={registrarHref("salida")}
-          scroll={false}
-          className={panelButtonClass("secundario", "md", "min-h-11!")}
-        >
-          <IconCalendar className="h-4 w-4" />
-          Crear salida
-        </Link>
-        <Link
-          href={registrarHref("vehiculo")}
-          scroll={false}
-          className={panelButtonClass("secundario", "md", "min-h-11!")}
-        >
-          <IconBus className="h-4 w-4" />
-          Registrar vehículo
-        </Link>
-        <Link
-          href={registrarHref("chofer")}
-          scroll={false}
-          className={panelButtonClass("secundario", "md", "min-h-11!")}
-        >
-          <IconUsers className="h-4 w-4" />
-          Registrar chofer
-        </Link>
-      </nav>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard
-          label="Tickets pendientes"
-          value={resumen.pendingTickets.total}
-          detail={`${resumen.pendingTickets.proofsToReview} comprobante(s) por revisar · ${resumen.pendingTickets.payOnSite} pago en sitio`}
-          href="/panel/pasajeros?vista=por-cobrar"
-          tone={resumen.pendingTickets.proofsToReview > 0 ? "alerta" : "neutro"}
-        />
-        <StatCard
-          label={`Salidas · ${periodLabel}`}
-          value={resumen.departures.total}
-          detail={`${resumen.departures.programadas} programadas · ${resumen.departures.embarcando} embarcando · ${resumen.departures.enRuta} en ruta · ${resumen.departures.finalizadas} finalizadas`}
-          href="/panel/salidas"
-        />
-        <StatCard
-          label={`Recaudación · ${periodLabel}`}
-          value={formatMoney(resumen.revenue.totalUsd, "USD")}
-          detail={`${resumen.revenue.payments} pago(s) aprobados o en efectivo`}
-          href={`/panel/reportes?vista=recaudacion&periodo=${periodo}`}
-        />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Suspense fallback={<SectionSkeleton rows={4} />}>
+          <FleetBlock fleet={flota} now={now} registerDriverHref={registrarHref("chofer")} />
+        </Suspense>
+        <Suspense key={periodo} fallback={<SectionSkeleton rows={4} />}>
+          <TicketsBlock tickets={tickets} periodPhrase={periodPhrase} now={now} />
+        </Suspense>
       </div>
 
-      {resumen.failedMessages > 0 ? (
-        <div
-          role="status"
-          className="flex items-center gap-2 rounded-xl border border-[var(--color-alerta)] bg-[var(--color-alerta-suave)] px-4 py-3 text-sm text-[var(--color-alerta)]"
+      <div className="flex flex-col gap-4">
+        <Collapsible
+          title="Actividad reciente"
+          description={`Ventas, cobros y embarques de tu agencia de ${periodPhrase}.`}
         >
-          <IconWarning className="h-5 w-5 shrink-0" />
-          <p>
-            {resumen.failedMessages} mensaje(s) a pasajeros no se pudieron enviar. El administrador del
-            terminal los revisa en su bandeja.
-          </p>
-        </div>
-      ) : null}
+          <Suspense key={periodo} fallback={<ListRowsSkeleton rows={5} />}>
+            <ActivityBlock activity={actividad} now={now} />
+          </Suspense>
+        </Collapsible>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <FleetBlock fleet={flota} now={now} registrarChoferHref={registrarHref("chofer")} />
-        <TicketsBlock tickets={tickets} periodLabel={periodLabel} now={now} />
-        <TripsTodayBlock departures={salidasHoy} registrarSalidaHref={registrarHref("salida")} />
-        <div className="lg:col-span-2">
-          <ActivityBlock activity={actividad} periodLabel={periodLabel} now={now} />
-        </div>
+        <Collapsible
+          title="Registro rápido"
+          description="Crea una salida o registra un vehículo o un chofer sin salir del tablero."
+        >
+          <nav aria-label="Registro rápido" className="flex flex-wrap gap-3">
+            <Link href={registrarHref("salida")} scroll={false} className={panelButtonClass("secundario")}>
+              <IconCalendar className="size-5" />
+              Crear una salida
+            </Link>
+            <Link href={registrarHref("vehiculo")} scroll={false} className={panelButtonClass("secundario")}>
+              <IconBus className="size-5" />
+              Registrar un vehículo
+            </Link>
+            <Link href={registrarHref("chofer")} scroll={false} className={panelButtonClass("secundario")}>
+              <IconUsers className="size-5" />
+              Registrar un chofer
+            </Link>
+          </nav>
+        </Collapsible>
       </div>
 
       {registrar === "cobro" ? (
-        <SidePanel title="Registrar cobro en efectivo" closeHref={closeHref}>
-          <CashPaymentForm mode="codigo" returnTo="tablero" error={params.error} />
+        <SidePanel
+          title="Registrar un cobro en efectivo"
+          subtitle="Escribe el código del ticket y el monto que recibiste."
+          closeHref={closeHref}
+        >
+          <CashPaymentForm mode="codigo" returnTo="tablero" error={error} />
         </SidePanel>
       ) : null}
 
       {registrar === "salida" ? (
-        <SidePanel title="Crear salida" closeHref={closeHref}>
-          <DepartureForm
-            routes={rutas}
-            vehicles={vehiculos.filter((v) => v.active)}
-            drivers={choferes.filter((d) => d.active)}
-            returnTo="tablero"
-            error={params.error}
-          />
+        <SidePanel title="Crear una salida" closeHref={closeHref}>
+          <Suspense fallback={<SkeletonText lines={6} />}>
+            <DeparturePanelContent agencyId={agencyId} error={error} />
+          </Suspense>
         </SidePanel>
       ) : null}
 
       {registrar === "vehiculo" ? (
-        <SidePanel title="Registrar vehículo" closeHref={closeHref}>
-          <VehicleForm mode="create" returnTo="tablero" error={params.error} />
+        <SidePanel title="Registrar un vehículo" closeHref={closeHref}>
+          <VehicleForm mode="create" returnTo="tablero" error={error} />
         </SidePanel>
       ) : null}
 
       {registrar === "chofer" ? (
-        <SidePanel title="Registrar chofer" closeHref={closeHref}>
-          <DriverForm mode="create" returnTo="tablero" error={params.error} />
+        <SidePanel title="Registrar un chofer" closeHref={closeHref}>
+          <DriverForm mode="create" returnTo="tablero" error={error} />
         </SidePanel>
       ) : null}
     </div>

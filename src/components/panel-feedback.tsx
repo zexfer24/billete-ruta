@@ -1,7 +1,11 @@
+import { Alert } from "./alert";
+import { ClearFeedbackParams } from "./clear-feedback-params";
+
 /**
- * Aviso de error o de éxito para las acciones del panel de agencia, con el
- * mismo marcado que usa `src/app/panel/admin/tasas/page.tsx`. Sin ninguno de
- * los dos, no renderiza nada.
+ * Resultado de una acción del panel (`?error=` o `?ok=`), mostrado con
+ * `Alert`: rojo con `role="alert"` si falló, verde con `role="status"` si
+ * salió bien. Tras mostrarse limpia esos parámetros de la URL para que el
+ * aviso no reaparezca al recargar. Sin ninguno de los dos no renderiza nada.
  */
 export function PanelFeedback({
   error,
@@ -14,21 +18,12 @@ export function PanelFeedback({
   return (
     <>
       {error ? (
-        <div
-          role="alert"
-          className="rounded-xl border border-[var(--color-peligro)] bg-red-50 px-4 py-3 text-sm text-[var(--color-peligro)]"
-        >
+        <Alert tone="peligro" title="No se pudo completar">
           {error}
-        </div>
+        </Alert>
       ) : null}
-      {ok ? (
-        <div
-          role="status"
-          className="rounded-xl border border-[var(--color-exito)] bg-green-50 px-4 py-3 text-sm text-[var(--color-exito)]"
-        >
-          {ok}
-        </div>
-      ) : null}
+      {ok ? <Alert tone="exito">{ok}</Alert> : null}
+      <ClearFeedbackParams />
     </>
   );
 }

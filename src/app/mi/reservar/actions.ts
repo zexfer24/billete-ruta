@@ -26,8 +26,15 @@ const crearReservaSchema = z.object({
 
 export interface CrearReservaState {
   error: string | null;
+  /** Falta la cédula o el permiso de viaje: la pantalla ofrece ir a Documentos. */
+  missingDocuments?: boolean;
 }
 
+/**
+ * Crea la reserva del asistente y lleva a su detalle con
+ * `?ok=reserva-creada`, donde se confirma y se explica cómo pagar. La
+ * redirección va fuera del `try` para no confundirla con un error.
+ */
 export async function crearReservaAction(
   _prevState: CrearReservaState,
   formData: FormData,
@@ -38,7 +45,7 @@ export async function crearReservaAction(
   try {
     companions = JSON.parse(String(formData.get("companions") ?? "[]"));
   } catch {
-    return { error: "No se pudieron leer los datos de los acompañantes." };
+    return { error: "No se pudieron leer los datos de los acompañantes. Vuelve al paso 2 y revísalos." };
   }
 
   const parsed = crearReservaSchema.safeParse({
@@ -52,6 +59,7 @@ export async function crearReservaAction(
     return { error: "Revisa los datos del formulario antes de continuar." };
   }
 
+  let code: string;
   try {
     const resultado = await createReservation({
       accountId: pasajero.id,
@@ -60,11 +68,13 @@ export async function crearReservaAction(
       companions: parsed.data.companions,
       policiesAccepted: true,
     });
-    redirect(`/mi/reservas/${resultado.code}`);
+    code = resultado.code;
   } catch (error) {
+    if (error instanceof MissingDocumentsError) {
+      return { error: error.message, missingDocuments: true };
+    }
     if (
       error instanceof ValidationError ||
-      error instanceof MissingDocumentsError ||
       error instanceof NoSeatsAvailableError ||
       error instanceof DepartureClosedError
     ) {
@@ -72,6 +82,8 @@ export async function crearReservaAction(
     }
     throw error;
   }
+
+  redirect(`/mi/reservas/${code}?ok=reserva-creada`);
 }
 
 const waitlistSchema = z.object({
@@ -95,7 +107,7 @@ export async function unirseListaEsperaAction(
     passengerCount: formData.get("passengerCount"),
   });
   if (!parsed.success) {
-    return { error: "Datos inválidos para la lista de espera.", success: false };
+    return { error: "Elige cuántas personas viajan, de 1 a 6.", success: false };
   }
 
   try {

@@ -2,9 +2,13 @@ import Link from "next/link";
 import { requireAgencyUser } from "@/modules/auth";
 import { listCounterOptions } from "@/modules/counter";
 import { EmptyState, PanelPageHeader, panelButtonClass } from "@/components/panel-ui";
+import { IconCash, IconCalendar } from "@/components/icons";
 import CounterSaleForm, { type DepartureOption, type PaymentMethodOption } from "./counter-sale-form";
+import { TAQUILLA_DESCRIPTION } from "./texts";
 
-/** Página de venta en el mostrador: elige salida, titular, acompañantes y cobra en efectivo. */
+export const metadata = { title: "Taquilla" };
+
+/** Venta en el mostrador: elige salida, titular, acompañantes y cobra en efectivo. */
 export default async function TaquillaPage() {
   const { agencyId } = await requireAgencyUser("sales.counter");
   const { departures, paymentMethods } = await listCounterOptions(agencyId);
@@ -28,28 +32,37 @@ export default async function TaquillaPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PanelPageHeader
-        title="Taquilla"
-        description="Vende un pasaje en el mostrador. El cobro es en efectivo y el ticket se emite en el acto. Horas en formato de 24 horas, hora de Caracas."
-      />
+      <PanelPageHeader title="Taquilla" description={TAQUILLA_DESCRIPTION} />
 
       {paymentMethodOptions.length === 0 ? (
         <EmptyState
-          title="El terminal no tiene métodos de pago en efectivo activos."
-          description="Pide al administrador que active uno."
+          icon={<IconCash />}
+          title="Todavía no se puede cobrar en efectivo"
+          description="El terminal no tiene activa ninguna forma de pago en efectivo. Avisa al administrador del terminal para que la active; mientras tanto no se puede vender en taquilla."
+          action={
+            <Link href="/panel" className={panelButtonClass("secundario")}>
+              Volver al tablero
+            </Link>
+          }
         />
       ) : departureOptions.length === 0 ? (
         <EmptyState
-          title="No hay salidas con cupo en los próximos 7 días."
+          icon={<IconCalendar />}
+          title="No hay salidas con puestos libres"
+          description="En los próximos 7 días no queda ninguna salida con puestos. Crea una salida para poder vender."
           action={
-            <Link href="/panel/salidas?crear=1" className={panelButtonClass("primario", "sm")}>
-              Crear salida
+            <Link href="/panel/salidas?crear=1" className={panelButtonClass("primario")}>
+              Crear una salida
             </Link>
           }
         />
       ) : (
         <div className="max-w-3xl">
-          <CounterSaleForm departures={departureOptions} paymentMethods={paymentMethodOptions} />
+          <CounterSaleForm
+            departures={departureOptions}
+            paymentMethods={paymentMethodOptions}
+            nowIso={new Date().toISOString()}
+          />
         </div>
       )}
     </div>

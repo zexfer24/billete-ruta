@@ -129,3 +129,25 @@ export const SALES_CHANNEL_LABELS: Record<string, string> = {
 export function salesChannelLabel(channel: string): string {
   return SALES_CHANNEL_LABELS[channel] ?? channel;
 }
+
+/**
+ * Los nueve estados de reserva en el lenguaje del pasajero (spec 7.1): dicen
+ * qué le pasa a su viaje, no el nombre interno del estado. Solo los usa la
+ * app del pasajero; el panel conserva `RESERVATION_STATUS_LABELS`.
+ */
+export const PASSENGER_STATUS_LABELS: Record<string, string> = {
+  PENDIENTE_PAGO: "Falta pagar",
+  EN_VALIDACION: "Revisando tu pago",
+  ABONADA: "Pagado en parte",
+  PAGADA: "Pagado",
+  PAGO_EN_SITIO: "Pagas en taquilla",
+  LIBERADA: "Puesto liberado",
+  CANCELADA: "Cancelada",
+  ABORDADA: "Viaje realizado",
+  NO_SHOW: "No te presentaste",
+};
+
+/** Texto del estado de una reserva para el pasajero; un estado desconocido devuelve su propio nombre. */
+export function passengerStatusLabel(status: string): string {
+  return PASSENGER_STATUS_LABELS[status] ?? status;
+}

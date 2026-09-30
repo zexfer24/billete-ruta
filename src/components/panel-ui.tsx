@@ -1,94 +1,93 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import type { StatusTone } from "@/lib/labels";
+import { IconArrowLeft, IconChevronRight } from "./icons";
+import { Pill } from "./ui";
+import { cx } from "./ui-classes";
 
 /**
- * Piezas base compartidas por las pantallas del panel del operador: botones,
- * cabecera de página, tarjetas de cifra, pastillas de estado, pestañas,
- * estado vacío, envoltorio de tabla y tarjeta de sección. Componentes de
- * servidor: nada aquí usa hooks ni eventos propios.
+ * Piezas base del panel de agencia y del terminal (spec 2026-09-30, sección
+ * 6): botones, campos, cabecera de página, tarjetas de cifra, pastillas de
+ * estado, pestañas, estado vacío, barra de progreso, tablas y tarjetas de
+ * sección. Solo utilidades de tokens; sin estado ni efectos. Las clases puras
+ * viven en `ui-classes.ts`; `EmptyState` y `ProgressBar` se comparten con la
+ * app del pasajero y se definen en `ui.tsx`.
  */
 
-export type PanelButtonVariant = "primario" | "secundario" | "exito" | "peligro" | "fantasma";
-export type PanelButtonSize = "md" | "sm";
+export {
+  panelButtonClass,
+  panelInputClass,
+  PANEL_LABEL_CLASS,
+  type PanelButtonSize,
+  type PanelButtonVariant,
+} from "./ui-classes";
+export { EmptyState, ProgressBar } from "./ui";
 
-const PANEL_BUTTON_BASE =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)] disabled:cursor-not-allowed disabled:opacity-50";
+/** Clases de una celda de cabecera de tabla del panel: oración normal, 14 px. */
+export const PANEL_TH_CLASS = "px-4 py-3 text-left text-sm font-semibold text-tinta-suave";
 
-const PANEL_BUTTON_SIZES: Record<PanelButtonSize, string> = {
-  md: "min-h-10 px-4 text-sm",
-  sm: "min-h-8 px-3 text-xs",
-};
+/** Clases de una celda de datos de tabla del panel. */
+export const PANEL_TD_CLASS = "px-4 py-3 align-middle text-sm text-tinta";
 
-const PANEL_BUTTON_VARIANTS: Record<PanelButtonVariant, string> = {
-  primario: "bg-[var(--color-acento)] text-white hover:brightness-90",
-  secundario:
-    "border border-[var(--color-borde)] bg-[var(--color-superficie)] hover:bg-[var(--color-acento-suave)]",
-  exito: "bg-[var(--color-exito)] text-white hover:brightness-90",
-  peligro: "bg-[var(--color-peligro)] text-white hover:brightness-90",
-  fantasma: "text-[var(--color-acento)] hover:bg-[var(--color-acento-suave)]",
-};
-
-/** Clases de un botón del panel según variante y tamaño, listas para pegar en cualquier elemento clicable. */
-export function panelButtonClass(
-  variant: PanelButtonVariant,
-  size: PanelButtonSize = "md",
-  extra?: string,
-): string {
-  return [PANEL_BUTTON_BASE, PANEL_BUTTON_SIZES[size], PANEL_BUTTON_VARIANTS[variant], extra]
-    .filter(Boolean)
-    .join(" ");
-}
-
-const PANEL_INPUT_BASE =
-  "w-full rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm text-[var(--color-texto)] transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-acento)] disabled:bg-[var(--color-fondo)] disabled:text-[var(--color-texto-suave)]";
-
-/** Clases de un campo de formulario del panel, listas para pegar en cualquier `input`, `select` o `textarea`. */
-export function panelInputClass(extra?: string): string {
-  return extra ? `${PANEL_INPUT_BASE} ${extra}` : PANEL_INPUT_BASE;
-}
-
-/** Clases de la etiqueta de un campo de formulario del panel. */
-export const PANEL_LABEL_CLASS = "flex flex-col gap-1 text-sm font-medium";
-
-/** Cabecera de página del panel: título, descripción opcional y acciones a la derecha. */
+/**
+ * Cabecera de página del panel: `h1` único, una frase que dice para qué sirve
+ * la pantalla, acciones a la derecha y, en pantallas de detalle, un enlace
+ * para volver.
+ */
 export function PanelPageHeader({
   title,
   description,
   actions,
+  back,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
+  /** Enlace de regreso, por ejemplo `{ href: "/panel/salidas", label: "Volver a salidas" }`. */
+  back?: { href: string; label: string };
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description ? (
-          <p className="mt-1 text-sm text-[var(--color-texto-suave)]">{description}</p>
-        ) : null}
+    <div className="flex flex-col gap-3">
+      {back ? (
+        <Link
+          href={back.href}
+          className="foco -ml-2 inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control px-2 text-[15px] font-semibold text-marca-700 transition-colors duration-150 hover:bg-marca-50 motion-reduce:transition-none"
+        >
+          <IconArrowLeft className="size-5 shrink-0" />
+          {back.label}
+        </Link>
+      ) : null}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">{title}</h1>
+          {description ? (
+            <p className="mt-1.5 text-base leading-relaxed text-tinta-suave">{description}</p>
+          ) : null}
+        </div>
+        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
 
-export type StatCardTone = "neutro" | "exito" | "alerta" | "peligro";
+export type StatCardTone = "neutro" | "marca" | "exito" | "alerta" | "peligro";
 
 const STAT_CARD_TONE_BAR: Record<StatCardTone, string> = {
-  neutro: "bg-[var(--color-borde)]",
-  exito: "bg-[var(--color-exito)]",
-  alerta: "bg-[var(--color-alerta)]",
-  peligro: "bg-[var(--color-peligro)]",
+  neutro: "bg-borde",
+  marca: "bg-marca-600",
+  exito: "bg-exito",
+  alerta: "bg-alerta",
+  peligro: "bg-peligro",
 };
 
 const STAT_CARD_CLASS =
-  "relative overflow-hidden rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5";
+  "relative flex flex-col overflow-hidden rounded-tarjeta border border-borde bg-superficie p-5 shadow-1";
 
 /**
- * Tarjeta de cifra con una barra superior de color del tono. El tono nunca es
- * la única señal: la etiqueta y el detalle ya dicen qué es la cifra.
+ * Tarjeta de cifra: etiqueta, cifra grande tabular y un detalle que le da
+ * contexto. La barra superior de color refuerza el tono, pero nunca es la
+ * única señal. Con `href` toda la tarjeta es un enlace y lo muestra con una
+ * flecha.
  */
 export function StatCard({
   label,
@@ -107,16 +106,26 @@ export function StatCard({
 }) {
   const contenido = (
     <>
-      <span
-        className={`absolute inset-x-0 top-0 h-1 ${STAT_CARD_TONE_BAR[tone]}`}
-        aria-hidden="true"
-      />
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-[var(--color-texto-suave)]">{label}</p>
-        {icon ? <span className="text-[var(--color-texto-suave)]">{icon}</span> : null}
+      <span className={`absolute inset-x-0 top-0 h-1 ${STAT_CARD_TONE_BAR[tone]}`} aria-hidden="true" />
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-semibold text-tinta-suave">{label}</p>
+        {icon ? (
+          <span
+            aria-hidden="true"
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600 [&>svg]:size-5"
+          >
+            {icon}
+          </span>
+        ) : null}
       </div>
-      <p className="tabular mt-1 text-3xl font-semibold">{value}</p>
-      {detail ? <p className="mt-1 text-sm text-[var(--color-texto-suave)]">{detail}</p> : null}
+      <p className="tabular mt-1 text-3xl font-bold tracking-tight text-tinta">{value}</p>
+      {detail ? <p className="mt-1 text-sm leading-snug text-tinta-suave">{detail}</p> : null}
+      {href ? (
+        <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-marca-700">
+          Ver detalle
+          <IconChevronRight className="size-4" />
+        </span>
+      ) : null}
     </>
   );
 
@@ -124,7 +133,7 @@ export function StatCard({
     return (
       <Link
         href={href}
-        className={`${STAT_CARD_CLASS} block transition-colors duration-150 hover:border-[var(--color-acento)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)] motion-reduce:transition-none`}
+        className={`${STAT_CARD_CLASS} foco transition duration-150 ease-out hover:border-marca-600 hover:shadow-2 motion-reduce:transition-none`}
       >
         {contenido}
       </Link>
@@ -134,24 +143,12 @@ export function StatCard({
   return <div className={STAT_CARD_CLASS}>{contenido}</div>;
 }
 
-const STATUS_BADGE_CLASSES: Record<StatusTone, string> = {
-  exito: "bg-[var(--color-exito-suave)] text-[var(--color-exito)]",
-  alerta: "bg-[var(--color-alerta-suave)] text-[var(--color-alerta)]",
-  peligro: "bg-[var(--color-peligro-suave)] text-[var(--color-peligro)]",
-  marca: "bg-[var(--color-acento-suave)] text-[var(--color-acento)]",
-  neutro: "border border-[var(--color-borde)] bg-[var(--color-fondo)] text-[var(--color-texto-suave)]",
-};
-
-/** Pastilla de estado con un punto del color del texto; el texto siempre se muestra. */
+/**
+ * Pastilla de estado del panel. Comparte implementación con `Pill` del
+ * pasajero: texto de 14 px con punto del tono sobre su fondo suave.
+ */
 export function StatusBadge({ label, tone }: { label: string; tone: StatusTone }) {
-  return (
-    <span
-      className={`inline-flex w-fit shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[tone]}`}
-    >
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
-      {label}
-    </span>
-  );
+  return <Pill tone={tone}>{label}</Pill>;
 }
 
 export interface PanelTab {
@@ -161,25 +158,35 @@ export interface PanelTab {
   active: boolean;
 }
 
-/** Fila de pestañas segmentada y desplazable; la activa lleva `aria-current="page"`. */
+/**
+ * Pestañas segmentadas de 44 px, desplazables en pantallas angostas. Son
+ * enlaces de navegación: la activa lleva `aria-current="page"` y un contador
+ * opcional dice cuántos elementos hay en cada una.
+ */
 export function PanelTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) {
   return (
-    <nav aria-label={label} className="overflow-x-auto">
-      <div className="inline-flex min-w-full gap-1 rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] p-1">
+    <nav aria-label={label} className="-m-1 overflow-x-auto p-1">
+      <div className="inline-flex min-w-full gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1">
         {tabs.map((tab) => (
           <Link
             key={tab.href}
             href={tab.href}
             aria-current={tab.active ? "page" : undefined}
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)] motion-reduce:transition-none ${
+            className={cx(
+              "foco inline-flex min-h-11 shrink-0 items-center gap-2 rounded-control px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none",
               tab.active
-                ? "bg-[var(--color-acento-suave)] text-[var(--color-acento)]"
-                : "text-[var(--color-texto-suave)] hover:bg-[var(--color-acento-suave)]"
-            }`}
+                ? "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200"
+                : "text-tinta-suave hover:bg-lienzo hover:text-tinta",
+            )}
           >
             {tab.label}
             {typeof tab.count === "number" ? (
-              <span className="tabular rounded-full bg-[var(--color-fondo)] px-1.5 py-0.5 text-xs">
+              <span
+                className={cx(
+                  "tabular min-w-6 rounded-pastilla px-2 py-0.5 text-center text-xs font-bold",
+                  tab.active ? "bg-marca-600 text-white" : "bg-lienzo text-tinta-suave",
+                )}
+              >
                 {tab.count}
               </span>
             ) : null}
@@ -190,35 +197,69 @@ export function PanelTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) 
   );
 }
 
-/** Estado vacío: caja con borde discontinuo, mensaje centrado y acción opcional debajo. */
-export function EmptyState({
+/**
+ * Envoltorio de tabla con desplazamiento horizontal para que nada desborde la
+ * página. Con `mobile`, la tabla solo se ve desde `md` y por debajo se muestra
+ * ese contenido (normalmente una lista de `MobileCard`).
+ */
+export function TableShell({ children, mobile }: { children: ReactNode; mobile?: ReactNode }) {
+  const table = (
+    <div className="overflow-x-auto rounded-tarjeta border border-borde bg-superficie shadow-1">{children}</div>
+  );
+
+  if (!mobile) return table;
+
+  return (
+    <>
+      <div className="hidden md:block">{table}</div>
+      <div className="md:hidden">{mobile}</div>
+    </>
+  );
+}
+
+/**
+ * Tarjeta de una fila de tabla en pantallas angostas: título, estado, los 3 o
+ * 4 datos esenciales y la acción. Se agrupan en una lista `ul` que arma la
+ * página.
+ */
+export function MobileCard({
   title,
-  description,
+  subtitle,
+  status,
+  details,
   action,
 }: {
-  title: string;
-  description?: string;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  status?: ReactNode;
+  details?: Array<{ label: string; value: ReactNode }>;
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[var(--color-borde)] px-6 py-10 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      {description ? <p className="text-sm text-[var(--color-texto-suave)]">{description}</p> : null}
-      {action ? <div className="mt-2">{action}</div> : null}
-    </div>
+    <li className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-tinta">{title}</p>
+          {subtitle ? <p className="text-sm text-tinta-suave">{subtitle}</p> : null}
+        </div>
+        {status ? <div className="shrink-0">{status}</div> : null}
+      </div>
+      {details && details.length > 0 ? (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {details.map((detail) => (
+            <div key={detail.label} className="min-w-0">
+              <dt className="text-sm text-tinta-suave">{detail.label}</dt>
+              <dd className="tabular text-[15px] font-medium text-tinta">{detail.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {action ? <div className="flex flex-wrap gap-2">{action}</div> : null}
+    </li>
   );
 }
 
-/** Envoltorio con desplazamiento horizontal para que ninguna tabla desborde la página. */
-export function TableShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)]">
-      {children}
-    </div>
-  );
-}
-
-/** Tarjeta de sección con cabecera (título, descripción y acción) y cuerpo. */
+/** Tarjeta de sección con cabecera (título `h2`, descripción y acción) y cuerpo. */
 export function SectionCard({
   title,
   description,
@@ -226,18 +267,16 @@ export function SectionCard({
   children,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)]">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-borde)] px-5 py-4">
-        <div>
-          <h2 className="text-base font-semibold">{title}</h2>
-          {description ? (
-            <p className="mt-1 text-sm text-[var(--color-texto-suave)]">{description}</p>
-          ) : null}
+    <section className="rounded-tarjeta border border-borde bg-superficie shadow-1">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-borde px-5 py-4">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-tinta">{title}</h2>
+          {description ? <p className="mt-1 text-sm leading-snug text-tinta-suave">{description}</p> : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>

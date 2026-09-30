@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+import type { Prisma } from "@prisma/client";
+import { PanelFeedback } from "@/components/panel-feedback";
+import { PanelPageHeader, SectionCard } from "@/components/panel-ui";
+import { formatMoney } from "@/lib/decimal";
+import { formatCaracasDateTime24 } from "@/lib/time";
 import { requirePanelUser } from "@/modules/auth";
 import {
   getCurrentDepartureTax,
@@ -5,17 +11,68 @@ import {
   listDepartureTaxes,
   listExchangeRates,
 } from "@/modules/catalog";
-import { formatCaracasDateTime24 } from "@/lib/time";
-import { formatMoney } from "@/lib/decimal";
 import { setDepartureTaxAction, setExchangeRateAction } from "./actions";
+import { RateChangeForm } from "./rate-change-form";
+import { RateHistory, type RateHistoryEntry } from "./rate-history";
 
+export const metadata: Metadata = { title: "Tasas y precios" };
+
+/**
+ * Textos de los códigos `?ok=` que devuelven las acciones de esta página. Es
+ * un `Map` para que una clave heredada (`?ok=constructor`) no cuele un texto.
+ */
+const OK_LABELS = new Map<string, string>([
+  ["tasa-salida", "Tasa de salida actualizada. Las reservas nuevas ya la cobran."],
+  ["tasa-ves", "Tasa del bolívar actualizada. Los pagos nuevos en bolívares ya la usan."],
+  ["tasa-cop", "Tasa del peso colombiano actualizada. Los pagos nuevos en pesos ya la usan."],
+]);
+
+function first(value: string | string[] | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+/** Valor vigente destacado, con la fecha desde la que rige. */
+function CurrentValue({
+  label,
+  value,
+  since,
+}: {
+  label: string;
+  value: string | null;
+  since?: Date;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-sm font-semibold text-tinta-suave">{label}</p>
+      {value ? (
+        <>
+          <p className="tabular text-3xl font-bold tracking-tight text-tinta">{value}</p>
+          {since ? (
+            <p className="tabular text-sm text-tinta-suave">Desde el {formatCaracasDateTime24(since)}</p>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-base font-semibold text-alerta">Todavía no está configurada.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Tasas del terminal: la tasa de salida por pasajero y las tasas de cambio
+ * del bolívar y del peso colombiano. Cada cambio pide confirmación y solo
+ * aplica a las reservas nuevas.
+ */
 export default async function TasasAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; ok?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requirePanelUser("terminal.rates");
   const params = await searchParams;
+  const okCode = first(params.ok);
+  const ok = okCode ? OK_LABELS.get(okCode) : undefined;
+  const error = first(params.error)?.slice(0, 300);
 
   const [currentDepartureTax, departureTaxHistory, vesRate, copRate, vesHistory, copHistory] =
     await Promise.all([
@@ -27,120 +84,132 @@ export default async function TasasAdminPage({
       listExchangeRates("COP"),
     ]);
 
-  const exchangeCards = [
-    { currency: "VES" as const, label: "Bolívar (VES)", current: vesRate, history: vesHistory },
-    { currency: "COP" as const, label: "Peso colombiano (COP)", current: copRate, history: copHistory },
+  const taxEntries: RateHistoryEntry[] = departureTaxHistory.map((h) => ({
+    id: h.id,
+    amount: formatMoney(h.amountUsd, "USD"),
+    effectiveFrom: h.effectiveFrom,
+  }));
+
+  const exchangeBlocks: Array<{
+    currency: "VES" | "COP";
+    title: string;
+    prefix: string;
+    current: Prisma.Decimal | null;
+    history: RateHistoryEntry[];
+    placeholder: string;
+    /** Nombre de la moneda en plural, para la etiqueta del campo. */
+    plural: string;
+  }> = [
+    {
+      currency: "VES",
+      title: "Bolívar",
+      prefix: "Bs.",
+      current: vesRate,
+      history: vesHistory.map((h) => ({
+        id: h.id,
+        amount: formatMoney(h.rateFromUsd, "VES"),
+        effectiveFrom: h.effectiveFrom,
+      })),
+      placeholder: "36,50",
+      plural: "bolívares",
+    },
+    {
+      currency: "COP",
+      title: "Peso colombiano",
+      prefix: "COP",
+      current: copRate,
+      history: copHistory.map((h) => ({
+        id: h.id,
+        amount: formatMoney(h.rateFromUsd, "COP"),
+        effectiveFrom: h.effectiveFrom,
+      })),
+      placeholder: "4000",
+      plural: "pesos",
+    },
   ];
+
+  const currentTaxLabel = currentDepartureTax ? formatMoney(currentDepartureTax, "USD") : null;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Tasas del terminal</h2>
-        <p className="mt-1 text-sm text-[var(--color-texto-suave)]">
-          Tasa de salida y tasas de cambio vigentes. Un cambio de tasa solo aplica a reservas nuevas: las
-          reservas ya creadas conservan la tasa congelada al momento de crearse.
-        </p>
-      </div>
+      <PanelPageHeader
+        title="Tasas y precios"
+        description="La tasa de salida que paga cada pasajero y las tasas de cambio para cobrar en bolívares y en pesos. Un cambio solo aplica a las reservas nuevas: las que ya existen mantienen su precio."
+      />
 
-      {params.error && (
-        <div className="rounded-xl border border-[var(--color-peligro)] bg-red-50 px-4 py-3 text-sm text-[var(--color-peligro)]">
-          {params.error}
-        </div>
-      )}
-      {params.ok && (
-        <div className="rounded-xl border border-[var(--color-exito)] bg-green-50 px-4 py-3 text-sm text-[var(--color-exito)]">
-          Tasa cargada con éxito.
-        </div>
-      )}
+      <PanelFeedback error={error} ok={ok} />
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">
-          <h3 className="text-sm font-medium text-[var(--color-texto-suave)]">Tasa de salida vigente</h3>
-          <p className="mt-2 text-3xl font-semibold tracking-tight tabular">
-            {currentDepartureTax ? formatMoney(currentDepartureTax, "USD") : "No configurada"}
-          </p>
-          <form action={setDepartureTaxAction} className="mt-4 flex items-end gap-2">
-            <div className="flex-1">
-              <label htmlFor="amountUsd" className="block text-xs font-medium text-[var(--color-texto-suave)]">
-                Nuevo monto (USD por pasajero)
-              </label>
-              <input
-                id="amountUsd"
-                name="amountUsd"
-                required
-                inputMode="decimal"
-                placeholder="2.00"
-                className="mt-1 w-full rounded-md border border-[var(--color-borde)] px-3 py-1.5 text-sm"
-              />
-            </div>
-            <button
-              type="submit"
-              className="rounded-md bg-[var(--color-acento)] px-4 py-1.5 text-sm font-medium text-white"
-            >
-              Cargar
-            </button>
-          </form>
-          <div className="mt-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-texto-suave)]">Historial</p>
-            <ul className="mt-2 space-y-1 text-sm">
-              {departureTaxHistory.map((h) => (
-                <li key={h.id} className="flex justify-between gap-3 tabular">
-                  <span>{formatMoney(h.amountUsd, "USD")}</span>
-                  <span className="text-[var(--color-texto-suave)]">desde {formatCaracasDateTime24(h.effectiveFrom)}</span>
-                </li>
-              ))}
-              {departureTaxHistory.length === 0 && (
-                <li className="text-[var(--color-texto-suave)]">Sin historial.</li>
-              )}
-            </ul>
-          </div>
+      <SectionCard
+        title="Tasa de salida"
+        description="La cobra el terminal a cada pasajero, aparte de la tarifa de la agencia."
+      >
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <CurrentValue
+            label="Vigente, por pasajero"
+            value={currentTaxLabel}
+            since={departureTaxHistory[0]?.effectiveFrom}
+          />
+          <RateChangeForm
+            key={departureTaxHistory[0]?.id ?? "sin-tasa"}
+            action={setDepartureTaxAction}
+            fieldName="amountUsd"
+            label="Nueva tasa de salida, en dólares por pasajero"
+            hint="Usa coma para los decimales, sin puntos de miles."
+            prefix="$"
+            subject="la tasa de salida"
+            unit=" por pasajero"
+            current={currentTaxLabel}
+            placeholder="2,50"
+            primary
+          />
         </div>
+        <div className="mt-6 border-t border-borde pt-4">
+          <RateHistory title="Historial" entries={taxEntries} />
+        </div>
+      </SectionCard>
 
-        {exchangeCards.map((c) => (
-          <div key={c.currency} className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">
-            <h3 className="text-sm font-medium text-[var(--color-texto-suave)]">Tasa de cambio — {c.label}</h3>
-            <p className="mt-2 text-3xl font-semibold tracking-tight tabular">
-              {c.current ? `1 USD = ${formatMoney(c.current, c.currency)}` : "No configurada"}
-            </p>
-            <form action={setExchangeRateAction} className="mt-4 flex items-end gap-2">
-              <input type="hidden" name="currency" value={c.currency} />
-              <div className="flex-1">
-                <label
-                  htmlFor={`rate-${c.currency}`}
-                  className="block text-xs font-medium text-[var(--color-texto-suave)]"
-                >
-                  Nueva tasa (monto por 1 USD)
-                </label>
-                <input
-                  id={`rate-${c.currency}`}
-                  name="rateFromUsd"
-                  required
-                  inputMode="decimal"
-                  className="mt-1 w-full rounded-md border border-[var(--color-borde)] px-3 py-1.5 text-sm"
-                />
-              </div>
-              <button
-                type="submit"
-                className="rounded-md bg-[var(--color-acento)] px-4 py-1.5 text-sm font-medium text-white"
+      <SectionCard
+        title="Tasas de cambio"
+        description="Cuántos bolívares o pesos equivalen a un dólar. Se usan para convertir los pagos en esas monedas."
+      >
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-6">
+          {exchangeBlocks.map((block) => {
+            const currentLabel = block.current ? formatMoney(block.current, block.currency) : null;
+            return (
+              <section
+                key={block.currency}
+                aria-labelledby={`tasa-${block.currency}`}
+                className="flex flex-col gap-5 rounded-control border border-borde p-4"
               >
-                Cargar
-              </button>
-            </form>
-            <div className="mt-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-texto-suave)]">Historial</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {c.history.map((h) => (
-                  <li key={h.id} className="flex justify-between gap-3 tabular">
-                    <span>{formatMoney(h.rateFromUsd, c.currency)}</span>
-                    <span className="text-[var(--color-texto-suave)]">desde {formatCaracasDateTime24(h.effectiveFrom)}</span>
-                  </li>
-                ))}
-                {c.history.length === 0 && <li className="text-[var(--color-texto-suave)]">Sin historial.</li>}
-              </ul>
-            </div>
-          </div>
-        ))}
-      </section>
+                <h3 id={`tasa-${block.currency}`} className="text-base font-semibold text-tinta">
+                  {block.title}
+                </h3>
+                <CurrentValue
+                  label="Vigente, por cada dólar"
+                  value={currentLabel}
+                  since={block.history[0]?.effectiveFrom}
+                />
+                <RateChangeForm
+                  key={block.history[0]?.id ?? `sin-tasa-${block.currency}`}
+                  action={setExchangeRateAction}
+                  fieldName="rateFromUsd"
+                  hiddenFields={{ currency: block.currency }}
+                  label={`Nueva tasa, en ${block.plural} por cada dólar`}
+                  hint="Usa coma para los decimales, sin puntos de miles."
+                  prefix={block.prefix}
+                  subject={`la tasa del ${block.title.toLowerCase()}`}
+                  unit=" por cada dólar"
+                  current={currentLabel}
+                  placeholder={block.placeholder}
+                />
+                <div className="border-t border-borde pt-4">
+                  <RateHistory title="Historial" entries={block.history} />
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </SectionCard>
     </div>
   );
 }

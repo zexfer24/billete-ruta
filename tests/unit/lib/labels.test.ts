@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEPARTURE_STATUS_LABELS,
   MESSAGE_STATUS_LABELS,
+  PASSENGER_STATUS_LABELS,
   PROOF_STATUS_LABELS,
   RESERVATION_STATUS_LABELS,
   SALES_CHANNEL_LABELS,
@@ -9,6 +10,7 @@ import {
   departureStatusLabel,
   departureStatusTone,
   messageStatusTone,
+  passengerStatusLabel,
   reservationStatusLabel,
   reservationStatusTone,
   salesChannelLabel,
@@ -194,5 +196,34 @@ describe("SALES_CHANNEL_LABELS y salesChannelLabel", () => {
 
   it("un canal desconocido devuelve el mismo texto", () => {
     expect(salesChannelLabel("CANAL_INVENTADO")).toBe("CANAL_INVENTADO");
+  });
+});
+
+describe("passengerStatusLabel", () => {
+  it("traduce los nueve estados al lenguaje del pasajero", () => {
+    expect(passengerStatusLabel("PENDIENTE_PAGO")).toBe("Falta pagar");
+    expect(passengerStatusLabel("EN_VALIDACION")).toBe("Revisando tu pago");
+    expect(passengerStatusLabel("ABONADA")).toBe("Pagado en parte");
+    expect(passengerStatusLabel("PAGADA")).toBe("Pagado");
+    expect(passengerStatusLabel("PAGO_EN_SITIO")).toBe("Pagas en taquilla");
+    expect(passengerStatusLabel("LIBERADA")).toBe("Puesto liberado");
+    expect(passengerStatusLabel("CANCELADA")).toBe("Cancelada");
+    expect(passengerStatusLabel("ABORDADA")).toBe("Viaje realizado");
+    expect(passengerStatusLabel("NO_SHOW")).toBe("No te presentaste");
+  });
+
+  it("un estado desconocido devuelve el mismo texto", () => {
+    expect(passengerStatusLabel("ESTADO_INVENTADO")).toBe("ESTADO_INVENTADO");
+  });
+
+  it("cubre exactamente los mismos estados que las etiquetas del panel", () => {
+    expect(Object.keys(PASSENGER_STATUS_LABELS).sort()).toEqual(
+      Object.keys(RESERVATION_STATUS_LABELS).sort(),
+    );
+  });
+
+  it("no cambia las etiquetas del panel", () => {
+    expect(RESERVATION_STATUS_LABELS.PAGO_EN_SITIO).toBe("Pago en sitio");
+    expect(RESERVATION_STATUS_LABELS.ABONADA).toBe("Abonada");
   });
 });

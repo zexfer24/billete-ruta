@@ -1,137 +1,86 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { z } from "zod";
+import { Alert } from "@/components/alert";
+import { IconSearch } from "@/components/icons";
+import { PANEL_LABEL_CLASS, PanelPageHeader, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { requirePanelUser } from "@/modules/auth";
-import { listAccounts } from "@/modules/reports";
-import { formatCaracasDateTime24 } from "@/lib/time";
+import { cleanSearch, pageFromParam } from "../_shared/format";
+import { UsersResults, UsersResultsSkeleton } from "./users-results";
 
+export const metadata: Metadata = { title: "Base de datos de usuarios" };
+
+/** Parámetros de la URL. Nunca lanza: una página no numérica o un valor repetido caen al valor por defecto. */
 const searchParamsSchema = z.object({
-  q: z.string().optional(),
-  page: z.string().regex(/^\d+$/).optional(),
+  q: z.string().optional().catch(undefined),
+  page: z.string().optional().catch(undefined),
 });
 
-const PAGE_SIZE = 25;
-
-function pageHref(query: string | undefined, page: number): string {
-  const params = new URLSearchParams();
-  if (query) params.set("q", query);
-  params.set("page", String(page));
-  return `/panel/admin/usuarios?${params.toString()}`;
-}
-
+/**
+ * Base de datos de cuentas de pasajero, con búsqueda y páginas de 25. Es la
+ * única pantalla con la cédula completa: cada consulta queda auditada en
+ * `listAccounts`, como antes.
+ */
 export default async function UsuariosAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requirePanelUser("terminal.users");
-  const rawParams = searchParamsSchema.parse(await searchParams);
-  const query = rawParams.q?.trim() || undefined;
-  const page = rawParams.page ? Math.max(1, Number.parseInt(rawParams.page, 10)) : 1;
-
-  const { rows, total, pageSize } = await listAccounts({ search: query, page, pageSize: PAGE_SIZE }, user.id);
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const parsed = searchParamsSchema.safeParse(await searchParams);
+  const params = parsed.success ? parsed.data : {};
+  const query = cleanSearch(params.q);
+  const page = pageFromParam(params.page);
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Base de datos de usuarios</h2>
-        <p className="mt-1 text-sm text-[var(--color-texto-suave)]">
-          Cuentas de pasajero registradas en el terminal.
-        </p>
-      </div>
+      <PanelPageHeader
+        title="Base de datos de usuarios"
+        description="Las cuentas de pasajero del terminal. Busca a una persona por su cédula, su nombre o su teléfono."
+      />
 
-      <div className="rounded-xl border border-[var(--color-alerta)] bg-amber-50 px-4 py-3 text-sm text-[var(--color-alerta)]">
-        Esta pantalla muestra información sensible: cédula completa, teléfono y demás datos personales de
-        los pasajeros. Es la única pantalla del sistema donde la cédula se muestra sin enmascarar. Cada
-        consulta queda registrada en la bitácora de auditoría con el administrador que la realizó y el
-        filtro aplicado.
-      </div>
+      <Alert tone="alerta" role="none" title="Datos personales">
+        Aquí ves la cédula completa y el teléfono de cada pasajero. Cada consulta queda registrada con tu nombre.
+      </Alert>
 
       <form
         method="get"
-        className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-4"
+        role="search"
+        className="flex flex-col gap-1.5 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
       >
-        <div className="min-w-[240px] flex-1">
-          <label htmlFor="q" className="block text-xs font-medium text-[var(--color-texto-suave)]">
-            Buscar por cédula, nombre o teléfono
-          </label>
+        <label htmlFor="q" className={PANEL_LABEL_CLASS}>
+          Buscar por cédula, nombre o teléfono
+        </label>
+        <div className="flex flex-wrap gap-2">
           <input
-            type="text"
+            type="search"
             id="q"
             name="q"
             defaultValue={query ?? ""}
-            placeholder="V12345678, María Pérez, +58412..."
-            className="mt-1 w-full rounded-md border border-[var(--color-borde)] px-3 py-1.5 text-sm"
+            maxLength={80}
+            autoComplete="off"
+            aria-describedby="q-ayuda"
+            className={panelInputClass("min-w-0 flex-1 basis-60")}
           />
+          <button type="submit" className={panelButtonClass("primario", "md", "flex-1 sm:flex-none")}>
+            <IconSearch className="size-5 shrink-0" />
+            Buscar
+          </button>
+          {query ? (
+            <Link href="/panel/admin/usuarios" className={panelButtonClass("fantasma", "md", "flex-1 sm:flex-none")}>
+              Limpiar búsqueda
+            </Link>
+          ) : null}
         </div>
-        <button
-          type="submit"
-          className="rounded-md bg-[var(--color-acento)] px-4 py-1.5 text-sm font-medium text-white"
-        >
-          Buscar
-        </button>
-        {query && (
-          <Link href="/panel/admin/usuarios" className="text-sm text-[var(--color-texto-suave)] underline">
-            Limpiar
-          </Link>
-        )}
+        <p id="q-ayuda" className="text-sm text-tinta-suave">
+          Ejemplos: V12345678, María Pérez o 4121234567 (el teléfono, sin el 0 del inicio ni espacios).
+        </p>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)]">
-        <table className="w-full min-w-[880px] text-left text-sm">
-          <thead className="border-b border-[var(--color-borde)] text-xs uppercase tracking-wide text-[var(--color-texto-suave)]">
-            <tr>
-              <th className="px-4 py-3">Cédula</th>
-              <th className="px-4 py-3">Nombre</th>
-              <th className="px-4 py-3">Teléfono</th>
-              <th className="px-4 py-3">Año de nacimiento</th>
-              <th className="px-4 py-3 text-right">Viajes pagados</th>
-              <th className="px-4 py-3">Registro</th>
-              <th className="px-4 py-3">Última actividad</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-b border-[var(--color-borde)] last:border-0">
-                <td className="px-4 py-2 font-medium tabular">{r.idNumber}</td>
-                <td className="px-4 py-2">{r.fullName}</td>
-                <td className="px-4 py-2 tabular">{r.phone}</td>
-                <td className="px-4 py-2 tabular">{r.birthYear}</td>
-                <td className="px-4 py-2 text-right tabular">{r.paidTrips}</td>
-                <td className="px-4 py-2 tabular">{formatCaracasDateTime24(r.createdAt)}</td>
-                <td className="px-4 py-2 tabular">
-                  {r.lastLoginAt ? formatCaracasDateTime24(r.lastLoginAt) : "Nunca"}
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-[var(--color-texto-suave)]">
-                  Sin resultados.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--color-texto-suave)]">
-        <span>
-          {total} cuenta(s) — página {page} de {totalPages}
-        </span>
-        <div className="flex gap-2">
-          {page > 1 && (
-            <Link href={pageHref(query, page - 1)} className="rounded-md border border-[var(--color-borde)] px-3 py-1.5">
-              Anterior
-            </Link>
-          )}
-          {page < totalPages && (
-            <Link href={pageHref(query, page + 1)} className="rounded-md border border-[var(--color-borde)] px-3 py-1.5">
-              Siguiente
-            </Link>
-          )}
-        </div>
-      </div>
+      <Suspense key={`${query ?? ""}|${page}`} fallback={<UsersResultsSkeleton />}>
+        <UsersResults query={query} page={page} panelUserId={user.id} />
+      </Suspense>
     </div>
   );
 }

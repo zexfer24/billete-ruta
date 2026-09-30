@@ -1,8 +1,14 @@
 "use client";
 
 import type { Currency } from "@prisma/client";
+import { Skeleton } from "@/components/skeleton";
+import { Alert } from "@/components/alert";
+import { panelButtonClass } from "@/components/panel-ui";
+import { IconCheckCircle, IconChevronDown, IconRefresh, IconWarning } from "@/components/icons";
+import { countLabel } from "../_dashboard/text";
 import type { ChangeResult } from "./change";
 import type { PaymentMethodOption } from "./counter-sale-form";
+import { CounterField } from "./counter-field";
 
 export interface QuoteResult {
   fareTotalUsd: string;
@@ -12,55 +18,37 @@ export interface QuoteResult {
   amountInCurrency: string;
 }
 
+const PREFIJOS: Record<Currency, string> = { USD: "$ ", VES: "Bs. ", COP: "COP ", USDT: "USDT " };
+
+/** Nombre de cada moneda en palabras, para etiquetas como "Dinero recibido (bolívares)". */
+export const CURRENCY_NAMES: Record<Currency, string> = {
+  USD: "dólares",
+  VES: "bolívares",
+  COP: "pesos colombianos",
+  USDT: "USDT",
+};
+
 /** Formatea un monto en la moneda dada, con separador de miles y coma decimal. */
 export function formatAmount(value: string, currency: Currency): string {
-  const prefijos: Record<Currency, string> = { USD: "$ ", VES: "Bs. ", COP: "COP ", USDT: "USDT " };
   const numero = Number(value);
   const formateado = new Intl.NumberFormat("es-VE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number.isFinite(numero) ? numero : 0);
-  return `${prefijos[currency]}${formateado}`;
+  return `${PREFIJOS[currency]}${formateado}`;
+}
+
+/** Tasa de cambio legible: "1 US$ = Bs. 36,50". Solo para monedas que no van 1 a 1 con el dólar. */
+export function formatRate(rateFromUsd: string | null, currency: Currency): string | null {
+  if (!rateFromUsd || (currency !== "VES" && currency !== "COP")) return null;
+  return `1 US$ = ${formatAmount(rateFromUsd, currency)}`;
 }
 
 /**
- * Botones, insumos y etiquetas propios de la taquilla: se usa en el
- * mostrador, así que exige controles de 44 px y texto base de 16 px, más
- * grandes que el resto del panel (`panelButtonClass`/`panelInputClass` dan
- * 40 px y 14 px). Viven en este archivo, sin dependencias de otros pasos,
- * para que `step-holder.tsx` y `step-companions.tsx` los importen sin crear
- * un ciclo con `counter-sale-form.tsx`.
+ * Paso 4 del asistente: forma de pago, el total a cobrar y el vuelto, las dos
+ * cifras que el cajero necesita, en tamaño muy grande. El botón de cobrar vive
+ * en la barra inferior del asistente, igual que "Continuar" en los otros pasos.
  */
-const TAQUILLA_BUTTON_VARIANTS = {
-  primario: "bg-[var(--color-acento)] text-white hover:brightness-90",
-  secundario:
-    "border border-[var(--color-borde)] bg-[var(--color-superficie)] hover:bg-[var(--color-acento-suave)]",
-  exito: "bg-[var(--color-exito)] text-white hover:brightness-90",
-  fantasma: "text-[var(--color-acento)] hover:bg-[var(--color-acento-suave)]",
-} as const;
-
-export function taquillaButtonClass(variant: keyof typeof TAQUILLA_BUTTON_VARIANTS, extra?: string): string {
-  return [
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)] disabled:cursor-not-allowed disabled:opacity-50",
-    TAQUILLA_BUTTON_VARIANTS[variant],
-    extra,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-export function taquillaInputClass(extra?: string): string {
-  return [
-    "min-h-11 w-full rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-base text-[var(--color-texto)] transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-acento)] disabled:bg-[var(--color-fondo)] disabled:text-[var(--color-texto-suave)]",
-    extra,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-export const TAQUILLA_LABEL_CLASS = "flex flex-col gap-1 text-base font-medium";
-
-/** Paso 4 del asistente: método de pago, cotización, vuelto y confirmación en dos tiempos. */
 export function StepPayment({
   paymentMethods,
   selectedId,
@@ -68,13 +56,11 @@ export function StepPayment({
   quote,
   quotePending,
   quoteError,
+  onRetryQuote,
   receivedAmount,
   onChangeReceived,
   changeResult,
-  confirmOpen,
-  onOpenConfirm,
-  onCloseConfirm,
-  submitting,
+  passengerCount,
 }: {
   paymentMethods: PaymentMethodOption[];
   selectedId: string | null;
@@ -82,26 +68,26 @@ export function StepPayment({
   quote: QuoteResult | null;
   quotePending: boolean;
   quoteError: string | null;
+  onRetryQuote: () => void;
   receivedAmount: string;
   onChangeReceived: (value: string) => void;
   changeResult: ChangeResult | null;
-  confirmOpen: boolean;
-  onOpenConfirm: () => void;
-  onCloseConfirm: () => void;
-  submitting: boolean;
+  passengerCount: number;
 }) {
+  const recibidoInvalido = receivedAmount.trim() !== "" && changeResult?.kind === "invalido";
+
   return (
-    <div className="flex flex-col gap-5">
-      <div role="radiogroup" aria-label="Método de pago" className="flex flex-col gap-3">
+    <div className="flex flex-col gap-6">
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-3 text-base font-semibold text-tinta">¿Cómo te paga?</legend>
         {paymentMethods.map((m) => {
           const selected = m.id === selectedId;
+          const tasa = formatRate(m.rateFromUsd, m.currency);
           return (
             <label
               key={m.id}
-              className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border p-4 transition-colors duration-150 motion-reduce:transition-none ${
-                selected
-                  ? "border-[var(--color-acento)] bg-[var(--color-acento-suave)]"
-                  : "border-[var(--color-borde)] bg-[var(--color-superficie)]"
+              className={`flex min-h-16 cursor-pointer items-center gap-4 rounded-tarjeta border-2 bg-superficie px-4 py-3 transition-colors duration-150 ease-out motion-reduce:transition-none ${
+                selected ? "border-marca-600 bg-marca-50" : "border-borde hover:border-marca-600/60"
               }`}
             >
               <input
@@ -110,99 +96,120 @@ export function StepPayment({
                 value={m.id}
                 checked={selected}
                 onChange={() => onSelect(m.id)}
-                className="h-5 w-5 shrink-0 accent-[var(--color-acento)]"
+                className="foco size-5 shrink-0 accent-marca-600"
               />
-              <span className="flex-1">
-                {m.name} · {m.currency}
-                {m.rateFromUsd && (m.currency === "VES" || m.currency === "COP")
-                  ? ` · Tasa: ${m.rateFromUsd}`
-                  : ""}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-base font-semibold text-tinta">{m.name}</span>
+                <span className="tabular text-sm text-tinta-suave">
+                  En {CURRENCY_NAMES[m.currency]}
+                  {tasa ? ` · ${tasa}` : ""}
+                </span>
               </span>
+              {selected ? <IconCheckCircle className="size-6 shrink-0 text-marca-600" /> : null}
             </label>
           );
         })}
-      </div>
+      </fieldset>
 
-      <div className="rounded-xl border border-[var(--color-borde)] bg-[var(--color-superficie)] p-4">
+      <section
+        aria-labelledby="total-titulo"
+        aria-busy={quotePending || undefined}
+        className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-5 shadow-1"
+      >
+        <h3 id="total-titulo" className="text-base font-semibold text-tinta-suave">
+          Total a cobrar
+        </h3>
         {quotePending ? (
-          <p className="text-sm text-[var(--color-texto-suave)]">Calculando…</p>
-        ) : quoteError ? (
-          <p role="alert" className="text-sm font-medium text-[var(--color-peligro)]">
-            {quoteError}
-          </p>
-        ) : quote ? (
           <div className="flex flex-col gap-2">
-            <dl className="tabular grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-[var(--color-texto-suave)]">Tarifa</dt>
-                <dd className="font-medium">{formatAmount(quote.fareTotalUsd, "USD")}</dd>
-              </div>
-              <div>
-                <dt className="text-[var(--color-texto-suave)]">Tasa de salida</dt>
-                <dd className="font-medium">{formatAmount(quote.taxTotalUsd, "USD")}</dd>
-              </div>
-              <div>
-                <dt className="text-[var(--color-texto-suave)]">Total en USD</dt>
-                <dd className="font-medium">{formatAmount(quote.totalUsd, "USD")}</dd>
-              </div>
-            </dl>
-            <p className="text-lg font-semibold">
-              Total a cobrar: {formatAmount(quote.amountInCurrency, quote.currency)}
-            </p>
+            <span className="sr-only" role="status">
+              Calculando el total…
+            </span>
+            <Skeleton className="h-14 w-64 max-w-full" />
+            <Skeleton className="h-5 w-48 rounded-pastilla" />
           </div>
+        ) : quoteError ? (
+          <Alert
+            tone="peligro"
+            title="No se pudo calcular el total"
+            action={
+              <button type="button" onClick={onRetryQuote} className={panelButtonClass("secundario")}>
+                <IconRefresh className="size-5" />
+                Intentar de nuevo
+              </button>
+            }
+          >
+            {quoteError}
+          </Alert>
+        ) : quote ? (
+          <>
+            <p className="tabular text-5xl font-bold tracking-tight text-tinta">
+              {formatAmount(quote.amountInCurrency, quote.currency)}
+            </p>
+            <p className="tabular text-[15px] text-tinta-suave">
+              {countLabel(passengerCount, "persona", "personas")}
+              {quote.currency !== "USD" ? ` · Equivale a ${formatAmount(quote.totalUsd, "USD")}` : ""}
+            </p>
+            <details className="group">
+              <summary className="foco inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-control px-2 -ml-2 text-[15px] font-semibold text-marca-700 hover:bg-marca-50 [&::-webkit-details-marker]:hidden">
+                Ver el desglose
+                <IconChevronDown className="size-5 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
+              </summary>
+              <dl className="tabular mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[15px]">
+                <dt className="text-tinta-suave">Pasajes</dt>
+                <dd className="text-right font-medium text-tinta">{formatAmount(quote.fareTotalUsd, "USD")}</dd>
+                <dt className="text-tinta-suave">Tasa del terminal</dt>
+                <dd className="text-right font-medium text-tinta">{formatAmount(quote.taxTotalUsd, "USD")}</dd>
+                <dt className="font-semibold text-tinta">Total en dólares</dt>
+                <dd className="text-right font-semibold text-tinta">{formatAmount(quote.totalUsd, "USD")}</dd>
+              </dl>
+            </details>
+          </>
         ) : (
-          <p className="text-sm text-[var(--color-texto-suave)]">Elige un método de pago para cotizar.</p>
+          <p className="text-[15px] text-tinta-suave">Elige cómo te paga para ver el total.</p>
         )}
-      </div>
+      </section>
 
       {quote ? (
-        <label className={TAQUILLA_LABEL_CLASS}>
-          Recibido ({quote.currency})
-          <input
-            type="text"
+        <div className="flex flex-col gap-4">
+          <CounterField
+            id="taquilla-recibido"
+            label={`Dinero recibido (${CURRENCY_NAMES[quote.currency]})`}
+            hint="Escríbelo para calcular el vuelto. Si te pagan el monto exacto, puedes dejarlo vacío."
+            error={recibidoInvalido ? "Escribe solo el número, por ejemplo 1500 o 1500,50." : undefined}
             inputMode="decimal"
+            autoComplete="off"
             value={receivedAmount}
             onChange={(e) => onChangeReceived(e.target.value)}
-            className={taquillaInputClass("w-40")}
+            inputClassName="tabular max-w-xs text-lg"
           />
-        </label>
-      ) : null}
 
-      {quote && changeResult && changeResult.kind !== "invalido" ? (
-        <p className="tabular text-sm font-medium">
-          {changeResult.kind === "vuelto" ? "Vuelto" : "Faltan"}:{" "}
-          {formatAmount((changeResult.cents / 100).toString(), quote.currency)}
-        </p>
-      ) : null}
-
-      {quote && !confirmOpen ? (
-        <button type="button" onClick={onOpenConfirm} className={taquillaButtonClass("exito", "w-full")}>
-          Cobrar {formatAmount(quote.amountInCurrency, quote.currency)} y emitir ticket
-        </button>
-      ) : null}
-
-      {quote && confirmOpen ? (
-        <div className="flex flex-col gap-3 rounded-xl border border-[var(--color-alerta)] bg-[var(--color-alerta-suave)] p-4">
-          <p className="text-sm">
-            ¿Confirmas el cobro de {formatAmount(quote.amountInCurrency, quote.currency)} en efectivo? La
-            venta no se puede deshacer desde esta pantalla.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="submit"
-              disabled={submitting}
-              className={taquillaButtonClass("exito", "flex-1")}
-            >
-              {submitting ? "Procesando…" : "Sí, cobrar y emitir"}
-            </button>
-            <button
-              type="button"
-              onClick={onCloseConfirm}
-              disabled={submitting}
-              className={taquillaButtonClass("secundario", "flex-1")}
-            >
-              Revisar datos
-            </button>
+          <div aria-live="polite">
+            {changeResult && !recibidoInvalido && receivedAmount.trim() !== "" ? (
+              changeResult.kind === "vuelto" ? (
+                <div className="flex flex-col gap-1 rounded-tarjeta border border-exito/30 bg-exito-suave p-5">
+                  <p className="flex items-center gap-2 text-base font-semibold text-exito">
+                    <IconCheckCircle className="size-5" />
+                    {changeResult.cents === 0 ? "Pago exacto, no hay vuelto" : "Vuelto a entregar"}
+                  </p>
+                  <p className="tabular text-5xl font-bold tracking-tight text-exito">
+                    {formatAmount((changeResult.cents / 100).toString(), quote.currency)}
+                  </p>
+                </div>
+              ) : changeResult.kind === "faltan" ? (
+                <div className="flex flex-col gap-1 rounded-tarjeta border border-alerta/30 bg-alerta-suave p-5">
+                  <p className="flex items-center gap-2 text-base font-semibold text-alerta">
+                    <IconWarning className="size-5" />
+                    Falta dinero
+                  </p>
+                  <p className="tabular text-5xl font-bold tracking-tight text-alerta">
+                    {formatAmount((changeResult.cents / 100).toString(), quote.currency)}
+                  </p>
+                  <p className="text-[15px] text-tinta">
+                    Pide al pasajero lo que falta o corrige lo recibido antes de cobrar.
+                  </p>
+                </div>
+              ) : null
+            ) : null}
           </div>
         </div>
       ) : null}

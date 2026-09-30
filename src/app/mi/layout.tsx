@@ -1,42 +1,63 @@
-import Link from "next/link";
+import { Suspense, type ReactNode } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { requirePassenger } from "@/modules/auth";
 import { listNoticesForAccount } from "@/modules/notices";
 import { firstNamePart, maskIdNumber } from "@/lib/identity";
-import { AppHeader } from "@/components/app-header";
-import { BottomNav } from "@/components/bottom-nav";
-import { IconDocument, IconLogout } from "@/components/icons";
+import { AppHeader, AppHeaderAction } from "@/components/app-header";
+import { BottomNav, BottomNavBadge } from "@/components/bottom-nav";
+import { IconDocument, IconExit } from "@/components/icons";
 
-export default async function MiLayout({ children }: { children: React.ReactNode }) {
+/**
+ * Contador de avisos por atender (nivel alerta). Va dentro de su propio
+ * `<Suspense>`: la cabecera, la barra y el skeleton de la página se pintan
+ * sin esperar esta consulta. Si la consulta falla, la barra queda sin
+ * contador en vez de tumbar la pantalla.
+ */
+async function NoticeBadge({ accountId }: { accountId: string }) {
+  try {
+    const avisos = await listNoticesForAccount(accountId);
+    return <BottomNavBadge count={avisos.filter((aviso) => aviso.level === "alerta").length} />;
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("No se pudo contar los avisos del pasajero", error);
+    return null;
+  }
+}
+
+export default async function MiLayout({ children }: { children: ReactNode }) {
   const pasajero = await requirePassenger();
-  const avisos = await listNoticesForAccount(pasajero.id);
-  const noticeCount = avisos.filter((aviso) => aviso.level === "alerta").length;
 
   return (
-    <div className="min-h-screen bg-lienzo">
+    <div className="min-h-dvh bg-lienzo">
       <AppHeader
+        titleAs="p"
         title={`Hola, ${firstNamePart(pasajero.fullName)}`}
-        subtitle={maskIdNumber(pasajero.idNumber)}
+        subtitle={`Cédula ${maskIdNumber(pasajero.idNumber)}`}
         right={
           <>
-            <Link
+            <AppHeaderAction
               href="/mi/documentos"
-              aria-label="Mis documentos"
-              className="flex h-11 w-11 items-center justify-center rounded-pastilla bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              <IconDocument aria-hidden="true" />
-            </Link>
-            <a
-              href="/salir"
-              aria-label="Salir"
-              className="flex h-11 w-11 items-center justify-center rounded-pastilla bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              <IconLogout aria-hidden="true" />
-            </a>
+              label="Documentos"
+              icon={<IconDocument />}
+            />
+            <AppHeaderAction href="/salir" label="Salir" icon={<IconExit />} plain />
           </>
         }
       />
-      <BottomNav noticeCount={noticeCount} />
-      <main className="mx-auto w-full max-w-md px-4 pb-28 pt-4 md:max-w-2xl md:pb-12">{children}</main>
+      <main
+        id="contenido"
+        className="mx-auto w-full max-w-md px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5 md:max-w-2xl"
+      >
+        {children}
+      </main>
+      {/* Después de <main> en el orden del DOM: el teclado llega primero al contenido. */}
+      <BottomNav
+        noticeCount={
+          <Suspense fallback={null}>
+            <NoticeBadge accountId={pasajero.id} />
+          </Suspense>
+        }
+      />
     </div>
   );
 }

@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { IconBell, IconBus, IconHome, IconTicket, type IconProps } from "./icons";
 
 export interface BottomNavProps {
-  noticeCount?: number;
+  /**
+   * Contador de avisos. Un número pinta la insignia aquí mismo; un nodo (por
+   * ejemplo un `<Suspense>` con `BottomNavBadge` dentro) se pinta tal cual,
+   * para que el layout no espere la consulta de avisos antes de mostrarse.
+   */
+  noticeCount?: number | ReactNode;
 }
 
 interface NavItem {
@@ -22,51 +27,85 @@ const ITEMS: NavItem[] = [
   { href: "/mi/avisos", label: "Avisos", Icon: IconBell },
 ];
 
+const NOTICES_HREF = "/mi/avisos";
+
 /** `/mi` solo se marca activo con igualdad exacta; el resto también con sus subrutas. */
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/mi") return pathname === "/mi";
+  if (href === "/mi") return pathname === "/mi" || pathname === "/mi/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** Barra de navegación de cuatro destinos: fija abajo en móvil, fila de pestañas en `md`. */
+/**
+ * Insignia roja del contador de avisos. Va dentro del enlace "Avisos", después
+ * de la etiqueta, para que el lector de pantalla diga "Avisos, 2 avisos por
+ * atender". Con cero no pinta nada.
+ */
+export function BottomNavBadge({ count }: { count: number }) {
+  if (!Number.isFinite(count) || count <= 0) return null;
+  const visible = count > 9 ? "9+" : String(count);
+
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className="tabular absolute left-1/2 top-1 ml-2.5 flex h-5 min-w-5 items-center justify-center rounded-pastilla bg-peligro px-1 text-xs font-bold text-white ring-2 ring-white"
+      >
+        {visible}
+      </span>
+      <span className="sr-only">
+        , {count} {count === 1 ? "aviso por atender" : "avisos por atender"}
+      </span>
+    </>
+  );
+}
+
+/**
+ * Barra de navegación de cuatro destinos (spec 6.4): fija abajo en todos los
+ * anchos, con el contenido centrado y el mismo ancho máximo que la página.
+ * El destino activo va en morado, con una pastilla detrás del icono y
+ * `aria-current="page"`.
+ */
 export function BottomNav({ noticeCount = 0 }: BottomNavProps) {
   const pathname = usePathname();
+  const badge =
+    typeof noticeCount === "number" ? <BottomNavBadge count={noticeCount} /> : noticeCount;
 
   return (
     <nav
       aria-label="Principal"
-      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-borde bg-white pb-[env(safe-area-inset-bottom)] md:static md:mx-auto md:my-3 md:max-w-2xl md:rounded-pastilla md:border"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-borde bg-superficie pb-[env(safe-area-inset-bottom)] shadow-2"
     >
-      {ITEMS.map(({ href, label, Icon }) => {
-        const active = isActive(pathname, href);
-        const mostrarContador = href === "/mi/avisos" && noticeCount > 0;
+      <div className="mx-auto flex w-full max-w-md md:max-w-2xl">
+        {ITEMS.map(({ href, label, Icon }) => {
+          const active = isActive(pathname, href);
 
-        return (
-          <Link
-            key={href}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className={[
-              "relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca",
-              active ? "text-marca" : "text-tinta-suave",
-            ].join(" ")}
-          >
-            {active ? (
-              <span className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-marca" aria-hidden="true" />
-            ) : null}
-            <span className="relative">
-              <Icon aria-hidden="true" />
-              {mostrarContador ? (
-                <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-pastilla bg-cta px-1 text-[10px] font-bold text-white">
-                  <span aria-hidden="true">{noticeCount}</span>
-                  <span className="sr-only">{noticeCount} avisos</span>
-                </span>
-              ) : null}
-            </span>
-            {label}
-          </Link>
-        );
-      })}
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={[
+                "foco relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1 rounded-control px-1 py-2 text-sm transition-colors duration-150 ease-out motion-reduce:transition-none",
+                active
+                  ? "font-bold text-marca-600"
+                  : "font-medium text-tinta-suave hover:text-marca-700",
+              ].join(" ")}
+            >
+              <span
+                aria-hidden="true"
+                className={[
+                  "flex h-8 w-14 items-center justify-center rounded-pastilla transition-colors duration-150 ease-out motion-reduce:transition-none",
+                  active ? "bg-marca-100" : "",
+                ].join(" ")}
+              >
+                <Icon />
+              </span>
+              <span className="leading-tight">{label}</span>
+              {href === NOTICES_HREF ? badge : null}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

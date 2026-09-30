@@ -1,61 +1,94 @@
 "use client";
 
-import { useActionState } from "react";
-import { Card, Pill, buttonClass } from "@/components/ui";
+import Link from "next/link";
+import { useActionState, useEffect, useRef, type FormEvent, type ReactNode } from "react";
+import { Alert } from "@/components/alert";
 import { DepartureRow } from "@/components/departure-row";
+import { IconAlertCircle } from "@/components/icons";
+import { currencyName } from "@/components/passenger-copy";
 import { StickyActions } from "@/components/sticky-actions";
-import { DetailsView } from "@/components/details-view";
+import { SubmitButton } from "@/components/submit-button";
+import { Card } from "@/components/ui";
+import { buttonClass, cx } from "@/components/ui-classes";
+import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { crearReservaAction, type CrearReservaState } from "./actions";
 import {
+  DOCUMENTS_RETURN_HREF,
   toDepartureRowData,
   type CompanionForm,
   type DepartureVM,
   type PaymentMethodVM,
 } from "./booking-form";
+import { convertCents, formatCents, type BookingCost } from "./money";
 
 const initialCrearState: CrearReservaState = { error: null };
 
-function formatUsd(value: number): string {
-  return `$ ${value.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+/** Una reserva para pagar en taquilla debe pagarse 12 horas antes de salir. */
+const HORAS_LIMITE_TAQUILLA = 12;
 
 interface StepPaymentProps {
   departure: DepartureVM;
   now: Date;
   availableMethods: PaymentMethodVM[];
+  /** Falso cuando faltan menos de 12 horas: ya no se puede elegir pagar en la taquilla. */
+  physicalAllowed: boolean;
   selectedMethod: PaymentMethodVM | null;
-  selectedPaymentMethodId: string | null;
   onChangePaymentMethod: (id: string) => void;
   passengerCount: number;
-  fareUsd: number;
-  fareTotal: number;
-  taxPerPassenger: number;
-  taxTotal: number;
-  total: number;
+  cost: BookingCost;
+  exchangeRates: Partial<Record<"VES" | "COP", string>>;
   companions: CompanionForm[];
   policiesAccepted: boolean;
+  summary: ReactNode;
   onBack: () => void;
+  onGoToStep: (step: 1 | 2 | 3 | 4) => void;
 }
 
-/** Paso 4 del asistente: método de pago, desglose de montos y confirmación de la reserva. */
+/** Equivalente del total en la moneda del método, con la tasa del día; `null` si es en dólares o no hay tasa. */
+function equivalente(
+  totalCents: bigint,
+  method: PaymentMethodVM,
+  rates: Partial<Record<"VES" | "COP", string>>,
+): string | null {
+  if (method.currency !== "VES" && method.currency !== "COP") return null;
+  const rate = rates[method.currency];
+  if (!rate) return null;
+  const cents = convertCents(totalCents, rate);
+  return cents === null ? null : formatCents(cents, method.currency);
+}
+
+/**
+ * Paso 4 del asistente: elegir cómo pagar (en línea o en la taquilla), ver
+ * el recibo con la tarifa, la tasa del terminal y el total, y confirmar la
+ * reserva. Los datos para pagar se muestran después, en la reserva creada,
+ * para que nadie pague antes de tener su puesto.
+ */
 export function StepPayment({
   departure,
   now,
   availableMethods,
+  physicalAllowed,
   selectedMethod,
-  selectedPaymentMethodId,
   onChangePaymentMethod,
   passengerCount,
-  fareUsd,
-  fareTotal,
-  taxPerPassenger,
-  taxTotal,
-  total,
+  cost,
+  exchangeRates,
   companions,
   policiesAccepted,
+  summary,
   onBack,
+  onGoToStep,
 }: StepPaymentProps) {
-  const [state, formAction, pending] = useActionState(crearReservaAction, initialCrearState);
+  const [state, formAction] = useActionState(crearReservaAction, initialCrearState);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const methodsRef = useRef<HTMLFieldSetElement>(null);
+
+  useEffect(() => {
+    if (state.error) {
+      errorRef.current?.focus({ preventScroll: true });
+      errorRef.current?.scrollIntoView({ block: "center" });
+    }
+  }, [state]);
 
   const companionsPayload = JSON.stringify(
     companions.map((c) => ({
@@ -65,102 +98,191 @@ export function StepPayment({
     })),
   );
 
+  const enLinea = availableMethods.filter((m) => m.kind === "DIGITAL");
+  const enTaquilla = availableMethods.filter((m) => m.kind === "FISICO");
+  const limiteTaquilla = new Date(new Date(departure.departsAtIso).getTime() - HORAS_LIMITE_TAQUILLA * 3_600_000);
+  const total = formatCents(cost.totalCents, "USD");
+  const totalEnMoneda = selectedMethod ? equivalente(cost.totalCents, selectedMethod, exchangeRates) : null;
+
+  function metodoOpcion(m: PaymentMethodVM) {
+    const checked = selectedMethod?.id === m.id;
+    return (
+      <li key={m.id}>
+        <label
+          className={cx(
+            "flex min-h-14 cursor-pointer items-center gap-3 rounded-control border-2 bg-superficie px-4 py-3 transition-colors duration-150 ease-out motion-reduce:transition-none has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-marca-600",
+            checked ? "border-marca-600 bg-marca-50" : "border-borde-control hover:border-marca-600",
+          )}
+        >
+          <input
+            type="radio"
+            name="paymentMethodId"
+            value={m.id}
+            checked={checked}
+            required
+            onChange={() => onChangePaymentMethod(m.id)}
+            className="size-5 shrink-0 cursor-pointer accent-marca-600 focus-visible:outline-none"
+          />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="break-words font-semibold text-tinta">{m.name}</span>
+            <span className="text-sm text-tinta-suave">Pagas en {currencyName(m.currency)}</span>
+          </span>
+        </label>
+      </li>
+    );
+  }
+
+  function validarAntesDeEnviar(event: FormEvent<HTMLFormElement>) {
+    if (!selectedMethod) {
+      event.preventDefault();
+      methodsRef.current?.querySelector<HTMLInputElement>("input[type=radio]")?.focus();
+    }
+  }
+
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form action={formAction} onSubmit={validarAntesDeEnviar} className="flex flex-col gap-5">
       <input type="hidden" name="departureId" value={departure.id} />
       <input type="hidden" name="companions" value={companionsPayload} />
       <input type="hidden" name="policiesAccepted" value={policiesAccepted ? "on" : ""} />
 
       <DepartureRow departure={toDepartureRowData(departure)} now={now} selected />
 
-      <div className="flex flex-col gap-3">
-        <h3 className="font-semibold text-tinta">Método de pago</h3>
-        {availableMethods.length === 0 ? (
-          <p className="text-sm text-tinta-suave">No hay métodos de pago disponibles para esta salida.</p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {availableMethods.map((m) => (
-              <li key={m.id}>
-                <label
-                  className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-tarjeta border bg-white p-4 has-[:checked]:ring-2 has-[:checked]:ring-marca ${
-                    selectedPaymentMethodId === m.id ? "border-marca" : "border-borde"
-                  }`}
+      {availableMethods.length === 0 ? (
+        <Alert tone="alerta" role="none" title="Esta salida no tiene formas de pago disponibles">
+          Elige otra salida o pregunta en la taquilla de {departure.agencyName}.
+        </Alert>
+      ) : (
+        <fieldset ref={methodsRef} className="flex flex-col gap-4">
+          <legend className="sr-only">Forma de pago</legend>
+          {enLinea.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <p className="font-semibold text-tinta">Pagar en línea</p>
+              <p className="text-sm text-tinta-suave">
+                Pagas desde tu banco o billetera y subes la captura del pago.
+              </p>
+              <ul className="flex flex-col gap-2">{enLinea.map(metodoOpcion)}</ul>
+            </div>
+          ) : null}
+          {enTaquilla.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <p className="font-semibold text-tinta">Pagar en la taquilla</p>
+              <p className="text-sm text-tinta-suave">
+                Pagas en efectivo en la taquilla de {departure.agencyName}.
+              </p>
+              <ul className="flex flex-col gap-2">{enTaquilla.map(metodoOpcion)}</ul>
+            </div>
+          ) : null}
+          {!physicalAllowed ? (
+            <p className="text-sm text-tinta-suave">
+              Pagar en la taquilla solo se puede elegir hasta 12 horas antes de salir.
+            </p>
+          ) : null}
+        </fieldset>
+      )}
+
+      {selectedMethod?.kind === "DIGITAL" ? (
+        <Card className="flex flex-col gap-3">
+          <p className="font-semibold text-tinta">Qué sigue</p>
+          <ol className="flex flex-col gap-2">
+            {[
+              "Confirmas tu reserva con el botón de abajo.",
+              `Pagas ${totalEnMoneda ?? total} con ${selectedMethod.name}: te mostramos los datos.`,
+              "Subes la captura del pago. Tienes 2 horas para hacerlo.",
+            ].map((paso, indice) => (
+              <li key={paso} className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="tabular grid size-7 shrink-0 place-items-center rounded-full bg-marca-600 text-sm font-bold text-white"
                 >
-                  <input
-                    type="radio"
-                    name="paymentMethodId"
-                    value={m.id}
-                    checked={selectedPaymentMethodId === m.id}
-                    onChange={() => onChangePaymentMethod(m.id)}
-                    className="peer h-5 w-5 shrink-0 accent-marca"
-                  />
-                  <span className="flex-1 font-semibold text-tinta">{m.name}</span>
-                  <Pill tone={m.kind === "DIGITAL" ? "marca" : "neutro"}>
-                    {m.kind === "DIGITAL" ? `Digital · ${m.currency}` : "En sitio"}
-                  </Pill>
-                </label>
+                  {indice + 1}
+                </span>
+                <span className="leading-relaxed text-tinta">
+                  <span className="sr-only">Paso {indice + 1}: </span>
+                  {paso}
+                </span>
               </li>
             ))}
-          </ul>
-        )}
+          </ol>
+        </Card>
+      ) : null}
 
-        {selectedMethod && selectedMethod.kind === "DIGITAL" ? (
-          <Card className="text-sm">
-            <p className="font-semibold text-tinta">Datos de cobro</p>
-            <DetailsView value={selectedMethod.details} />
-          </Card>
-        ) : null}
+      {selectedMethod?.kind === "FISICO" ? (
+        <Alert tone="info" role="none" title="Pagas en la taquilla">
+          Paga {total} en la taquilla de {departure.agencyName} antes del {formatCaracasDate(limiteTaquilla)} a
+          las {formatCaracasTime24(limiteTaquilla)}. Si no, el puesto se libera.
+        </Alert>
+      ) : null}
 
-        {selectedMethod && selectedMethod.kind === "FISICO" ? (
-          <Card className="border border-alerta text-sm text-alerta">
-            Tu reserva quedará condicional hasta que la agencia registre el cobro en sitio. Debes
-            reconfirmarla antes de las 12 horas previas a la salida o se liberará el cupo.
-          </Card>
-        ) : null}
-      </div>
-
-      <Card>
-        <h3 className="font-semibold text-tinta">Desglose</h3>
-        <dl className="mt-2 grid grid-cols-2 gap-3 text-sm tabular sm:grid-cols-4">
-          <div>
-            <dt className="text-tinta-suave">Tarifa por pasajero</dt>
-            <dd className="font-medium text-tinta">{formatUsd(fareUsd)}</dd>
+      <Card className="flex flex-col gap-3">
+        <p className="font-semibold text-tinta">Tu recibo</p>
+        <dl className="tabular flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-tinta-suave">
+              Pasaje × {passengerCount}
+              <span className="block text-sm">{formatCents(cost.fareCents, "USD")} por persona</span>
+            </dt>
+            <dd className="font-semibold text-tinta">{formatCents(cost.fareTotalCents, "USD")}</dd>
           </div>
-          <div>
-            <dt className="text-tinta-suave">Tasa de salida por pasajero</dt>
-            <dd className="font-medium text-tinta">{formatUsd(taxPerPassenger)}</dd>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-tinta-suave">
+              Tasa del terminal × {passengerCount}
+              <span className="block text-sm">{formatCents(cost.taxCents, "USD")} por persona</span>
+            </dt>
+            <dd className="font-semibold text-tinta">{formatCents(cost.taxTotalCents, "USD")}</dd>
           </div>
-          <div>
-            <dt className="text-tinta-suave">Pasajeros</dt>
-            <dd className="font-medium text-tinta">{passengerCount}</dd>
+          <div className="flex items-baseline justify-between gap-3 border-t border-borde pt-3">
+            <dt className="font-bold text-tinta">Total a pagar</dt>
+            <dd className="text-2xl font-bold text-tinta">{total}</dd>
           </div>
-          <div>
-            <dt className="text-tinta-suave">Total</dt>
-            <dd className="text-2xl font-extrabold text-tinta">{formatUsd(total)}</dd>
-          </div>
+          {totalEnMoneda && selectedMethod ? (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm text-tinta-suave">En {currencyName(selectedMethod.currency)}, con la tasa de hoy</dt>
+              <dd className="font-semibold text-tinta">{totalEnMoneda}</dd>
+            </div>
+          ) : null}
         </dl>
-        <p className="mt-2 text-xs text-tinta-suave">
-          Tarifa total {formatUsd(fareTotal)} + tasa de salida total {formatUsd(taxTotal)}.
-        </p>
       </Card>
 
       {state.error ? (
-        <p role="alert" className="text-sm font-medium text-peligro">
-          {state.error}
+        <div ref={errorRef} tabIndex={-1} className="outline-none">
+          <Alert
+            tone="peligro"
+            title="No pudimos confirmar tu reserva"
+            action={
+              state.missingDocuments ? (
+                <Link href={DOCUMENTS_RETURN_HREF} className={buttonClass("secundario", undefined, "sm")}>
+                  Ir a mis documentos
+                </Link>
+              ) : state.error.startsWith("No se pudieron leer") ? (
+                <button type="button" onClick={() => onGoToStep(2)} className={buttonClass("secundario", undefined, "sm")}>
+                  Revisar pasajeros
+                </button>
+              ) : undefined
+            }
+          >
+            {state.error}
+          </Alert>
+        </div>
+      ) : null}
+
+      {!selectedMethod && availableMethods.length > 0 ? (
+        <p className="flex items-center gap-2 text-sm font-medium text-tinta-suave">
+          <IconAlertCircle aria-hidden="true" className="size-4 shrink-0" />
+          Elige una forma de pago para confirmar.
         </p>
       ) : null}
 
-      <StickyActions>
-        <button type="button" onClick={onBack} className={buttonClass("secundario", "flex-1")}>
+      <StickyActions summary={summary}>
+        <button type="button" onClick={onBack} className={buttonClass("secundario", "shrink-0", "lg")}>
           Atrás
         </button>
-        <button
-          type="submit"
-          disabled={pending || !selectedPaymentMethodId}
-          className={buttonClass("primario", "flex-1")}
+        <SubmitButton
+          pendingLabel="Confirmando…"
+          disabled={availableMethods.length === 0}
+          className={buttonClass("primario", "flex-1", "lg")}
         >
-          {pending ? "Confirmando…" : "Confirmar reserva"}
-        </button>
+          Confirmar reserva
+        </SubmitButton>
       </StickyActions>
     </form>
   );

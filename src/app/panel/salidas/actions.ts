@@ -34,16 +34,23 @@ function salidaDetalleUrl(
   return panelFeedbackUrl(`/panel/salidas/${departureId}`, params);
 }
 
+/** Nombre del campo del formulario al que apunta un error de zod, si es uno simple. */
+function issueField(path: ReadonlyArray<string | number> | undefined): string | undefined {
+  const first = path?.[0];
+  return typeof first === "string" ? first : undefined;
+}
+
 export async function createDepartureAction(formData: FormData): Promise<void> {
   const user = await requirePanelUser("departures.manage");
   const agencyId = requireAgencyScope(user);
   const origen = parsePanelOrigin(formData.get("origen"));
 
-  function errorRedirect(mensaje: string): never {
+  // `campo` le dice al formulario qué dato marcar en rojo; sin él, el error queda como aviso general.
+  function errorRedirect(mensaje: string, campo?: string): never {
     if (origen === "tablero") {
-      redirect(tableroUrl({ registrar: "salida", error: mensaje }));
+      redirect(tableroUrl({ registrar: "salida", error: mensaje, campo }));
     }
-    redirect(salidasUrl({ crear: 1, error: mensaje }));
+    redirect(salidasUrl({ crear: 1, error: mensaje, campo }));
   }
 
   const schema = z.object({
@@ -61,7 +68,8 @@ export async function createDepartureAction(formData: FormData): Promise<void> {
     hora: formData.get("hora"),
   });
   if (!parsed.success) {
-    errorRedirect(parsed.error.issues[0]?.message ?? "Datos inválidos.");
+    const issue = parsed.error.issues[0];
+    errorRedirect(issue?.message ?? "Revisa los datos de la salida.", issueField(issue?.path));
   }
   const data = parsed.data;
 
@@ -99,7 +107,7 @@ export async function startBoardingAction(formData: FormData): Promise<void> {
   const agencyId = requireAgencyScope(user);
   const departureIdParsed = z.string().uuid().safeParse(formData.get("departureId"));
   if (!departureIdParsed.success) {
-    redirect(salidasUrl({ error: "Salida inválida." }));
+    redirect(salidasUrl({ error: "No encontramos esa salida. Ábrela de nuevo desde la lista." }));
   }
   const departureId = departureIdParsed.data;
 
@@ -128,7 +136,7 @@ export async function registerDepartureAction(formData: FormData): Promise<void>
   const agencyId = requireAgencyScope(user);
   const departureIdParsed = z.string().uuid().safeParse(formData.get("departureId"));
   if (!departureIdParsed.success) {
-    redirect(salidasUrl({ error: "Salida inválida." }));
+    redirect(salidasUrl({ error: "No encontramos esa salida. Ábrela de nuevo desde la lista." }));
   }
   const departureId = departureIdParsed.data;
 
@@ -158,7 +166,7 @@ export async function registerArrivalAction(formData: FormData): Promise<void> {
   const agencyId = requireAgencyScope(user);
   const departureIdParsed = z.string().uuid().safeParse(formData.get("departureId"));
   if (!departureIdParsed.success) {
-    redirect(salidasUrl({ error: "Salida inválida." }));
+    redirect(salidasUrl({ error: "No encontramos esa salida. Ábrela de nuevo desde la lista." }));
   }
   const departureId = departureIdParsed.data;
 

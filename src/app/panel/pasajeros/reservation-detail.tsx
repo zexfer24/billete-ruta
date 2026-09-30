@@ -1,5 +1,8 @@
+import Link from "next/link";
 import { PanelFeedback } from "@/components/panel-feedback";
-import { StatusBadge } from "@/components/panel-ui";
+import { Alert } from "@/components/alert";
+import { EmptyState, ProgressBar, StatusBadge, panelButtonClass } from "@/components/panel-ui";
+import { IconDownload, IconSearch } from "@/components/icons";
 import { formatMoney } from "@/lib/decimal";
 import { formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
 import {
@@ -7,16 +10,39 @@ import {
   departureStatusTone,
   reservationStatusLabel,
   reservationStatusTone,
-  salesChannelLabel,
 } from "@/lib/labels";
 import type { AgencyReservationDetail } from "@/modules/reports";
 import { CashPaymentForm } from "@/app/panel/_forms/cash-payment-form";
+import { countLabel } from "../_dashboard/text";
 import { coverageBadge, ProofActions, ProofHistoryTable } from "./proof-review";
+import { Disclosure, DetailList } from "./disclosure";
+
+/** Título de una sección del panel lateral. */
+function PanelSectionTitle({ children }: { children: string }) {
+  return <h3 className="text-base font-semibold text-tinta">{children}</h3>;
+}
+
+/** La reserva no existe o es de otra agencia: se dice con claridad y se ofrece volver. */
+export function ReservationNotFound({ closeHref }: { closeHref: string }) {
+  return (
+    <EmptyState
+      icon={<IconSearch />}
+      title="No encontramos esta reserva"
+      description="Puede que el enlace esté incompleto o que la reserva sea de otra agencia."
+      action={
+        <Link href={closeHref} scroll={false} className={panelButtonClass("secundario")}>
+          Volver a la lista
+        </Link>
+      }
+    />
+  );
+}
 
 /**
- * Detalle completo de una reserva, en el panel lateral abierto con
- * `?reserva=<id>`. Reutiliza `ProofActions` y `ProofHistoryTable` del panel
- * de comprobante en vez de repetir su marcado.
+ * Detalle de una reserva en el panel lateral (`?reserva=<id>`). Arriba el
+ * resumen con cuánto se pagó y cuánto falta; después la acción que toca
+ * (revisar un comprobante, cobrar el saldo o descargar el ticket); luego el
+ * viaje y los pasajeros; y plegados, el desglose del precio y el historial.
  */
 export function ReservationDetailPanel({
   detail,
@@ -29,165 +55,94 @@ export function ReservationDetailPanel({
   error?: string;
   ok?: string;
 }) {
-  const { reservation, departure, passengers, ticket, pendingProofs, history, canRegisterCash } = detail;
+  const { reservation, holder, departure, passengers, ticket, pendingProofs, history, canRegisterCash } = detail;
   const seLibera =
     reservation.status === "PENDIENTE_PAGO" &&
     reservation.expiresAt !== null &&
     reservation.expiresAt.getTime() > Date.now();
+  const saldoCero = reservation.balanceUsd.isZero() || reservation.balanceUsd.isNegative();
 
   return (
     <div className="flex flex-col gap-6">
       <PanelFeedback error={error} ok={ok} />
 
-      <section>
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-4 rounded-tarjeta border border-borde bg-lienzo p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="tabular text-lg font-bold tracking-tight text-tinta">{reservation.code}</p>
+            <p className="text-[15px] text-tinta">
+              {holder.fullName} <span className="tabular text-tinta-suave">· {holder.maskedIdNumber}</span>
+            </p>
+            <p className="text-sm text-tinta-suave">
+              {reservation.salesChannel === "TAQUILLA" ? "Vendida en taquilla" : "Reservada en la app"} el{" "}
+              <span className="tabular">{formatCaracasDateTime24(reservation.createdAt)}</span>
+            </p>
+          </div>
           <StatusBadge
             label={reservationStatusLabel(reservation.status)}
             tone={reservationStatusTone(reservation.status)}
           />
-          <span className="text-sm text-[var(--color-texto-suave)]">
-            {salesChannelLabel(reservation.salesChannel)}
-          </span>
         </div>
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="font-medium text-[var(--color-texto-suave)]">Creada el</dt>
-          <dd className="tabular">{formatCaracasDateTime24(reservation.createdAt)}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Método de pago</dt>
-          <dd>{reservation.paymentMethodName}</dd>
-        </dl>
+        <ProgressBar
+          value={Number(reservation.paidUsd.toString())}
+          max={Number(reservation.totalUsd.toString())}
+          label={`Pagado ${formatMoney(reservation.paidUsd, "USD")} de ${formatMoney(reservation.totalUsd, "USD")}`}
+          detail={saldoCero ? "Pagado completo" : `Falta ${formatMoney(reservation.balanceUsd, "USD")}`}
+          tone={saldoCero ? "exito" : "marca"}
+        />
         {seLibera && reservation.expiresAt ? (
-          <p className="mt-2 text-sm text-[var(--color-alerta)]">
-            Se libera a las {formatCaracasTime24(reservation.expiresAt)} si no recibe pago
-          </p>
+          <Alert tone="alerta" role="none">
+            Si no recibe ningún pago, el puesto se libera a las {formatCaracasTime24(reservation.expiresAt)}.
+          </Alert>
         ) : null}
-      </section>
-
-      <section>
-        <h3 className="text-sm font-semibold tracking-tight">Salida</h3>
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="font-medium text-[var(--color-texto-suave)]">Ruta</dt>
-          <dd>
-            {departure.origin} → {departure.destination}
-          </dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Fecha y hora</dt>
-          <dd className="tabular">{formatCaracasDateTime24(departure.departsAt)}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Placa</dt>
-          <dd className="tabular">{departure.vehiclePlate}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Estado</dt>
-          <dd>
-            <StatusBadge
-              label={departureStatusLabel(departure.status)}
-              tone={departureStatusTone(departure.status)}
-            />
-          </dd>
-        </dl>
-      </section>
-
-      <section>
-        <h3 className="text-sm font-semibold tracking-tight">Pasajeros</h3>
-        <ul className="mt-2 flex flex-col gap-2 text-sm">
-          {passengers.map((p) => (
-            <li
-              key={p.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--color-borde)] px-3 py-2"
-            >
-              <span>
-                {p.fullName}{" "}
-                <span className="tabular text-[var(--color-texto-suave)]">{p.maskedIdNumber}</span>
-                {p.isHolder ? (
-                  <span className="ml-1 text-[var(--color-texto-suave)]">(titular)</span>
-                ) : null}
-              </span>
-              {p.boardedAt ? (
-                <span className="tabular text-xs text-[var(--color-exito)]">
-                  Abordó {formatCaracasTime24(p.boardedAt)}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <h3 className="text-sm font-semibold tracking-tight">Cuentas</h3>
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="font-medium text-[var(--color-texto-suave)]">Tarifa</dt>
-          <dd className="tabular">{formatMoney(reservation.fareTotalUsd, "USD")}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Tasa de salida</dt>
-          <dd className="tabular">{formatMoney(reservation.taxTotalUsd, "USD")}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Total</dt>
-          <dd className="tabular">{formatMoney(reservation.totalUsd, "USD")}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Abonado</dt>
-          <dd className="tabular">{formatMoney(reservation.paidUsd, "USD")}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Saldo</dt>
-          <dd className="tabular font-semibold">{formatMoney(reservation.balanceUsd, "USD")}</dd>
-        </dl>
-        {reservation.currency !== "USD" ? (
-          <p className="mt-2 text-sm text-[var(--color-texto-suave)]">
-            Total en {reservation.currency}:{" "}
-            {formatMoney(reservation.amountInCurrency, reservation.currency)}
-          </p>
-        ) : null}
-      </section>
-
-      <section>
-        <h3 className="text-sm font-semibold tracking-tight">Ticket</h3>
-        {ticket ? (
-          <p className="mt-2 text-sm">
-            Emitido el {formatCaracasDateTime24(ticket.issuedAt)} ·{" "}
-            <a
-              href={`/api/archivos/${ticket.pdfPath}`}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-[var(--color-acento)] underline"
-            >
-              Descargar PDF
-            </a>
-          </p>
-        ) : (
-          <p className="mt-2 text-sm text-[var(--color-texto-suave)]">
-            Se emite cuando el saldo llegue a cero.
-          </p>
-        )}
-      </section>
+      </div>
 
       {pendingProofs.length > 0 ? (
-        <section className="flex flex-col gap-4">
-          <h3 className="text-sm font-semibold tracking-tight">Comprobantes por revisar</h3>
+        <section className="flex flex-col gap-3">
+          <PanelSectionTitle>
+            {pendingProofs.length === 1 ? "Comprobante por revisar" : "Comprobantes por revisar"}
+          </PanelSectionTitle>
           {pendingProofs.map((p) => {
             const badge = coverageBadge(p.coverage);
+            const imagen = `/api/archivos/${p.imagePath}`;
             return (
-              <div
-                key={p.id}
-                className="flex flex-col gap-3 rounded-lg border border-[var(--color-borde)] p-4"
-              >
+              <div key={p.id} className="flex flex-col gap-4 rounded-tarjeta border border-borde p-4">
                 <div className="flex flex-wrap items-start gap-4">
                   <a
-                    href={`/api/archivos/${p.imagePath}`}
+                    href={imagen}
                     target="_blank"
                     rel="noreferrer"
-                    className="shrink-0"
+                    className="foco shrink-0 rounded-control"
                   >
+                    {/* Imagen subida por el pasajero y servida por /api/archivos: no pasa por next/image. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`/api/archivos/${p.imagePath}`}
-                      alt={`Comprobante de pago, referencia ${p.reference}`}
-                      className="h-20 w-20 rounded-lg border border-[var(--color-borde)] object-cover"
+                      src={imagen}
+                      alt={`Comprobante con referencia ${p.reference}, abrir en tamaño completo`}
+                      className="size-24 rounded-control border border-borde object-cover"
                     />
                   </a>
-                  <div className="flex-1 text-sm">
-                    <p>
-                      Ref. {p.reference} · {p.paymentMethodName}
-                    </p>
-                    <p className="tabular">
-                      {formatMoney(p.amount, p.currency)} · {formatMoney(p.amountUsd, "USD")}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <p className="tabular text-xl font-bold text-tinta">{formatMoney(p.amount, p.currency)}</p>
+                    {p.currency !== "USD" ? (
+                      <p className="tabular text-sm text-tinta-suave">Equivale a {formatMoney(p.amountUsd, "USD")}</p>
+                    ) : null}
+                    <p className="text-sm text-tinta-suave">
+                      Referencia <span className="tabular font-semibold text-tinta">{p.reference}</span> ·{" "}
+                      {p.paymentMethodName}
                     </p>
                     <div className="mt-1">
                       <StatusBadge label={badge.label} tone={badge.tone} />
                     </div>
                   </div>
                 </div>
-                <ProofActions proofId={p.id} hidden={hidden} />
+                <ProofActions
+                  proofId={p.id}
+                  code={reservation.code}
+                  amountUsd={p.amountUsd}
+                  coverage={p.coverage}
+                  hidden={hidden}
+                />
               </div>
             );
           })}
@@ -195,29 +150,124 @@ export function ReservationDetailPanel({
       ) : null}
 
       {canRegisterCash ? (
-        <section>
-          <h3 className="text-sm font-semibold tracking-tight">Registrar cobro en efectivo</h3>
-          <div className="mt-2">
-            <CashPaymentForm
-              mode="reserva"
-              reservationId={reservation.id}
-              balanceUsd={reservation.balanceUsd.toString()}
-              currency={reservation.currency}
-              amountInCurrencyHint={
-                reservation.currency !== "USD"
-                  ? `Total de la reserva en ${reservation.currency}: ${formatMoney(
-                      reservation.amountInCurrency,
-                      reservation.currency,
-                    )}.`
-                  : undefined
-              }
-              hidden={hidden}
-            />
-          </div>
+        <section className="flex flex-col gap-3">
+          <PanelSectionTitle>Cobrar en efectivo</PanelSectionTitle>
+          <CashPaymentForm
+            mode="reserva"
+            reservationId={reservation.id}
+            balanceUsd={reservation.balanceUsd.toString()}
+            currency={reservation.currency}
+            amountInCurrencyHint={
+              reservation.currency !== "USD"
+                ? `Total de la reserva en ${reservation.currency}: ${formatMoney(
+                    reservation.amountInCurrency,
+                    reservation.currency,
+                  )}.`
+                : undefined
+            }
+            hidden={hidden}
+          />
         </section>
       ) : null}
 
-      <ProofHistoryTable history={history} />
+      <section className="flex flex-col gap-3">
+        <PanelSectionTitle>Ticket</PanelSectionTitle>
+        {ticket ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-[15px] text-tinta">
+              Emitido el <span className="tabular">{formatCaracasDateTime24(ticket.issuedAt)}</span>.
+            </p>
+            <a
+              href={`/api/archivos/${ticket.pdfPath}`}
+              target="_blank"
+              rel="noreferrer"
+              className={panelButtonClass("secundario", "md", "w-fit")}
+            >
+              <IconDownload className="size-5" />
+              Descargar el ticket (PDF)
+              <span className="sr-only">(se abre en otra pestaña)</span>
+            </a>
+          </div>
+        ) : (
+          <p className="text-[15px] text-tinta-suave">El ticket se emite solo cuando el saldo llegue a cero.</p>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <PanelSectionTitle>Viaje</PanelSectionTitle>
+        <DetailList
+          items={[
+            { label: "Ruta", value: `${departure.origin} → ${departure.destination}` },
+            {
+              label: "Fecha y hora",
+              value: <span className="tabular">{formatCaracasDateTime24(departure.departsAt)}</span>,
+            },
+            { label: "Bus", value: <span className="tabular">{departure.vehiclePlate}</span> },
+            {
+              label: "Estado",
+              value: (
+                <StatusBadge label={departureStatusLabel(departure.status)} tone={departureStatusTone(departure.status)} />
+              ),
+            },
+          ]}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <PanelSectionTitle>{`Pasajeros (${countLabel(passengers.length, "persona", "personas")})`}</PanelSectionTitle>
+        <ul className="flex flex-col gap-2">
+          {passengers.map((p) => (
+            <li
+              key={p.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-borde px-4 py-3"
+            >
+              <span className="min-w-0 text-[15px] text-tinta">
+                <span className="font-semibold">{p.fullName}</span>{" "}
+                <span className="tabular text-tinta-suave">· {p.maskedIdNumber}</span>
+                {p.isHolder ? <span className="text-tinta-suave"> · Titular</span> : null}
+              </span>
+              {p.boardedAt ? (
+                <StatusBadge label={`Abordó a las ${formatCaracasTime24(p.boardedAt)}`} tone="exito" />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <div className="flex flex-col gap-3">
+        <Disclosure title="Desglose del precio">
+          <div className="flex flex-col gap-3">
+            <DetailList
+              items={[
+                { label: "Tarifa", value: <span className="tabular">{formatMoney(reservation.fareTotalUsd, "USD")}</span> },
+                {
+                  label: "Tasa del terminal",
+                  value: <span className="tabular">{formatMoney(reservation.taxTotalUsd, "USD")}</span>,
+                },
+                {
+                  label: "Total",
+                  value: <span className="tabular font-semibold">{formatMoney(reservation.totalUsd, "USD")}</span>,
+                },
+                { label: "Pagado", value: <span className="tabular">{formatMoney(reservation.paidUsd, "USD")}</span> },
+                {
+                  label: "Falta",
+                  value: <span className="tabular font-semibold">{formatMoney(reservation.balanceUsd, "USD")}</span>,
+                },
+                { label: "Forma de pago", value: reservation.paymentMethodName },
+              ]}
+            />
+            {reservation.currency !== "USD" ? (
+              <p className="text-sm text-tinta-suave">
+                Total en {reservation.currency}:{" "}
+                <span className="tabular">{formatMoney(reservation.amountInCurrency, reservation.currency)}</span>
+              </p>
+            ) : null}
+          </div>
+        </Disclosure>
+        <Disclosure title={`Historial de pagos (${countLabel(history.length, "pago", "pagos")})`}>
+          <ProofHistoryTable history={history} />
+        </Disclosure>
+      </div>
     </div>
   );
 }

@@ -7,38 +7,69 @@ import { loginAccount } from "@/modules/accounts";
 import { checkLoginRate, PASSENGER_COOKIE } from "@/modules/auth";
 import { normalizeIdNumber } from "@/lib/identity";
 import { safeNext } from "@/lib/safe-next";
+import { fieldErrorsFromIssues, formText } from "../_publico/form-errors";
+
+export type IngresarField = "idNumber" | "password";
 
 export interface IngresarFormState {
+  /** Error general, arriba del formulario (datos que no coinciden, demasiados intentos). */
   error: string | null;
+  /** Qué tipo de error general es, para ofrecer el camino que corresponde. */
+  errorKind?: "no-coinciden" | "intentos";
+  /** Errores junto a su campo. */
+  fieldErrors?: Partial<Record<IngresarField, string>>;
+  /** Cédula enviada, para no obligar a escribirla de nuevo. La contraseña nunca se devuelve. */
+  idNumber?: string;
+  /** Cuenta los envíos con error, para que el aviso se anuncie otra vez aunque repita el texto. */
+  attempt?: number;
 }
 
+const INGRESAR_FIELDS: readonly IngresarField[] = ["idNumber", "password"];
+
 const ingresarSchema = z.object({
-  idNumber: z.string().min(1, "Ingresa tu cédula."),
-  password: z.string().min(1, "Ingresa tu contraseña."),
+  idNumber: z.string().trim().min(1, "Escribe tu cédula."),
+  password: z.string().min(1, "Escribe tu contraseña."),
   next: z.string().optional(),
 });
 
 export async function ingresarAction(
-  _prevState: IngresarFormState,
+  prevState: IngresarFormState,
   formData: FormData,
 ): Promise<IngresarFormState> {
+  const attempt = (prevState.attempt ?? 0) + 1;
+  const idNumber = formText(formData, "idNumber");
   const parsed = ingresarSchema.safeParse({
-    idNumber: formData.get("idNumber"),
-    password: formData.get("password"),
-    next: formData.get("next") ?? undefined,
+    idNumber,
+    password: formText(formData, "password"),
+    next: formText(formData, "next") || undefined,
   });
   if (!parsed.success) {
-    return { error: "Ingresa tu cédula y tu contraseña." };
+    return {
+      error: null,
+      fieldErrors: fieldErrorsFromIssues(parsed.error.issues, INGRESAR_FIELDS),
+      idNumber,
+      attempt,
+    };
   }
 
   const clave = `pasajero:${normalizeIdNumber(parsed.data.idNumber)}`;
   if (!checkLoginRate(clave)) {
-    return { error: "Demasiados intentos. Espera unos minutos e inténtalo de nuevo." };
+    return {
+      error: "Hiciste demasiados intentos. Espera unos minutos e inténtalo de nuevo.",
+      errorKind: "intentos",
+      idNumber,
+      attempt,
+    };
   }
 
   const sesion = await loginAccount(parsed.data.idNumber, parsed.data.password);
   if (!sesion) {
-    return { error: "Credenciales inválidas." };
+    return {
+      error: "La cédula o la contraseña no coinciden. Revisa e inténtalo de nuevo.",
+      errorKind: "no-coinciden",
+      idNumber,
+      attempt,
+    };
   }
 
   const store = await cookies();

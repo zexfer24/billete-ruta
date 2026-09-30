@@ -1,0 +1,329 @@
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { IconBus, IconRoute, IconUsers } from "@/components/icons";
+import {
+  EmptyState,
+  MobileCard,
+  PANEL_TD_CLASS,
+  PANEL_TH_CLASS,
+  StatCard,
+  TableShell,
+  panelButtonClass,
+} from "@/components/panel-ui";
+import { Skeleton } from "@/components/skeleton";
+import { cx } from "@/components/ui-classes";
+import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
+import {
+  departureTaxByHour,
+  listNewAccounts,
+  listTerminalTrips,
+  recurringAccounts,
+} from "@/modules/reports";
+import { countLabel, formatCount } from "../_shared/format";
+import { AuditNote, MobileCardList, TimeCell } from "../_shared/lists";
+import {
+  describeAdminRange,
+  periodQuery,
+  spansSeveralDays,
+  withQuery,
+  type AdminRange,
+} from "../_shared/period";
+import { SectionHeadingSkeleton, StatCardSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { TaxByHourChart } from "./tax-by-hour-chart";
+
+/** Cuántas filas trae cada lista del tablero. Las cifras usan el total real. */
+const LIST_LIMIT = 100;
+
+/** Con más filas que estas, la tabla de escritorio se desplaza dentro de su marco. */
+const SCROLL_AFTER_ROWS = 10;
+
+const TABLERO_PATH = "/panel/admin/tablero";
+
+/** Enlace a otro periodo del tablero, para salir de un estado vacío. */
+function widerPeriodHref(range: AdminRange): { href: string; label: string } | null {
+  if (range.period === "30d") return null;
+  if (range.period === "7d") return { href: withQuery(TABLERO_PATH, { periodo: "30d" }), label: "Ver los últimos 30 días" };
+  return { href: withQuery(TABLERO_PATH, { periodo: "7d" }), label: "Ver los últimos 7 días" };
+}
+
+function ScrollArea({ label, long, children }: { label: string; long: boolean; children: ReactNode }) {
+  if (!long) return <>{children}</>;
+  return (
+    // Región desplazable enfocable, para que también se recorra con el teclado.
+    <div role="region" aria-label={label} tabIndex={0} className="foco max-h-[30rem] overflow-y-auto">
+      {children}
+    </div>
+  );
+}
+
+/** Cabecera de columna que queda fija arriba cuando la lista se desplaza. */
+const STICKY_TH = cx(PANEL_TH_CLASS, "sticky top-0 z-10 bg-superficie shadow-1");
+
+/**
+ * Cifras, listas y gráfico del periodo elegido en el tablero. Va dentro de un
+ * `<Suspense>` con la clave del periodo, así el cambio de pestaña muestra su
+ * silueta enseguida. `listNewAccounts` deja registro de auditoría, como antes.
+ */
+export async function PeriodData({ range, panelUserId }: { range: AdminRange; panelUserId: string }) {
+  const [trips, newAccounts, returningAccounts, byHour] = await Promise.all([
+    listTerminalTrips(range.from, range.to, { limit: LIST_LIMIT }),
+    listNewAccounts(range.from, range.to, panelUserId, { limit: LIST_LIMIT }),
+    recurringAccounts(),
+    departureTaxByHour(range.from, range.to),
+  ]);
+
+  const rangeText = describeAdminRange(range);
+  const wider = widerPeriodHref(range);
+  const movementsHref = withQuery("/panel/admin/movimientos", periodQuery(range));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Recorridos completados"
+          value={formatCount(trips.total)}
+          detail={`Viajes que llegaron a su destino. ${rangeText}.`}
+          icon={<IconBus />}
+          tone="marca"
+          href={movementsHref}
+        />
+        <StatCard
+          label="Usuarios nuevos"
+          value={formatCount(newAccounts.total)}
+          detail={`Cuentas de pasajero creadas. ${rangeText}.`}
+          icon={<IconUsers />}
+          tone="marca"
+        />
+        <StatCard
+          label="Usuarios recurrentes"
+          value={formatCount(returningAccounts)}
+          detail="Pasajeros con dos o más viajes pagados, desde el inicio. No depende del periodo."
+          icon={<IconUsers />}
+        />
+      </div>
+
+      <section aria-labelledby="recorridos-titulo" className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="recorridos-titulo" className="text-lg font-semibold text-tinta">
+              Recorridos completados
+            </h2>
+            <p className="text-sm leading-snug text-tinta-suave">
+              De dónde salió y a dónde llegó cada viaje, del más reciente al más antiguo.
+            </p>
+          </div>
+          {trips.total > 0 ? (
+            <Link href={movementsHref} className={panelButtonClass("fantasma", "md", "-mr-2")}>
+              Ver todos los movimientos
+            </Link>
+          ) : null}
+        </div>
+
+        {trips.rows.length === 0 ? (
+          <EmptyState
+            icon={<IconRoute />}
+            title="No hay recorridos completados en este periodo"
+            description="Un recorrido cuenta cuando la agencia registra la llegada del bus a su destino."
+            action={
+              wider ? (
+                <Link href={wider.href} className={panelButtonClass("secundario")}>
+                  {wider.label}
+                </Link>
+              ) : undefined
+            }
+          />
+        ) : (
+          <TableShell
+            mobile={
+              <MobileCardList
+                label="Recorridos completados"
+                moreNoun={["recorrido", "recorridos"]}
+                items={trips.rows.map((t) => (
+                  <MobileCard
+                    key={t.tripLogId}
+                    title={`${t.origin} → ${t.destination}`}
+                    subtitle={t.agencyName}
+                    details={[
+                      {
+                        label: "Salida",
+                        value: t.departedAt ? formatCaracasDateTime24(t.departedAt) : "Sin registrar",
+                      },
+                      { label: "Punto de encuentro", value: t.meetingPoint },
+                    ]}
+                  />
+                ))}
+              />
+            }
+          >
+            <ScrollArea label="Lista de recorridos completados" long={trips.rows.length > SCROLL_AFTER_ROWS}>
+              <table className="w-full text-left">
+                <caption className="sr-only">Recorridos completados. {rangeText}.</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className={STICKY_TH}>
+                      Salida
+                    </th>
+                    <th scope="col" className={STICKY_TH}>
+                      Sale de
+                    </th>
+                    <th scope="col" className={STICKY_TH}>
+                      Llega a
+                    </th>
+                    <th scope="col" className={STICKY_TH}>
+                      Agencia
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trips.rows.map((t) => (
+                    <tr key={t.tripLogId} className="border-t border-borde">
+                      <td className={PANEL_TD_CLASS}>
+                        <TimeCell
+                          time={t.departedAt ? formatCaracasTime24(t.departedAt) : undefined}
+                          date={t.departedAt ? formatCaracasDate(t.departedAt) : undefined}
+                        />
+                      </td>
+                      <td className={PANEL_TD_CLASS}>
+                        <span className="block font-semibold">{t.origin}</span>
+                        <span className="block text-sm text-tinta-suave">
+                          Punto de encuentro: {t.meetingPoint}
+                        </span>
+                      </td>
+                      <td className={cx(PANEL_TD_CLASS, "font-semibold")}>{t.destination}</td>
+                      <td className={PANEL_TD_CLASS}>{t.agencyName}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollArea>
+          </TableShell>
+        )}
+        {trips.total > trips.rows.length ? (
+          <p className="text-sm text-tinta-suave">
+            Se muestran los {formatCount(trips.rows.length)} más recientes de {countLabel(trips.total, "recorrido", "recorridos")}.
+          </p>
+        ) : null}
+      </section>
+
+      <section aria-labelledby="usuarios-nuevos-titulo" className="flex flex-col gap-3">
+        <div className="min-w-0">
+          <h2 id="usuarios-nuevos-titulo" className="text-lg font-semibold text-tinta">
+            Usuarios nuevos
+          </h2>
+          <p className="text-sm leading-snug text-tinta-suave">
+            Pasajeros que crearon su cuenta, o a quienes se la crearon en taquilla, en este periodo.
+          </p>
+        </div>
+
+        {newAccounts.rows.length === 0 ? (
+          <EmptyState
+            icon={<IconUsers />}
+            title="Nadie creó una cuenta en este periodo"
+            description="Las cuentas nuevas aparecen aquí apenas el pasajero se registra o lo registran en la taquilla."
+            action={
+              wider ? (
+                <Link href={wider.href} className={panelButtonClass("secundario")}>
+                  {wider.label}
+                </Link>
+              ) : undefined
+            }
+          />
+        ) : (
+          <TableShell
+            mobile={
+              <MobileCardList
+                label="Usuarios nuevos"
+                moreNoun={["usuario", "usuarios"]}
+                items={newAccounts.rows.map((a) => (
+                  <MobileCard
+                    key={a.id}
+                    title={`${a.firstName} ${a.firstSurname}`}
+                    subtitle={`Cédula ${a.idNumber}`}
+                    details={[{ label: "Registro", value: formatCaracasDateTime24(a.createdAt) }]}
+                  />
+                ))}
+              />
+            }
+          >
+            <ScrollArea label="Lista de usuarios nuevos" long={newAccounts.rows.length > SCROLL_AFTER_ROWS}>
+              <table className="w-full text-left">
+                <caption className="sr-only">Usuarios nuevos. {rangeText}.</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className={STICKY_TH}>
+                      Registro
+                    </th>
+                    <th scope="col" className={STICKY_TH}>
+                      Cédula
+                    </th>
+                    <th scope="col" className={STICKY_TH}>
+                      Primer nombre
+                    </th>
+                    <th scope="col" className={STICKY_TH}>
+                      Primer apellido
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {newAccounts.rows.map((a) => (
+                    <tr key={a.id} className="border-t border-borde">
+                      <td className={PANEL_TD_CLASS}>
+                        <TimeCell time={formatCaracasTime24(a.createdAt)} date={formatCaracasDate(a.createdAt)} />
+                      </td>
+                      <td className={cx(PANEL_TD_CLASS, "tabular font-semibold")}>{a.idNumber}</td>
+                      <td className={PANEL_TD_CLASS}>{a.firstName}</td>
+                      <td className={PANEL_TD_CLASS}>{a.firstSurname}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollArea>
+          </TableShell>
+        )}
+        {newAccounts.total > newAccounts.rows.length ? (
+          <p className="text-sm text-tinta-suave">
+            Se muestran los {formatCount(newAccounts.rows.length)} más recientes de{" "}
+            {countLabel(newAccounts.total, "usuario nuevo", "usuarios nuevos")}.
+          </p>
+        ) : null}
+        <AuditNote>Esta lista muestra datos personales: cada vez que se abre queda registrada con tu nombre.</AuditNote>
+      </section>
+
+      <TaxByHourChart hours={byHour} severalDays={range.period !== "24h" && spansSeveralDays(range)} />
+    </div>
+  );
+}
+
+/** Silueta de `PeriodData`: tres cifras, dos listas y el gráfico. */
+export function PeriodDataSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+      </div>
+      <div className="flex flex-col gap-3">
+        <SectionHeadingSkeleton />
+        <TableSkeleton rows={6} columns={4} />
+      </div>
+      <div className="flex flex-col gap-3">
+        <SectionHeadingSkeleton />
+        <TableSkeleton rows={4} columns={4} mobileCards={2} />
+      </div>
+      <div className="rounded-tarjeta border border-borde bg-superficie shadow-1">
+        <div className="border-b border-borde px-5 py-4">
+          <SectionHeadingSkeleton />
+        </div>
+        <div className="flex h-56 items-end gap-1 p-5">
+          {Array.from({ length: 24 }, (_, index) => (
+            <Skeleton
+              key={index}
+              className={`min-w-0 flex-1 rounded-b-none ${["h-1/4", "h-1/2", "h-2/3", "h-1/3", "h-3/4"][index % 5]}`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

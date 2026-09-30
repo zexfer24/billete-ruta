@@ -1,147 +1,205 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { PanelFeedback } from "@/components/panel-feedback";
-import { StatusBadge, panelButtonClass } from "@/components/panel-ui";
+import { Alert } from "@/components/alert";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SubmitButton } from "@/components/submit-button";
+import { EmptyState, PANEL_TD_CLASS, PANEL_TH_CLASS, StatusBadge, panelButtonClass, panelInputClass } from "@/components/panel-ui";
+import { IconCheckCircle, IconExternal, IconSearch, IconXCircle } from "@/components/icons";
 import { formatMoney } from "@/lib/decimal";
+import { maskIdNumber } from "@/lib/identity";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { PROOF_STATUS_LABELS, reservationStatusLabel, type StatusTone } from "@/lib/labels";
 import type { ProofCoverage, ProofHistoryItem, ProofReview } from "@/modules/payments";
+import { countLabel } from "../_dashboard/text";
 import { approveProofAction, rejectProofAction } from "./actions";
+import { Disclosure, DetailList } from "./disclosure";
 import { pasajerosUrlFromHidden } from "./urls";
 
 /**
- * Contenido compartido de la revisión de un comprobante, usado tanto en el
- * panel lateral de comprobante como en la sección "Comprobantes por revisar"
- * del detalle de reserva, para no duplicar el marcado entre las dos.
+ * Piezas de la revisión de un comprobante, compartidas por el panel lateral
+ * de comprobante y por la sección "Comprobantes por revisar" del detalle de
+ * reserva, para no duplicar el marcado entre las dos.
  */
 
-/** Texto y tono de la cobertura de un comprobante frente al saldo pendiente. */
+/** Qué cubre un comprobante frente al saldo pendiente, en lenguaje llano. */
 export function coverageBadge(coverage: ProofCoverage): { label: string; tone: StatusTone } {
   switch (coverage.kind) {
     case "ABONO_PARCIAL":
-      return { label: "Abono parcial", tone: "marca" };
+      return { label: "Paga una parte", tone: "marca" };
     case "PAGO_COMPLETO":
       return { label: "Completa el pago", tone: "exito" };
     case "EXCEDE_SALDO":
-      return {
-        label: `Excede el saldo en ${formatMoney(coverage.excessUsd, "USD")}`,
-        tone: "alerta",
-      };
+      return { label: `Paga de más: ${formatMoney(coverage.excessUsd, "USD")}`, tone: "alerta" };
   }
 }
 
-/** Campos ocultos con el contexto de retorno (vista, página, filtros y reserva de origen). */
-function HiddenFields({ hidden }: { hidden: Record<string, string> }) {
-  return (
-    <>
-      {Object.entries(hidden).map(([name, value]) => (
-        <input key={name} type="hidden" name={name} value={value} />
-      ))}
-    </>
-  );
+/** Lo que pasará al aprobar, con los montos: es la descripción de la confirmación. */
+function approvalConsequence(coverage: ProofCoverage, amountUsd: Prisma.Decimal): string {
+  const suma = `Se sumarán ${formatMoney(amountUsd, "USD")} a lo pagado.`;
+  switch (coverage.kind) {
+    case "ABONO_PARCIAL":
+      return `${suma} Quedará un saldo de ${formatMoney(coverage.balanceAfterUsd, "USD")}; el ticket se emite cuando el saldo llegue a cero.`;
+    case "PAGO_COMPLETO":
+      return `${suma} El saldo quedará en ${formatMoney(coverage.balanceAfterUsd, "USD")} y se emitirá el ticket.`;
+    case "EXCEDE_SALDO":
+      return `Este pago supera el saldo en ${formatMoney(coverage.excessUsd, "USD")}. El saldo quedará en ${formatMoney(coverage.balanceAfterUsd, "USD")} y se emitirá el ticket.`;
+  }
 }
 
 /**
- * Los dos formularios de decisión de un comprobante pendiente: aprobar y
- * rechazar con motivo. Se usan desde el panel de comprobante y desde el
- * detalle de reserva, con el mismo `hidden` de contexto en ambos casos.
+ * Decisión sobre un comprobante pendiente. "Aprobar pago" es la acción
+ * principal y pide confirmación con sus consecuencias en números, porque no
+ * se puede deshacer. "Rechazar" queda plegado: se abre para escribir el
+ * motivo, así no se pulsa por error junto al de aprobar.
  */
 export function ProofActions({
   proofId,
+  code,
+  amountUsd,
+  coverage,
   hidden,
 }: {
   proofId: string;
+  code: string;
+  amountUsd: Prisma.Decimal;
+  coverage: ProofCoverage | null;
   hidden: Record<string, string>;
 }) {
+  const motivoId = `motivo-${proofId}`;
+  const ayudaId = `${motivoId}-ayuda`;
+
   return (
-    <div className="flex flex-col gap-3 border-t border-[var(--color-borde)] pt-4 sm:flex-row sm:items-start">
-      <form action={approveProofAction}>
-        <input type="hidden" name="proofId" value={proofId} />
-        <HiddenFields hidden={hidden} />
-        <button type="submit" className={panelButtonClass("exito")}>
-          Aprobar pago
-        </button>
-      </form>
-      <form action={rejectProofAction} className="flex flex-1 flex-col gap-2">
-        <input type="hidden" name="proofId" value={proofId} />
-        <HiddenFields hidden={hidden} />
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          Motivo del rechazo
+    <div className="flex flex-col gap-3">
+      <ConfirmDialog
+        triggerLabel={
+          <>
+            <IconCheckCircle className="size-5" />
+            Aprobar pago
+          </>
+        }
+        triggerClassName={panelButtonClass("exito", "lg", "w-full sm:w-auto")}
+        title={`¿Aprobar el pago de la reserva ${code}?`}
+        description={
+          <p>
+            {coverage
+              ? approvalConsequence(coverage, amountUsd)
+              : `Se sumarán ${formatMoney(amountUsd, "USD")} a lo pagado.`}{" "}
+            Esta acción no se puede deshacer.
+          </p>
+        }
+        confirmLabel="Sí, aprobar el pago"
+        confirmClassName={panelButtonClass("exito", "lg", "w-full sm:w-auto")}
+        pendingLabel="Aprobando…"
+        action={approveProofAction}
+        fields={{ ...hidden, proofId }}
+      />
+
+      <details className="group rounded-control border border-borde">
+        <summary className="foco flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-control px-4 py-2.5 text-[15px] font-semibold text-peligro hover:bg-peligro-suave [&::-webkit-details-marker]:hidden">
+          <IconXCircle className="size-5 shrink-0" />
+          Rechazar este comprobante
+        </summary>
+        <form action={rejectProofAction} className="flex flex-col gap-3 border-t border-borde px-4 py-4">
+          <input type="hidden" name="proofId" value={proofId} />
+          {Object.entries(hidden).map(([name, value]) => (
+            <input key={name} type="hidden" name={name} value={value} />
+          ))}
+          <label htmlFor={motivoId} className="text-sm font-semibold text-tinta">
+            Motivo del rechazo
+          </label>
           <textarea
+            id={motivoId}
             name="reason"
             required
             minLength={4}
-            rows={2}
-            className="rounded-lg border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-sm"
+            rows={3}
+            aria-describedby={ayudaId}
+            className={panelInputClass("min-h-24 resize-y")}
           />
-        </label>
-        <button type="submit" className={panelButtonClass("peligro", "md", "w-fit")}>
-          Rechazar
-        </button>
-      </form>
+          <p id={ayudaId} className="text-sm text-tinta-suave">
+            El pasajero lo verá. Por ejemplo: «El monto no coincide», «La referencia no aparece en el banco» o
+            «La imagen no se lee».
+          </p>
+          <SubmitButton pendingLabel="Rechazando…" className={panelButtonClass("peligro", "md", "w-full sm:w-fit")}>
+            Rechazar comprobante
+          </SubmitButton>
+        </form>
+      </details>
     </div>
   );
 }
 
 /** Historial de pagos de una reserva: comprobantes revisados y cobros en efectivo. */
 export function ProofHistoryTable({ history }: { history: ProofHistoryItem[] }) {
+  if (history.length === 0) {
+    return <p className="text-[15px] text-tinta-suave">Esta reserva todavía no tiene pagos anteriores.</p>;
+  }
   return (
-    <div>
-      <h3 className="text-sm font-semibold tracking-tight">Historial de pagos de esta reserva</h3>
-      {history.length === 0 ? (
-        <p className="mt-2 text-sm text-[var(--color-texto-suave)]">
-          Sin pagos anteriores en esta reserva.
-        </p>
-      ) : (
-        <div className="mt-2 overflow-x-auto rounded-lg border border-[var(--color-borde)]">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-[var(--color-borde)] text-xs uppercase tracking-wide text-[var(--color-texto-suave)]">
-              <tr>
-                <th className="px-3 py-2">Fecha</th>
-                <th className="px-3 py-2">Tipo</th>
-                <th className="px-3 py-2">Monto</th>
-                <th className="px-3 py-2">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((item) => (
-                <tr key={item.id} className="border-b border-[var(--color-borde)] last:border-0">
-                  <td className="tabular px-3 py-2">{formatCaracasDateTime24(item.at)}</td>
-                  <td className="px-3 py-2">
-                    {item.kind === "COMPROBANTE" ? "Comprobante" : "Efectivo"}
-                  </td>
-                  <td className="tabular px-3 py-2">
-                    {formatMoney(item.amount, item.currency)}
-                    {item.currency !== "USD" ? (
-                      <span className="block text-xs text-[var(--color-texto-suave)]">
-                        {formatMoney(item.amountUsd, "USD")}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-2">
-                    {item.kind === "EFECTIVO" ? (
-                      "Cobrado"
-                    ) : (
-                      <>
-                        {item.status ? PROOF_STATUS_LABELS[item.status] : "—"}
-                        {item.status === "RECHAZADO" && item.rejectionReason ? (
-                          <span className="block text-xs text-[var(--color-texto-suave)]">
-                            {item.rejectionReason}
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <div className="overflow-x-auto">
+      <table className="w-full text-left">
+        <thead className="border-b border-borde">
+          <tr>
+            <th scope="col" className={PANEL_TH_CLASS}>
+              Fecha
+            </th>
+            <th scope="col" className={PANEL_TH_CLASS}>
+              Forma
+            </th>
+            <th scope="col" className={PANEL_TH_CLASS}>
+              Monto
+            </th>
+            <th scope="col" className={PANEL_TH_CLASS}>
+              Estado
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {history.map((item) => (
+            <tr key={item.id} className="border-b border-borde last:border-0">
+              <td className={`${PANEL_TD_CLASS} tabular`}>{formatCaracasDateTime24(item.at)}</td>
+              <td className={PANEL_TD_CLASS}>{item.kind === "COMPROBANTE" ? "Comprobante" : "Efectivo"}</td>
+              <td className={`${PANEL_TD_CLASS} tabular`}>
+                {formatMoney(item.amount, item.currency)}
+                {item.currency !== "USD" ? (
+                  <span className="block text-tinta-suave">{formatMoney(item.amountUsd, "USD")}</span>
+                ) : null}
+              </td>
+              <td className={PANEL_TD_CLASS}>
+                {item.kind === "EFECTIVO" ? "Cobrado" : item.status ? PROOF_STATUS_LABELS[item.status] : "Sin revisar"}
+                {item.kind === "COMPROBANTE" && item.status === "RECHAZADO" && item.rejectionReason ? (
+                  <span className="block text-tinta-suave">Motivo: {item.rejectionReason}</span>
+                ) : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-/** Panel lateral de revisión de un comprobante: sus datos, los de la reserva, la cobertura del saldo y el historial. */
+/** El comprobante no existe o es de otra agencia: se dice con claridad y se ofrece volver. */
+export function ProofNotFound({ closeHref }: { closeHref: string }) {
+  return (
+    <EmptyState
+      icon={<IconSearch />}
+      title="No encontramos este comprobante"
+      description="Puede que el enlace esté incompleto o que el comprobante sea de otra agencia."
+      action={
+        <Link href={closeHref} scroll={false} className={panelButtonClass("secundario")}>
+          Volver a la lista
+        </Link>
+      }
+    />
+  );
+}
+
+/**
+ * Contenido del panel lateral de revisión de un comprobante, en el orden en
+ * que se decide: cuánto envió y qué cubre, la imagen, la decisión y, plegado,
+ * el resto de los datos de la reserva y su historial.
+ */
 export function ProofReviewPanel({
   review,
   hidden,
@@ -154,95 +212,124 @@ export function ProofReviewPanel({
   const { proof, reservation, coverage, history } = review;
   const badge = coverage ? coverageBadge(coverage) : null;
   const verReservaHref = pasajerosUrlFromHidden(hidden, { reserva: reservation.id });
+  const imagen = `/api/archivos/${proof.imagePath}`;
 
   return (
     <div className="flex flex-col gap-6">
       <PanelFeedback error={error} />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {badge ? <StatusBadge label={badge.label} tone={badge.tone} /> : <span />}
-        <Link href={verReservaHref} className={panelButtonClass("secundario", "sm")}>
-          Ver reserva completa
-        </Link>
-      </div>
-
-      <div>
-        <a href={`/api/archivos/${proof.imagePath}`} target="_blank" rel="noreferrer">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/archivos/${proof.imagePath}`}
-            alt={`Comprobante de pago, referencia ${proof.reference}`}
-            className="max-h-[60vh] w-full rounded-lg border border-[var(--color-borde)] bg-[var(--color-fondo)] object-contain"
-          />
-        </a>
-        <p className="mt-1 text-xs text-[var(--color-texto-suave)]">
-          Haz clic en la imagen para verla en tamaño completo.
-        </p>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold tracking-tight">Datos del pago</h3>
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="font-medium text-[var(--color-texto-suave)]">Referencia</dt>
-          <dd>{proof.reference}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Método</dt>
-          <dd>{proof.paymentMethodName}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Monto declarado</dt>
-          <dd className="tabular">{formatMoney(proof.amount, proof.currency)}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">En dólares</dt>
-          <dd className="tabular">{formatMoney(proof.amountUsd, "USD")}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Cargado el</dt>
-          <dd className="tabular">{formatCaracasDateTime24(proof.createdAt)}</dd>
-        </dl>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold tracking-tight">Reserva</h3>
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="font-medium text-[var(--color-texto-suave)]">Serial</dt>
-          <dd>{reservation.code}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Ruta</dt>
-          <dd>
-            {reservation.routeName} ({reservation.origin} → {reservation.destination})
-          </dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Salida</dt>
-          <dd className="tabular">{formatCaracasDateTime24(reservation.departsAt)}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Pasajeros</dt>
-          <dd>{reservation.passengerCount}</dd>
-          <dt className="font-medium text-[var(--color-texto-suave)]">Estado de la reserva</dt>
-          <dd>{reservationStatusLabel(reservation.status)}</dd>
-        </dl>
-      </div>
-
-      {coverage ? (
-        <div>
-          <h3 className="text-sm font-semibold tracking-tight">Cuentas</h3>
-          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-            <dt className="font-medium text-[var(--color-texto-suave)]">Total de la reserva</dt>
-            <dd className="tabular">{formatMoney(reservation.totalUsd, "USD")}</dd>
-            <dt className="font-medium text-[var(--color-texto-suave)]">Pagado antes</dt>
-            <dd className="tabular">{formatMoney(reservation.paidUsd, "USD")}</dd>
-            <dt className="font-medium text-[var(--color-texto-suave)]">Este comprobante (USD)</dt>
-            <dd className="tabular">{formatMoney(proof.amountUsd, "USD")}</dd>
-            <dt className="font-medium text-[var(--color-texto-suave)]">Saldo tras aprobar</dt>
-            <dd className="tabular font-semibold">{formatMoney(coverage.balanceAfterUsd, "USD")}</dd>
-          </dl>
+      <div className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-lienzo p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-tinta">{reservation.holderName}</p>
+            <p className="tabular text-sm text-tinta-suave">
+              {maskIdNumber(reservation.holderIdNumber)} · Reserva {reservation.code}
+            </p>
+          </div>
+          {badge ? <StatusBadge label={badge.label} tone={badge.tone} /> : null}
         </div>
-      ) : null}
+        <div>
+          <p className="text-sm font-semibold text-tinta-suave">Monto enviado</p>
+          <p className="tabular text-3xl font-bold tracking-tight text-tinta">
+            {formatMoney(proof.amount, proof.currency)}
+          </p>
+          {proof.currency !== "USD" ? (
+            <p className="tabular text-[15px] text-tinta-suave">Equivale a {formatMoney(proof.amountUsd, "USD")}</p>
+          ) : null}
+        </div>
+        <DetailList
+          items={[
+            { label: "Referencia", value: <span className="tabular font-semibold">{proof.reference}</span> },
+            { label: "Forma de pago", value: proof.paymentMethodName },
+            { label: "Enviado el", value: <span className="tabular">{formatCaracasDateTime24(proof.createdAt)}</span> },
+            ...(coverage
+              ? [
+                  {
+                    label: "Saldo después",
+                    value: (
+                      <span className="tabular font-semibold">{formatMoney(coverage.balanceAfterUsd, "USD")}</span>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </div>
 
-      <ProofHistoryTable history={history} />
+      <figure className="flex flex-col gap-2">
+        {/* Imagen subida por el pasajero y servida por /api/archivos: no pasa por next/image. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imagen}
+          alt={`Comprobante de pago con referencia ${proof.reference}`}
+          className="max-h-80 w-full rounded-control border border-borde bg-lienzo object-contain"
+        />
+        <figcaption>
+          <a
+            href={imagen}
+            target="_blank"
+            rel="noreferrer"
+            className="foco inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-[15px] font-semibold text-marca-700 hover:bg-marca-50"
+          >
+            <IconExternal className="size-5" />
+            Ver la imagen en tamaño completo
+            <span className="sr-only">(se abre en otra pestaña)</span>
+          </a>
+        </figcaption>
+      </figure>
 
       {proof.status === "PENDIENTE" ? (
-        <ProofActions proofId={proof.id} hidden={hidden} />
+        <section aria-labelledby="decision-titulo" className="flex flex-col gap-3">
+          <h3 id="decision-titulo" className="text-base font-semibold text-tinta">
+            ¿El pago está en tu cuenta?
+          </h3>
+          <p className="text-[15px] text-tinta-suave">
+            Compara la referencia y el monto con tu banco antes de decidir.
+          </p>
+          <ProofActions
+            proofId={proof.id}
+            code={reservation.code}
+            amountUsd={proof.amountUsd}
+            coverage={coverage}
+            hidden={hidden}
+          />
+        </section>
       ) : (
-        <p className="border-t border-[var(--color-borde)] pt-6 text-sm text-[var(--color-texto-suave)]">
-          Este comprobante ya fue {proof.status === "APROBADO" ? "aprobado" : "rechazado"} el{" "}
-          {proof.reviewedAt ? formatCaracasDateTime24(proof.reviewedAt) : "—"}.
-          {proof.status === "RECHAZADO" && proof.rejectionReason
-            ? ` Motivo: ${proof.rejectionReason}`
-            : ""}
-        </p>
+        <Alert tone={proof.status === "APROBADO" ? "exito" : "info"} role="none" title="Este comprobante ya se revisó">
+          Fue {proof.status === "APROBADO" ? "aprobado" : "rechazado"}
+          {proof.reviewedAt ? ` el ${formatCaracasDateTime24(proof.reviewedAt)}` : ""}.
+          {proof.status === "RECHAZADO" && proof.rejectionReason ? ` Motivo: ${proof.rejectionReason}` : ""}
+        </Alert>
       )}
+
+      <div className="flex flex-col gap-3">
+        <Disclosure title="Datos de la reserva">
+          <div className="flex flex-col gap-4">
+            <DetailList
+              items={[
+                { label: "Ruta", value: `${reservation.origin} → ${reservation.destination}` },
+                {
+                  label: "Salida",
+                  value: <span className="tabular">{formatCaracasDateTime24(reservation.departsAt)}</span>,
+                },
+                { label: "Personas", value: countLabel(reservation.passengerCount, "persona", "personas") },
+                { label: "Estado", value: reservationStatusLabel(reservation.status) },
+                { label: "Total", value: <span className="tabular">{formatMoney(reservation.totalUsd, "USD")}</span> },
+                {
+                  label: "Pagado antes",
+                  value: <span className="tabular">{formatMoney(reservation.paidUsd, "USD")}</span>,
+                },
+              ]}
+            />
+            <Link href={verReservaHref} scroll={false} className={panelButtonClass("secundario", "md", "w-fit")}>
+              Ver la reserva completa
+            </Link>
+          </div>
+        </Disclosure>
+        <Disclosure title={`Historial de pagos (${countLabel(history.length, "pago", "pagos")})`}>
+          <ProofHistoryTable history={history} />
+        </Disclosure>
+      </div>
     </div>
   );
 }

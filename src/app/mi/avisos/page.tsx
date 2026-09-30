@@ -1,85 +1,142 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePassenger } from "@/modules/auth";
 import { listNoticesForAccount } from "@/modules/notices";
 import { listMessagesForPhone } from "@/modules/messaging";
-import { formatCaracasDateTime24 } from "@/lib/time";
-import { MESSAGE_STATUS_LABELS, messageStatusTone } from "@/lib/labels";
-import { Card, Pill, SectionTitle } from "@/components/ui";
+import { formatCaracasTime24 } from "@/lib/time";
+import { buttonClass, EmptyState, SectionTitle } from "@/components/ui";
 import { NoticeCard } from "@/components/notice-card";
-import { IconBell, IconCheck } from "@/components/icons";
+import { IconCheckCircle, IconMessage } from "@/components/icons";
+import { dayGroupLabel } from "@/components/passenger-copy";
 
-const LIMITE_MENSAJES = 50;
+export const metadata: Metadata = {
+  title: "Avisos",
+};
 
+/** Mensajes más recientes que se muestran; los anteriores no aportan al pasajero. */
+const LIMITE_MENSAJES = 20;
+
+interface MensajeVM {
+  id: string;
+  text: string;
+  at: Date;
+  reservationCode: string | null;
+}
+
+/** Agrupa los mensajes por día ("Hoy", "Ayer", fecha), conservando el orden recibido. */
+function agruparPorDia(mensajes: MensajeVM[], now: Date): { dia: string; mensajes: MensajeVM[] }[] {
+  const grupos: { dia: string; mensajes: MensajeVM[] }[] = [];
+  for (const mensaje of mensajes) {
+    const dia = dayGroupLabel(mensaje.at, now);
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.dia === dia) {
+      ultimo.mensajes.push(mensaje);
+    } else {
+      grupos.push({ dia, mensajes: [mensaje] });
+    }
+  }
+  return grupos;
+}
+
+/**
+ * Avisos del pasajero: primero lo que tiene que hacer (con la acción de cada
+ * aviso) y después los mensajes que le enviamos, agrupados por día. El estado
+ * técnico de entrega de cada mensaje no se muestra: no le sirve al pasajero.
+ */
 export default async function AvisosPage() {
   const pasajero = await requirePassenger();
+  const now = new Date();
 
   const [avisos, mensajes] = await Promise.all([
     listNoticesForAccount(pasajero.id),
     listMessagesForPhone(pasajero.phone, LIMITE_MENSAJES),
   ]);
 
+  const grupos = agruparPorDia(
+    mensajes.map((mensaje) => ({
+      id: mensaje.id,
+      text: mensaje.text,
+      at: mensaje.sentAt ?? mensaje.createdAt,
+      reservationCode: mensaje.reservationCode,
+    })),
+    now,
+  );
+
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-extrabold text-tinta">Avisos</h1>
-        <p className="mt-1 text-tinta-suave">Lo que necesitas hacer y lo que te hemos enviado</p>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">Avisos</h1>
+        <p className="leading-relaxed text-tinta-suave">
+          Lo que tienes que hacer y los mensajes que te enviamos.
+        </p>
       </div>
 
-      <section className="flex flex-col gap-3">
-        <SectionTitle>Pendientes</SectionTitle>
+      <section aria-labelledby="por-hacer" className="flex flex-col gap-3">
+        <SectionTitle id="por-hacer">Por hacer</SectionTitle>
         {avisos.length > 0 ? (
-          <div className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-3">
             {avisos.map((aviso) => (
-              <NoticeCard key={`${aviso.kind}-${aviso.reservationCode ?? "cuenta"}`} notice={aviso} />
+              <li key={`${aviso.kind}-${aviso.reservationCode ?? "cuenta"}`}>
+                <NoticeCard notice={aviso} now={now} />
+              </li>
             ))}
-          </div>
+          </ul>
         ) : (
-          <Card className="flex items-center gap-3">
-            <IconCheck aria-hidden="true" className="shrink-0 text-exito" />
-            <p className="text-tinta">Todo en orden. No tienes pendientes.</p>
-          </Card>
+          <EmptyState
+            icon={<IconCheckCircle />}
+            title="Todo en orden"
+            description="No tienes nada pendiente. Si reservas un viaje, aquí te diremos qué sigue."
+          />
         )}
       </section>
 
-      <section className="flex flex-col gap-3">
-        <SectionTitle>Mensajes enviados</SectionTitle>
-        {mensajes.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            {mensajes.map((mensaje) => (
-              <Card key={mensaje.id} className="flex gap-3">
-                <IconBell aria-hidden="true" className="shrink-0 text-marca" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-tinta">{mensaje.text}</p>
-                  <p className="mt-1 text-sm text-tinta-suave">
-                    {formatCaracasDateTime24(mensaje.sentAt ?? mensaje.createdAt)}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <Pill tone={messageStatusTone(mensaje.status)}>
-                      {MESSAGE_STATUS_LABELS[mensaje.status] ?? mensaje.status}
-                    </Pill>
-                    {mensaje.reservationCode ? (
-                      <Link
-                        href={`/mi/reservas/${mensaje.reservationCode}`}
-                        className="rounded-pastilla text-sm font-semibold text-marca focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+      <section aria-labelledby="mensajes" className="flex flex-col gap-3">
+        <SectionTitle id="mensajes">Mensajes que te enviamos</SectionTitle>
+        {grupos.length > 0 ? (
+          <div className="flex flex-col gap-5">
+            {grupos.map((grupo) => (
+              <div key={grupo.dia} className="flex flex-col gap-2">
+                <h3 className="text-base font-semibold text-tinta-suave">{grupo.dia}</h3>
+                <ul className="flex flex-col gap-3">
+                  {grupo.mensajes.map((mensaje) => (
+                    <li
+                      key={mensaje.id}
+                      className="flex gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600"
                       >
-                        Ver reserva
-                      </Link>
-                    ) : null}
-                  </div>
-                </div>
-              </Card>
+                        <IconMessage className="size-5" />
+                      </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
+                        <p className="tabular text-sm font-medium text-tinta-suave">
+                          {formatCaracasTime24(mensaje.at)}
+                        </p>
+                        <p className="break-words leading-relaxed text-tinta">{mensaje.text}</p>
+                        {mensaje.reservationCode ? (
+                          <Link
+                            href={`/mi/reservas/${mensaje.reservationCode}`}
+                            className={buttonClass("secundario", "self-start", "sm")}
+                          >
+                            Ver mi viaje
+                          </Link>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
           </div>
         ) : (
-          <Card>
-            <p className="text-tinta">Todavía no te hemos enviado mensajes.</p>
-          </Card>
+          <EmptyState
+            icon={<IconMessage />}
+            title="Aún no hay mensajes"
+            description="Cuando reserves o pagues un viaje, te escribiremos para confirmarlo."
+          />
         )}
       </section>
-
-      <p className="text-sm text-tinta-suave">
-        En esta versión los mensajes de WhatsApp no salen a la red; quedan registrados aquí.
-      </p>
     </div>
   );
 }

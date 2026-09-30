@@ -1,69 +1,103 @@
-import type { ReactNode } from "react";
+import type { Metadata } from "next";
+import { Suspense } from "react";
 import { requireAgencyUser } from "@/modules/auth";
 import { driverMovements, revenueByRoute } from "@/modules/reports";
+import { SkeletonScreen } from "@/components/skeleton";
 import { PanelPageHeader, PanelTabs } from "@/components/panel-ui";
-import { reportViewFromSlug, resolveMovementsRange, resolveRevenueRange } from "./range";
+import { PeriodBar } from "./period-bar";
+import { reportViewFromSlug, resolveMovementsRange, resolveRevenueRange, type ReportRange, type ReportView } from "./range";
+import { ReportDataSkeleton } from "./report-skeleton";
 import { RevenueView } from "./revenue-view";
 import { MovementsView } from "./movements-view";
 
-interface ReportesSearchParams {
-  vista?: string;
-  periodo?: string;
-  desde?: string;
-  hasta?: string;
-  horaDesde?: string;
-  horaHasta?: string;
+export const metadata: Metadata = { title: "Recaudación y movimientos" };
+
+/** Parámetros de rango que entiende la página (y la descarga en CSV). */
+const RANGE_PARAMS = ["periodo", "desde", "hasta", "horaDesde", "horaHasta"] as const;
+
+type RangeParams = Partial<Record<(typeof RANGE_PARAMS)[number], string>>;
+
+/** Un parámetro de búsqueda como texto; un valor repetido (`?a=1&a=2`) se ignora. */
+function texto(value: string | string[] | undefined): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/** Enlace de descarga con la misma vista y el mismo rango que se está viendo. */
+function downloadHref(vista: ReportView, params: RangeParams): string {
+  const query = new URLSearchParams({ vista });
+  for (const name of RANGE_PARAMS) {
+    const value = params[name];
+    if (value) query.set(name, value);
+  }
+  return `/panel/reportes/descargar?${query.toString()}`;
+}
+
+/** Datos del reporte activo, consultados dentro de su `<Suspense>`. */
+async function ReportData({
+  agencyId,
+  vista,
+  range,
+  params,
+}: {
+  agencyId: string;
+  vista: ReportView;
+  range: ReportRange;
+  params: RangeParams;
+}) {
+  if (vista === "recaudacion") {
+    const filas = await revenueByRoute(agencyId, range.from, range.to);
+    return <RevenueView range={range} filas={filas} downloadHref={downloadHref(vista, params)} />;
+  }
+  const movimientos = await driverMovements(agencyId, range.from, range.to);
+  return <MovementsView range={range} movimientos={movimientos} downloadHref={downloadHref(vista, params)} />;
 }
 
 /**
- * Página unificada de reportes del panel: recaudación por ruta y movimientos
- * de choferes en pestañas. Solo resuelve la vista y el rango, carga los datos
- * y delega el detalle de cada vista a su propio componente de servidor.
+ * Reportes de la agencia en dos pestañas: recaudación por ruta y viajes de
+ * los choferes. La cabecera, las pestañas y el periodo salen al instante; los
+ * datos cargan dentro de un `<Suspense>` que cambia con el periodo elegido.
  */
 export default async function ReportesPage({
   searchParams,
 }: {
-  searchParams: Promise<ReportesSearchParams>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { agencyId } = await requireAgencyUser("agency.reports");
-  const params = await searchParams;
-  const vista = reportViewFromSlug(params.vista);
+  const raw = await searchParams;
+  const vista = reportViewFromSlug(texto(raw.vista));
+  const params: RangeParams = {};
+  for (const name of RANGE_PARAMS) params[name] = texto(raw[name]);
 
-  let contenido: ReactNode;
-  if (vista === "recaudacion") {
-    const range = resolveRevenueRange(params);
-    const filas = await revenueByRoute(agencyId, range.from, range.to);
-    contenido = <RevenueView range={range} filas={filas} />;
-  } else {
-    const range = resolveMovementsRange(params);
-    const movimientos = await driverMovements(agencyId, range.from, range.to);
-    contenido = <MovementsView range={range} movimientos={movimientos} />;
-  }
+  const range = vista === "recaudacion" ? resolveRevenueRange(params) : resolveMovementsRange(params);
+  const dataKey = [vista, ...RANGE_PARAMS.map((name) => params[name] ?? "")].join("|");
 
   return (
     <div className="flex flex-col gap-6">
       <PanelPageHeader
         title="Recaudación y movimientos"
-        description="Horas en formato de 24 horas, hora de Caracas."
+        description="Cuánto cobró tu agencia en cada ruta y qué viajes hicieron tus choferes."
       />
 
       <PanelTabs
         label="Tipo de reporte"
         tabs={[
-          {
-            href: "/panel/reportes?vista=recaudacion",
-            label: "Recaudación",
-            active: vista === "recaudacion",
-          },
-          {
-            href: "/panel/reportes?vista=movimientos",
-            label: "Movimientos",
-            active: vista === "movimientos",
-          },
+          { href: "/panel/reportes?vista=recaudacion", label: "Recaudación", active: vista === "recaudacion" },
+          { href: "/panel/reportes?vista=movimientos", label: "Viajes de choferes", active: vista === "movimientos" },
         ]}
       />
 
-      {contenido}
+      <PeriodBar key={dataKey} vista={vista} range={range} />
+
+      <Suspense
+        key={dataKey}
+        fallback={
+          <SkeletonScreen label="Cargando el reporte…">
+            <ReportDataSkeleton vista={vista} />
+          </SkeletonScreen>
+        }
+      >
+        <ReportData agencyId={agencyId} vista={vista} range={range} params={params} />
+      </Suspense>
     </div>
   );
 }

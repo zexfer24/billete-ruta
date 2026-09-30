@@ -1,9 +1,20 @@
 import type { Currency } from "@prisma/client";
 import { PanelFeedback } from "@/components/panel-feedback";
-import { PANEL_LABEL_CLASS, panelButtonClass, panelInputClass } from "@/components/panel-ui";
+import { SubmitButton } from "@/components/submit-button";
+import { panelButtonClass, panelInputClass } from "@/components/panel-ui";
+import { formatUsdString } from "@/lib/decimal";
 import { cashPaymentAction } from "@/app/panel/pasajeros/actions";
+import { PanelField, panelFieldAria } from "./panel-field";
 
 const CURRENCIES: readonly Currency[] = ["USD", "VES", "COP", "USDT"];
+
+/** Nombre de cada moneda junto a su código, para quien no reconoce la sigla. */
+const CURRENCY_NAMES: Record<Currency, string> = {
+  USD: "USD · dólares",
+  VES: "VES · bolívares",
+  COP: "COP · pesos colombianos",
+  USDT: "USDT · dólar digital",
+};
 
 type CashPaymentFormProps =
   | { mode: "codigo"; returnTo?: "tablero"; error?: string; hidden?: Record<string, string> }
@@ -29,24 +40,18 @@ function HiddenFields({ hidden }: { hidden?: Record<string, string> }) {
   );
 }
 
-/** El saldo llega como cadena; se formatea aquí en vez de reutilizar `formatMoney`, que exige un `Prisma.Decimal`. */
-function formatSaldoUsd(value: string): string {
-  const formateado = new Intl.NumberFormat("es-VE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(value));
-  return `US$ ${formateado}`;
-}
-
 /**
  * Formulario reutilizable de cobro en efectivo. En modo "codigo" (taquilla o
- * registro rápido del tablero) pide el serial del ticket; en modo "reserva"
+ * registro rápido del tablero) pide el código del ticket; en modo "reserva"
  * la reserva ya está fija, viene del panel lateral de "Pasajeros y pagos" y
  * el monto se precarga con el saldo pendiente.
  */
 export function CashPaymentForm(props: CashPaymentFormProps) {
+  const ayudaCodigo = "Está impreso en el ticket, debajo del código QR.";
+  const ayudaMonto = "Puedes usar coma o punto para los céntimos, por ejemplo 12,50.";
+
   return (
-    <form action={cashPaymentAction} className="flex flex-col gap-4">
+    <form action={cashPaymentAction} className="flex flex-col gap-5">
       <PanelFeedback error={props.error} />
       {props.mode === "codigo" && props.returnTo ? (
         <input type="hidden" name="origen" value="tablero" />
@@ -56,53 +61,61 @@ export function CashPaymentForm(props: CashPaymentFormProps) {
       {props.mode === "reserva" ? (
         <>
           <input type="hidden" name="reservationId" value={props.reservationId} />
-          <p className="text-sm text-[var(--color-texto-suave)]">
-            Saldo pendiente: {formatSaldoUsd(props.balanceUsd)}. Si cobras en otra moneda, se
-            convierte con la tasa de cambio vigente.
-          </p>
-          {props.amountInCurrencyHint ? (
-            <p className="text-sm text-[var(--color-texto-suave)]">{props.amountInCurrencyHint}</p>
-          ) : null}
+          <div className="flex flex-col gap-1 rounded-control border border-borde bg-lienzo px-4 py-3">
+            <p className="text-sm font-semibold text-tinta-suave">Falta por cobrar</p>
+            <p className="tabular text-2xl font-bold text-tinta">{formatUsdString(props.balanceUsd)}</p>
+            <p className="text-sm leading-snug text-tinta-suave">
+              Si cobras en otra moneda, se convierte con la tasa de cambio vigente.
+            </p>
+            {props.amountInCurrencyHint ? (
+              <p className="text-sm leading-snug text-tinta-suave">{props.amountInCurrencyHint}</p>
+            ) : null}
+          </div>
         </>
       ) : (
-        <label className={PANEL_LABEL_CLASS}>
-          Serial del ticket
+        <PanelField id="cobro-codigo" label="Código del ticket" hint={ayudaCodigo}>
           <input
             type="text"
             name="code"
             required
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
             placeholder="TR-0911-3PAX-Y962"
-            className={panelInputClass("uppercase")}
+            className={panelInputClass("tabular uppercase")}
+            {...panelFieldAria("cobro-codigo", ayudaCodigo)}
           />
-        </label>
+        </PanelField>
       )}
 
-      <label className={PANEL_LABEL_CLASS}>
-        Monto
-        <input
-          type="text"
-          name="amount"
-          required
-          inputMode="decimal"
-          defaultValue={props.mode === "reserva" ? props.balanceUsd : undefined}
-          className={panelInputClass("w-32")}
-        />
-      </label>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <PanelField id="cobro-monto" label="Monto recibido" hint={ayudaMonto}>
+          <input
+            type="text"
+            name="amount"
+            required
+            inputMode="decimal"
+            autoComplete="off"
+            defaultValue={props.mode === "reserva" ? props.balanceUsd : undefined}
+            className={panelInputClass("tabular")}
+            {...panelFieldAria("cobro-monto", ayudaMonto)}
+          />
+        </PanelField>
 
-      <label className={PANEL_LABEL_CLASS}>
-        Moneda
-        <select name="currency" defaultValue="USD" className={panelInputClass()}>
-          {CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </label>
+        <PanelField id="cobro-moneda" label="Moneda">
+          <select name="currency" defaultValue="USD" className={panelInputClass()} {...panelFieldAria("cobro-moneda")}>
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {CURRENCY_NAMES[c]}
+              </option>
+            ))}
+          </select>
+        </PanelField>
+      </div>
 
-      <button type="submit" className={panelButtonClass("exito", "md", "w-fit")}>
+      <SubmitButton pendingLabel="Registrando cobro…" className={panelButtonClass("exito", "lg", "w-full sm:w-fit")}>
         Registrar cobro
-      </button>
+      </SubmitButton>
     </form>
   );
 }

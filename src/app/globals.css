@@ -1,74 +1,200 @@
 @import "tailwindcss";
 
+/*
+ * Sistema de diseño TicketRuta (spec 2026-09-30, secciones 3 a 5).
+ * Los colores se definen aquí una sola vez y se exponen como utilidades de
+ * Tailwind en @theme inline (bg-marca-600, text-tinta-suave, border-borde…).
+ * Ningún componente usa hex ni colores fijos de Tailwind.
+ */
 :root {
-  --fondo: #f7f7f5;
-  --superficie: #ffffff;
-  --borde: #e2e2dd;
-  --texto: #1c1c1a;
-  --texto-suave: #6b6b64;
-  --acento: #1d4ed8;
-  --acento-suave: #eff4ff;
-  --exito: #15803d;
-  --alerta: #b45309;
-  --peligro: #b91c1c;
-  --exito-suave: #eaf6ef;
-  --alerta-suave: #fdf3e6;
-  --peligro-suave: #fdecec;
+  /* Morado de marca (primario). marca-600 es el color del logo. */
+  --marca-50: #f6f2fd;
+  --marca-100: #ece3fb;
+  --marca-200: #d9c7f7;
+  --marca-300: #bb9cf0;
+  --marca-400: #9565e3;
+  --marca-500: #7838d3;
+  --marca-600: #601dbf;
+  --marca-700: #4e169d;
+  --marca-800: #3d117c;
+  --marca-900: #2c0c5b;
+  --marca-950: #1c063c;
 
-  /* Lenguaje visual de la app del pasajero (Omio + Transit). */
-  --marca: #1e3a8a;
-  --marca-oscura: #172a63;
-  --marca-clara: #dbe6ff;
-  --ruta: #15803d;
-  --ruta-oscura: #166534;
-  --en-vivo: #16a34a;
-  --cta: #d93a4f;
-  --tinta: #0f172a;
-  --tinta-suave: #475569;
-  --lienzo: #eef2f7;
-  --radio-tarjeta: 20px;
+  /* Sol (acento secundario). El relleno amarillo solo va sobre fondos morados. */
+  --sol: #ffc629;
+  --sol-suave: #fff4d1;
+  --sol-oscuro: #8a5a00;
+
+  /* Neutros. */
+  --tinta: #1a1530;
+  --tinta-suave: #57526b;
+  --tinta-tenue: #6e6982;
+  --borde: #e3dfec;
+  --borde-control: #857e99;
+  --lienzo: #f6f4fa;
+  --superficie: #ffffff;
+
+  /* Semánticos: siempre con icono y texto, nunca solo color. */
+  --exito: #137a46;
+  --exito-suave: #e6f4ec;
+  --alerta: #a15c00;
+  --alerta-suave: #fff3dc;
+  --peligro: #c0262d;
+  --peligro-suave: #fdecec;
+  --info: #1f5fbf;
+  --info-suave: #e8f0fc;
+
+  /* Forma y elevación. */
+  --radio-tarjeta: 16px;
+  --radio-control: 12px;
   --radio-pastilla: 999px;
+  --sombra-1: 0 1px 2px rgb(26 21 48 / 0.06), 0 1px 3px rgb(26 21 48 / 0.04);
+  --sombra-2: 0 8px 24px rgb(26 21 48 / 0.1);
+
+  /*
+   * Alias de compatibilidad (spec 3.6). Solo existen para que las pantallas
+   * aún no migradas no se rompan; ningún archivo nuevo o rediseñado los usa.
+   */
+  --marca: var(--marca-600);
+  --marca-oscura: var(--marca-800);
+  --marca-clara: var(--marca-100);
+  --acento: var(--marca-600);
+  --acento-suave: var(--marca-50);
+  --cta: var(--marca-600);
+  --ruta: var(--marca-600);
+  --ruta-oscura: var(--marca-700);
+  --en-vivo: var(--exito);
+  --fondo: var(--lienzo);
+  --texto: var(--tinta);
+  --texto-suave: var(--tinta-suave);
 }
 
 @theme inline {
-  --color-fondo: var(--fondo);
-  --color-superficie: var(--superficie);
-  --color-borde: var(--borde);
-  --color-texto: var(--texto);
-  --color-texto-suave: var(--texto-suave);
-  --color-acento: var(--acento);
-  --color-acento-suave: var(--acento-suave);
-  --color-exito: var(--exito);
-  --color-alerta: var(--alerta);
-  --color-peligro: var(--peligro);
-  --color-exito-suave: var(--exito-suave);
-  --color-alerta-suave: var(--alerta-suave);
-  --color-peligro-suave: var(--peligro-suave);
+  --color-marca-50: var(--marca-50);
+  --color-marca-100: var(--marca-100);
+  --color-marca-200: var(--marca-200);
+  --color-marca-300: var(--marca-300);
+  --color-marca-400: var(--marca-400);
+  --color-marca-500: var(--marca-500);
+  --color-marca-600: var(--marca-600);
+  --color-marca-700: var(--marca-700);
+  --color-marca-800: var(--marca-800);
+  --color-marca-900: var(--marca-900);
+  --color-marca-950: var(--marca-950);
 
+  --color-sol: var(--sol);
+  --color-sol-suave: var(--sol-suave);
+  --color-sol-oscuro: var(--sol-oscuro);
+
+  --color-tinta: var(--tinta);
+  --color-tinta-suave: var(--tinta-suave);
+  --color-tinta-tenue: var(--tinta-tenue);
+  --color-borde: var(--borde);
+  --color-borde-control: var(--borde-control);
+  --color-lienzo: var(--lienzo);
+  --color-superficie: var(--superficie);
+
+  --color-exito: var(--exito);
+  --color-exito-suave: var(--exito-suave);
+  --color-alerta: var(--alerta);
+  --color-alerta-suave: var(--alerta-suave);
+  --color-peligro: var(--peligro);
+  --color-peligro-suave: var(--peligro-suave);
+  --color-info: var(--info);
+  --color-info-suave: var(--info-suave);
+
+  /* Alias de compatibilidad expuestos como utilidades (spec 3.6). */
   --color-marca: var(--marca);
   --color-marca-oscura: var(--marca-oscura);
   --color-marca-clara: var(--marca-clara);
+  --color-acento: var(--acento);
+  --color-acento-suave: var(--acento-suave);
+  --color-cta: var(--cta);
   --color-ruta: var(--ruta);
   --color-ruta-oscura: var(--ruta-oscura);
   --color-en-vivo: var(--en-vivo);
-  --color-cta: var(--cta);
-  --color-tinta: var(--tinta);
-  --color-tinta-suave: var(--tinta-suave);
-  --color-lienzo: var(--lienzo);
+  --color-fondo: var(--fondo);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+
   --radius-tarjeta: var(--radio-tarjeta);
+  --radius-control: var(--radio-control);
   --radius-pastilla: var(--radio-pastilla);
-  --font-sans: var(--font-rubik), ui-sans-serif, system-ui, sans-serif;
+
+  /* Valores literales: Tailwind necesita leer la sombra para las utilidades shadow-1 y shadow-2. */
+  --shadow-1: 0 1px 2px rgb(26 21 48 / 0.06), 0 1px 3px rgb(26 21 48 / 0.04);
+  --shadow-2: 0 8px 24px rgb(26 21 48 / 0.1);
+
+  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 body {
-  background: var(--fondo);
-  color: var(--texto);
-  font-family: var(--font-rubik), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--lienzo);
+  color: var(--tinta);
+  font-family: var(--font-atkinson), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-/* Las cifras de dinero, cupos y horas se leen mejor con dígitos de ancho fijo. */
+::selection {
+  background: var(--marca-100);
+  color: var(--tinta);
+}
+
+/* Desplazamiento suave solo para quien no pidió reducir el movimiento. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Las cifras de dinero, puestos, horas y códigos se leen mejor con dígitos de ancho fijo. */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Piezas en la capa de componentes: cualquier utilidad de Tailwind puesta en el
+ * mismo elemento (por ejemplo rounded-tarjeta o h-40 en un Skeleton) las ajusta.
+ */
+@layer components {
+  /* Foco visible (spec 5): anillo de 3 px en marca-600 separado 2 px del control. */
+  .foco:focus-visible {
+    outline: 3px solid var(--marca-600);
+    outline-offset: 2px;
+  }
+
+  /* Foco sobre fondos morados: anillo amarillo sol, que contrasta con el morado. */
+  .foco-sobre-marca:focus-visible {
+    outline: 3px solid var(--sol);
+    outline-offset: 2px;
+  }
+
+  /* Bloque de carga (spec 6.5): pista marca-100 al 60 % con un brillo que la recorre. */
+  .esqueleto {
+    position: relative;
+    overflow: hidden;
+    background-color: color-mix(in srgb, var(--marca-100) 60%, transparent);
+    border-radius: var(--radio-control);
+  }
+
+  .esqueleto::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgb(255 255 255 / 0.55) 50%,
+      transparent 100%
+    );
+    animation: esqueleto-brillo 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes esqueleto-brillo {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 /* Animaciones de entrada del panel lateral compartido (src/components/side-panel.tsx). */
@@ -86,5 +212,23 @@ body {
 @keyframes fondo-entrada {
   from {
     opacity: 0;
+  }
+}
+
+/* Movimiento reducido: animaciones y transiciones quedan prácticamente instantáneas. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* El skeleton queda estático, sin brillo. */
+  .esqueleto::after {
+    animation: none !important;
+    display: none;
   }
 }

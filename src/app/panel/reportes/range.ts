@@ -5,6 +5,8 @@ import {
   caracasHourStart,
   caracasPeriodRange,
   DASHBOARD_PERIODS,
+  formatCaracasDateTime24,
+  formatCaracasTime24,
 } from "@/lib/time";
 import type { DashboardPeriod } from "@/lib/time";
 import { last24h } from "@/modules/reports";
@@ -84,4 +86,30 @@ export function resolveMovementsRange(
     from: params.desde ? caracasDayStart(params.desde, defaults.from) : defaults.from,
     to: params.hasta ? caracasDayEnd(params.hasta, defaults.to) : defaults.to,
   }));
+}
+
+/** Fecha y hora cortas de Caracas en 24 horas: "30/09/2026 14:32". */
+function fechaHora(date: Date): string {
+  return formatCaracasDateTime24(date);
+}
+
+/**
+ * Frase llana del rango aplicado, para que siempre se sepa qué periodo se
+ * está viendo: "Hoy, de 00:00 a 14:32", "Últimos 7 días: del 24/09/2026 00:00
+ * al 30/09/2026 14:32" o "Del 10/09/2026 08:00 al 11/09/2026 18:59".
+ */
+export function describeReportRange(range: ReportRange): string {
+  const tramo = `del ${fechaHora(range.from)} al ${fechaHora(range.to)}`;
+  switch (range.preset) {
+    case "hoy":
+      return `Hoy, de ${formatCaracasTime24(range.from)} a ${formatCaracasTime24(range.to)}`;
+    case "24h":
+      return `Últimas 24 horas: ${tramo}`;
+    case "7d":
+      return `Últimos 7 días: ${tramo}`;
+    case "30d":
+      return `Últimos 30 días: ${tramo}`;
+    case "personalizado":
+      return `Del ${fechaHora(range.from)} al ${fechaHora(range.to)}`;
+  }
 }

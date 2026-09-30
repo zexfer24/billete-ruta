@@ -1,67 +1,64 @@
 import type { ActivityRow } from "@/modules/reports";
 import type { StatusTone } from "@/lib/labels";
 import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
-import { EmptyState, SectionCard } from "@/components/panel-ui";
+import { EmptyState } from "@/components/panel-ui";
+import { IconList } from "@/components/icons";
 
-/**
- * Color del punto de cada tono, igual que el color de texto que usa
- * `StatusBadge` para el mismo tono (el punto hereda el color con `bg-current`).
- */
+/** Color del punto de cada tono. Refuerza la frase, nunca la sustituye. */
 const DOT_TONE_CLASSES: Record<StatusTone, string> = {
-  exito: "text-[var(--color-exito)]",
-  alerta: "text-[var(--color-alerta)]",
-  peligro: "text-[var(--color-peligro)]",
-  marca: "text-[var(--color-acento)]",
-  neutro: "text-[var(--color-texto-suave)]",
+  exito: "bg-exito",
+  alerta: "bg-alerta",
+  peligro: "bg-peligro",
+  marca: "bg-marca-600",
+  neutro: "bg-tinta-tenue",
 };
 
 /**
- * Bloque "Actividad reciente" del tablero: la bitácora de la agencia ya
- * traducida a texto, con la hora y un punto de color del tono (nunca solo
- * color: el texto siempre dice qué pasó).
+ * Contenido de "Actividad reciente": la bitácora de la agencia ya traducida a
+ * frases, con la hora de cada una. Va dentro de una sección plegable del
+ * tablero, porque es consulta, no trabajo del día.
  */
-export function ActivityBlock({
+export async function ActivityBlock({
   activity,
-  periodLabel,
   now,
 }: {
-  activity: { rows: ActivityRow[]; truncated: boolean };
-  periodLabel: string;
+  activity: Promise<{ rows: ActivityRow[]; truncated: boolean }>;
   now: Date;
 }) {
+  const { rows, truncated } = await activity;
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={<IconList />}
+        title="Sin actividad en este periodo"
+        description="Aquí aparecerán las ventas, los cobros y los embarques de tu agencia."
+      />
+    );
+  }
+
   return (
-    <SectionCard
-      title="Actividad reciente"
-      description={`Registro de lo que pasó en tu agencia · ${periodLabel}`}
-    >
-      {activity.rows.length === 0 ? (
-        <EmptyState title="Sin actividad registrada en este periodo." />
-      ) : (
-        <>
-          <ol className="flex flex-col divide-y divide-[var(--color-borde)]">
-            {activity.rows.map((entry) => {
-              const mismoDia = formatCaracasDate(entry.at) === formatCaracasDate(now);
-              return (
-                <li key={entry.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                  <span className="tabular w-16 shrink-0 pt-0.5 text-xs text-[var(--color-texto-suave)]">
-                    {mismoDia ? formatCaracasTime24(entry.at) : formatCaracas(entry.at, "dd/MM HH:mm")}
-                  </span>
-                  <span
-                    className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-current ${DOT_TONE_CLASSES[entry.tone]}`}
-                    aria-hidden="true"
-                  />
-                  <p className="text-sm">{entry.text}</p>
-                </li>
-              );
-            })}
-          </ol>
-          {activity.truncated ? (
-            <p className="mt-3 text-xs text-[var(--color-texto-suave)]">
-              Se muestra la actividad más reciente.
-            </p>
-          ) : null}
-        </>
-      )}
-    </SectionCard>
+    <div className="flex flex-col gap-3">
+      <ol className="flex flex-col divide-y divide-borde">
+        {rows.map((entry) => {
+          const mismoDia = formatCaracasDate(entry.at) === formatCaracasDate(now);
+          return (
+            <li key={entry.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+              <span className="tabular w-24 shrink-0 text-sm font-medium text-tinta-suave">
+                {mismoDia ? formatCaracasTime24(entry.at) : formatCaracas(entry.at, "dd/MM HH:mm")}
+              </span>
+              <span
+                aria-hidden="true"
+                className={`mt-2 size-2 shrink-0 rounded-full ${DOT_TONE_CLASSES[entry.tone]}`}
+              />
+              <p className="min-w-0 text-[15px] leading-relaxed text-tinta">{entry.text}</p>
+            </li>
+          );
+        })}
+      </ol>
+      {truncated ? (
+        <p className="text-sm text-tinta-suave">Se muestra solo la actividad más reciente.</p>
+      ) : null}
+    </div>
   );
 }

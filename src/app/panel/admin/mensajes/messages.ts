@@ -1,0 +1,49 @@
+import type { MessageStatus } from "@prisma/client";
+
+/**
+ * Reglas puras de la bandeja de mensajes del administrador: estados que se
+ * filtran, nombres legibles de las plantillas y lectura segura de la URL.
+ * Probadas en tests/unit/panel/admin-format.test.ts.
+ */
+
+export const MESSAGES_PATH = "/panel/admin/mensajes";
+
+/** Estados de MessageStatus en el orden en que avanza un mensaje; el fallido va al final. */
+export const MESSAGE_STATUSES: readonly MessageStatus[] = ["ENCOLADO", "ENVIADO", "ENTREGADO", "LEIDO", "FALLIDO"];
+
+/** Estado pedido en `?status=`; cualquier otro valor (o ninguno) muestra todos. */
+export function messageStatusFromParam(value: unknown): MessageStatus | undefined {
+  return typeof value === "string" && (MESSAGE_STATUSES as readonly string[]).includes(value)
+    ? (value as MessageStatus)
+    : undefined;
+}
+
+/** Nombre de cada plantilla en palabras, en lugar de su clave interna. */
+const TEMPLATE_NAMES = new Map<string, string>([
+  ["solicitud_recibida", "Solicitud recibida"],
+  ["reserva_condicional", "Reserva para pagar en la taquilla"],
+  ["abono_registrado", "Abono registrado"],
+  ["ticket_emitido", "Ticket emitido"],
+  ["pago_rechazado", "Pago rechazado"],
+  ["recordatorio_24h", "Recordatorio del viaje, un día antes"],
+  ["reconfirmacion_pago_sitio", "Pedido de reconfirmación del viaje"],
+  ["confirmacion_2h", "Confirmación de asistencia, dos horas antes"],
+  ["reserva_liberada", "Puesto liberado"],
+  ["cupo_disponible_lista_espera", "Puesto disponible para la lista de espera"],
+]);
+
+/** Nombre legible de una plantilla; una clave desconocida se muestra tal cual. */
+export function templateName(templateKey: string): string {
+  return TEMPLATE_NAMES.get(templateKey) ?? templateKey;
+}
+
+/** Convierte el payload JSON guardado en un mapa de textos para `renderStoredPreview`. */
+export function payloadToParams(payload: unknown): Record<string, string> {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return {};
+  const params: Record<string, string> = {};
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (value === null || value === undefined) continue;
+    params[key] = typeof value === "string" ? value : String(value);
+  }
+  return params;
+}

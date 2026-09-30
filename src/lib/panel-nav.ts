@@ -1,9 +1,21 @@
 /**
- * Menú agrupado y utilidades de navegación del panel del operador. Módulo
- * puro (sin React ni Next) para poder probarlo con tests unitarios simples.
+ * Menús agrupados y utilidades de navegación del panel: el del operador de
+ * agencia (`OPERATOR_NAV`) y el del administrador del terminal (`ADMIN_NAV`).
+ * Módulo puro (sin React ni Next) para poder probarlo con tests unitarios simples.
  */
 
-export type PanelNavIcon = "tablero" | "taquilla" | "pasajeros" | "salidas" | "flota" | "reportes";
+export type PanelNavIcon =
+  | "tablero"
+  | "taquilla"
+  | "pasajeros"
+  | "salidas"
+  | "flota"
+  | "reportes"
+  | "movimientos"
+  | "usuarios"
+  | "agencias"
+  | "tasas"
+  | "mensajes";
 export type PanelNavBadgeKey = "pendingProofs";
 
 export interface PanelNavLink {
@@ -43,6 +55,38 @@ export const OPERATOR_NAV: readonly PanelNavGroup[] = [
     links: [{ href: "/panel/reportes", label: "Recaudación y movimientos", icon: "reportes" }],
   },
 ];
+
+/**
+ * Menú agrupado del panel del administrador del terminal, en el orden exacto
+ * en que se muestra. Misma estructura que el del operador (spec 7.3), para que
+ * quien conoce una pantalla conozca la otra.
+ */
+export const ADMIN_NAV: readonly PanelNavGroup[] = [
+  {
+    label: "Supervisión",
+    links: [
+      { href: "/panel/admin/tablero", label: "Tablero", icon: "tablero" },
+      { href: "/panel/admin/movimientos", label: "Movimientos", icon: "movimientos" },
+      { href: "/panel/admin/usuarios", label: "Usuarios", icon: "usuarios" },
+    ],
+  },
+  {
+    label: "Terminal",
+    links: [
+      { href: "/panel/admin/agencias", label: "Agencias", icon: "agencias" },
+      { href: "/panel/admin/tasas", label: "Tasas y precios", icon: "tasas" },
+      { href: "/panel/admin/mensajes", label: "Mensajes", icon: "mensajes" },
+    ],
+  },
+];
+
+/**
+ * Inicio de un menú: el primer enlace de su primer grupo. El logo de la barra
+ * lateral enlaza aquí. Un menú vacío cae en `/panel`.
+ */
+export function panelNavHomeHref(groups: readonly PanelNavGroup[]): string {
+  return groups[0]?.links[0]?.href ?? "/panel";
+}
 
 /**
  * Alias de ruta: el abordaje es parte del flujo de una salida, así que activa

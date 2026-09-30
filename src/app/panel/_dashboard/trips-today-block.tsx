@@ -3,99 +3,182 @@ import type { AgencyDepartureRow } from "@/modules/catalog";
 import { departureStatusLabel, departureStatusTone } from "@/lib/labels";
 import { formatCaracasTime24 } from "@/lib/time";
 import { ClickableRow } from "@/components/clickable-row";
-import { EmptyState, SectionCard, StatusBadge, TableShell, panelButtonClass } from "@/components/panel-ui";
+import {
+  EmptyState,
+  MobileCard,
+  PANEL_TD_CLASS,
+  PANEL_TH_CLASS,
+  SectionCard,
+  StatusBadge,
+  panelButtonClass,
+} from "@/components/panel-ui";
+import { IconBus } from "@/components/icons";
+import { sortTodayDepartures } from "./attention";
+import { ResponsiveTable } from "./responsive-table";
 
-/** Hora en formato de 24 horas, o guion si el hito todavía no ocurrió. */
-function hora(date: Date | null): string {
-  return date ? formatCaracasTime24(date) : "—";
+/** Cuántas salidas del día muestra el tablero antes de remitir a "Salidas". */
+const MAX_FILAS = 8;
+
+/** Hora del hito, o "Aún no" si todavía no ocurrió: nunca un guion sin explicar. */
+function Hito({ date }: { date: Date | null }) {
+  return date ? (
+    <span className="tabular">{formatCaracasTime24(date)}</span>
+  ) : (
+    <span className="text-tinta-tenue">Aún no</span>
+  );
 }
 
 /**
- * Bloque "Embarques y desembarques de hoy" del tablero: las salidas del día
- * en curso con sus horas de embarque, partida y llegada.
+ * "Salidas de hoy" del tablero: las del día con sus horas de embarque,
+ * partida y llegada. En escritorio es una tabla cuya fila entera abre la
+ * salida (con un único enlace, la ruta, para el teclado); en pantallas
+ * angostas, una lista de tarjetas.
  */
-export function TripsTodayBlock({
+export async function TripsTodayBlock({
   departures,
-  registrarSalidaHref,
+  createDepartureHref,
 }: {
-  departures: AgencyDepartureRow[];
-  registrarSalidaHref: string;
+  departures: Promise<AgencyDepartureRow[]>;
+  createDepartureHref: string;
 }) {
+  const salidas = sortTodayDepartures(await departures);
+  const visibles = salidas.slice(0, MAX_FILAS);
+
   return (
-    // Ocupa las dos columnas de la rejilla desde `lg`: con una sola columna la
-    // tabla (siete columnas propias) quedaba apretada a la mitad del ancho
-    // (ver hallazgo V3 de la ronda 4).
-    <div className="lg:col-span-2">
-      <SectionCard
-        title="Embarques y desembarques de hoy"
-        action={
-          <Link href="/panel/salidas" className={panelButtonClass("secundario", "sm")}>
-            Ver salidas
-          </Link>
-        }
-      >
-        {departures.length === 0 ? (
-          <EmptyState
-            title="No hay salidas programadas para hoy."
-            action={
-              <Link
-                href={registrarSalidaHref}
-                scroll={false}
-                className={panelButtonClass("primario", "sm")}
-              >
-                Crear salida
-              </Link>
-            }
-          />
-        ) : (
-          <TableShell>
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="border-b border-[var(--color-borde)] text-[var(--color-texto-suave)]">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Hora</th>
-                  <th className="px-4 py-3 font-medium">Ruta</th>
-                  <th className="px-4 py-3 font-medium">Unidad y chofer</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="px-4 py-3 font-medium">Embarque</th>
-                  <th className="px-4 py-3 font-medium">Salida</th>
-                  <th className="px-4 py-3 font-medium">Llegada</th>
-                </tr>
-              </thead>
-              <tbody>
-                {departures.map((salida) => (
-                  <ClickableRow
+    <SectionCard
+      title="Salidas de hoy"
+      description="Cuándo embarcó, partió y llegó cada bus. Toca una salida para abrirla."
+      action={
+        <Link href="/panel/salidas" className={panelButtonClass("secundario")}>
+          Ver todas las salidas
+        </Link>
+      }
+    >
+      {salidas.length === 0 ? (
+        <EmptyState
+          icon={<IconBus />}
+          title="No hay salidas programadas para hoy"
+          description="Crea una salida para empezar a vender pasajes en esa ruta."
+          action={
+            <Link href={createDepartureHref} scroll={false} className={panelButtonClass("secundario")}>
+              Crear una salida
+            </Link>
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <ResponsiveTable
+            cards={
+              <>
+                {visibles.map((salida) => (
+                  <MobileCard
                     key={salida.id}
-                    href={`/panel/salidas/${salida.id}`}
-                    className="border-b border-[var(--color-borde)] last:border-0"
-                  >
-                    <td className="tabular px-4 py-3">{formatCaracasTime24(salida.departsAt)}</td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/panel/salidas/${salida.id}`}
-                        className="rounded-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-acento)]"
-                      >
-                        {salida.routeName}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      {salida.vehiclePlate} · {salida.driverName}
-                    </td>
-                    <td className="px-4 py-3">
+                    title={
+                      <span className="tabular">
+                        {formatCaracasTime24(salida.departsAt)} · {salida.routeName}
+                      </span>
+                    }
+                    subtitle={`${salida.vehiclePlate} · ${salida.driverName}`}
+                    status={
                       <StatusBadge
                         label={departureStatusLabel(salida.status)}
                         tone={departureStatusTone(salida.status)}
                       />
-                    </td>
-                    <td className="tabular px-4 py-3">{hora(salida.boardingStartedAt)}</td>
-                    <td className="tabular px-4 py-3">{hora(salida.departedAt)}</td>
-                    <td className="tabular px-4 py-3">{hora(salida.arrivedAt)}</td>
-                  </ClickableRow>
+                    }
+                    details={[
+                      { label: "Embarcó", value: <Hito date={salida.boardingStartedAt} /> },
+                      { label: "Partió", value: <Hito date={salida.departedAt} /> },
+                      { label: "Llegó", value: <Hito date={salida.arrivedAt} /> },
+                    ]}
+                    action={
+                      <Link
+                        href={`/panel/salidas/${salida.id}`}
+                        className={panelButtonClass("secundario", "md", "w-full")}
+                      >
+                        Abrir la salida
+                      </Link>
+                    }
+                  />
                 ))}
-              </tbody>
-            </table>
-          </TableShell>
-        )}
-      </SectionCard>
-    </div>
+              </>
+            }
+            table={
+              <table className="w-full text-left">
+                <thead className="border-b border-borde">
+                  <tr>
+                    <th scope="col" className={PANEL_TH_CLASS}>
+                      Hora
+                    </th>
+                    <th scope="col" className={PANEL_TH_CLASS}>
+                      Ruta, bus y chofer
+                    </th>
+                    <th scope="col" className={PANEL_TH_CLASS}>
+                      Estado
+                    </th>
+                    <th scope="col" className={PANEL_TH_CLASS}>
+                      Embarcó
+                    </th>
+                    <th scope="col" className={PANEL_TH_CLASS}>
+                      Partió
+                    </th>
+                    <th scope="col" className={PANEL_TH_CLASS}>
+                      Llegó
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibles.map((salida) => (
+                    <ClickableRow
+                      key={salida.id}
+                      href={`/panel/salidas/${salida.id}`}
+                      className="border-b border-borde last:border-0"
+                    >
+                      <td className={`${PANEL_TD_CLASS} tabular text-base font-semibold`}>
+                        {formatCaracasTime24(salida.departsAt)}
+                      </td>
+                      <td className={PANEL_TD_CLASS}>
+                        <Link
+                          href={`/panel/salidas/${salida.id}`}
+                          className="foco rounded-sm font-semibold text-marca-700 hover:underline"
+                        >
+                          {salida.routeName}
+                        </Link>
+                        <span className="block text-tinta-suave">
+                          {salida.vehiclePlate} · {salida.driverName}
+                        </span>
+                      </td>
+                      <td className={PANEL_TD_CLASS}>
+                        <StatusBadge
+                          label={departureStatusLabel(salida.status)}
+                          tone={departureStatusTone(salida.status)}
+                        />
+                      </td>
+                      <td className={PANEL_TD_CLASS}>
+                        <Hito date={salida.boardingStartedAt} />
+                      </td>
+                      <td className={PANEL_TD_CLASS}>
+                        <Hito date={salida.departedAt} />
+                      </td>
+                      <td className={PANEL_TD_CLASS}>
+                        <Hito date={salida.arrivedAt} />
+                      </td>
+                    </ClickableRow>
+                  ))}
+                </tbody>
+              </table>
+            }
+          />
+
+          {salidas.length > visibles.length ? (
+            <p className="text-sm text-tinta-suave">
+              Se muestran {visibles.length} de {salidas.length} salidas de hoy.{" "}
+              <Link href="/panel/salidas" className="foco rounded-sm font-semibold text-marca-700 underline">
+                Ver todas
+              </Link>
+            </p>
+          ) : null}
+        </div>
+      )}
+    </SectionCard>
   );
 }

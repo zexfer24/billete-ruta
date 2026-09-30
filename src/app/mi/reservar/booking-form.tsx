@@ -1,10 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isMinor, isValidBirthYear, isValidIdNumber } from "@/lib/identity";
+import { Alert } from "@/components/alert";
 import type { DepartureRowData } from "@/components/departure-row";
 import type { JsonValue } from "@/components/details-view";
-import { StepIndicator } from "./step-indicator";
+import { Stepper } from "@/components/stepper";
+import { buttonClass } from "@/components/ui-classes";
+import { clearBookingDraft, readBookingDraft, writeBookingDraft } from "./draft";
+import { bookingCost, formatCents } from "./money";
 import { StepDepartures } from "./step-departures";
 import { StepPassengers } from "./step-passengers";
 import { StepPolicies } from "./step-policies";
@@ -22,6 +27,7 @@ export interface DepartureVM {
   estimatedMinutes: number;
   departsAtIso: string;
   departsAtLabel: string;
+  /** Tarifa por persona con dos decimales, como texto ("12.50"). */
   fareUsd: string;
   capacity: number;
   available: number;
@@ -44,8 +50,21 @@ export interface CompanionForm {
   birthYear: string;
 }
 
+type Step = 1 | 2 | 3 | 4;
+
+/** Una reserva para pagar en taquilla solo se admite con 12 horas o más antes de salir. */
 const CASH_MIN_LEAD_HOURS = 12;
-const STEP_LABELS = ["Salida", "Pasajeros", "Políticas", "Pago"] as const;
+/** Tope de personas por reserva (el titular más cinco acompañantes). */
+const MAX_PASSENGERS = 6;
+const STEP_LABELS = ["Salida", "Pasajeros", "Condiciones", "Pago"] as const;
+const STEP_TITLES: Record<Step, string> = {
+  1: "Elige tu salida",
+  2: "¿Quiénes viajan?",
+  3: "Lee y acepta las condiciones",
+  4: "¿Cómo vas a pagar?",
+};
+
+export const DOCUMENTS_RETURN_HREF = "/mi/documentos?volver=reservar";
 
 function emptyCompanion(): CompanionForm {
   return { fullName: "", idNumber: "", birthYear: "" };
@@ -67,14 +86,39 @@ export function toDepartureRowData(d: DepartureVM): DepartureRowData {
   };
 }
 
-/** Asistente de reserva de 4 pasos: estado y reglas de negocio del cliente; renderiza el paso activo. */
+/** Errores de un acompañante, campo por campo; vacío si está completo. */
+export function companionErrors(c: CompanionForm): Partial<Record<keyof CompanionForm, string>> {
+  const errors: Partial<Record<keyof CompanionForm, string>> = {};
+  if (c.fullName.trim().length < 3) errors.fullName = "Escribe el nombre y el apellido.";
+  if (!isValidIdNumber(c.idNumber)) {
+    errors.idNumber = "Escribe la cédula con la letra y los números, por ejemplo V12345678.";
+  }
+  if (!isValidBirthYear(Number.parseInt(c.birthYear, 10) || 0) || !/^\d{4}$/.test(c.birthYear.trim())) {
+    errors.birthYear = "Escribe el año con cuatro números, por ejemplo 2010.";
+  }
+  return errors;
+}
+
+function passengersText(count: number): string {
+  return count === 1 ? "1 pasajero" : `${count} pasajeros`;
+}
+
+/**
+ * Asistente de reserva de cuatro pasos (spec 7.1): un paso por pantalla con
+ * el `Stepper` arriba, el total siempre a la vista en la barra fija de abajo
+ * y el avance con un botón grande. Lo elegido se guarda en un borrador de la
+ * pestaña (`draft.ts`), así la persona puede ir a Documentos a subir la
+ * cédula, o recargar, y seguir donde quedó.
+ */
 export default function BookingForm({
   departures,
   origins,
   destinations,
   paymentMethodsByAgency,
   taxPerPassengerUsd,
+  exchangeRates,
   passenger,
+  documents,
   initialOrigin,
   initialDestination,
   initialDepartureId,
@@ -86,7 +130,10 @@ export default function BookingForm({
   destinations: string[];
   paymentMethodsByAgency: Record<string, PaymentMethodVM[]>;
   taxPerPassengerUsd: string;
+  /** Bolívares y pesos por dólar vigentes, con seis decimales ("36.500000"). */
+  exchangeRates: Partial<Record<"VES" | "COP", string>>;
   passenger: { fullName: string; birthYear: number };
+  documents: { hasIdDocument: boolean; hasTravelPermit: boolean };
   initialOrigin?: string;
   initialDestination?: string;
   initialDepartureId?: string;
@@ -94,36 +141,90 @@ export default function BookingForm({
   nowIso: string;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const initialDeparture = initialDepartureId
+    ? (departures.find((d) => d.id === initialDepartureId) ?? null)
+    : null;
+
+  const [step, setStep] = useState<Step>(initialDeparture ? 2 : 1);
   const [origin, setOrigin] = useState(initialOrigin && origins.includes(initialOrigin) ? initialOrigin : "");
   const [destination, setDestination] = useState(
     initialDestination && destinations.includes(initialDestination) ? initialDestination : "",
   );
-  const [selectedDepartureId, setSelectedDepartureId] = useState<string | null>(initialDepartureId ?? null);
-  const [passengerCount, setPassengerCount] = useState(Math.min(6, Math.max(1, initialPassengerCount ?? 1)));
-  const [companions, setCompanions] = useState<CompanionForm[]>([]);
+  const [selectedDepartureId, setSelectedDepartureId] = useState<string | null>(initialDeparture?.id ?? null);
+  const [companions, setCompanions] = useState<CompanionForm[]>(() => {
+    if (!initialDeparture || !initialPassengerCount) return [];
+    const tope = Math.min(MAX_PASSENGERS, Math.max(1, initialDeparture.available));
+    const cantidad = Math.min(initialPassengerCount, tope);
+    return Array.from({ length: Math.max(0, cantidad - 1) }, emptyCompanion);
+  });
   const [policiesAccepted, setPoliciesAccepted] = useState(false);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
+  const [restored, setRestored] = useState(false);
 
-  const tax = Number.parseFloat(taxPerPassengerUsd);
+  // El borrador se lee una sola vez al montar; hasta el render siguiente no se escribe encima.
+  const [draftReady, setDraftReady] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const lastStep = useRef<Step>(step);
+  const restoredStep = useRef<Step | null>(null);
 
-  const selectedDeparture =
-    useMemo(() => departures.find((d) => d.id === selectedDepartureId), [departures, selectedDepartureId]) ??
-    null;
+  useEffect(() => {
+    const draft = readBookingDraft();
+    setDraftReady(true);
+    if (!draft) return;
+    const salida = departures.find((d) => d.id === draft.departureId);
+    if (!salida) return;
+    // Si la persona llegó eligiendo otra salida, esa manda sobre el borrador.
+    if (initialDepartureId && initialDepartureId !== draft.departureId) return;
+    const tope = Math.min(MAX_PASSENGERS, Math.max(1, salida.available));
+    setSelectedDepartureId(salida.id);
+    setCompanions(draft.companions.slice(0, tope - 1));
+    setPoliciesAccepted(draft.policiesAccepted);
+    setSelectedPaymentMethodId(draft.paymentMethodId);
+    const pasoRecuperado: Step = salida.available === 0 || draft.step === 1 ? 2 : draft.step;
+    // Recuperar no es "cambiar de paso": la vista no salta ni mueve el foco.
+    if (pasoRecuperado !== step) restoredStep.current = pasoRecuperado;
+    setStep(pasoRecuperado);
+    setRestored(true);
+    // Solo al montar: el borrador es el de la visita anterior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const maxPassengers = selectedDeparture ? Math.min(6, selectedDeparture.available) : 0;
+  useEffect(() => {
+    if (!draftReady || !selectedDepartureId) return;
+    writeBookingDraft({
+      step,
+      departureId: selectedDepartureId,
+      companions,
+      policiesAccepted,
+      paymentMethodId: selectedPaymentMethodId,
+    });
+  }, [draftReady, step, selectedDepartureId, companions, policiesAccepted, selectedPaymentMethodId]);
+
+  // Al cambiar de paso, la vista vuelve arriba y el foco va al título del paso nuevo.
+  useEffect(() => {
+    if (lastStep.current === step) return;
+    lastStep.current = step;
+    if (restoredStep.current === step) {
+      restoredStep.current = null;
+      return;
+    }
+    topRef.current?.scrollIntoView({ block: "start" });
+    headingRef.current?.focus({ preventScroll: true });
+  }, [step]);
+
+  const selectedDeparture = departures.find((d) => d.id === selectedDepartureId) ?? null;
+  const maxPassengers = selectedDeparture ? Math.min(MAX_PASSENGERS, selectedDeparture.available) : 0;
+  const passengerCount = companions.length + 1;
 
   const viajaMenor =
-    isMinor(passenger.birthYear) ||
+    isMinor(passenger.birthYear, now) ||
     companions.some((c) => {
       const year = Number.parseInt(c.birthYear, 10);
-      return Number.isInteger(year) && isMinor(year);
+      return /^\d{4}$/.test(c.birthYear.trim()) && isValidBirthYear(year, now) && isMinor(year, now);
     });
 
-  const fareUsd = selectedDeparture ? Number.parseFloat(selectedDeparture.fareUsd) : 0;
-  const fareTotal = fareUsd * passengerCount;
-  const taxTotal = tax * passengerCount;
-  const total = fareTotal + taxTotal;
+  const cost = bookingCost(selectedDeparture?.fareUsd ?? "0", taxPerPassengerUsd, passengerCount);
 
   const hoursUntilDeparture = selectedDeparture
     ? (new Date(selectedDeparture.departsAtIso).getTime() - now.getTime()) / 3_600_000
@@ -135,50 +236,85 @@ export default function BookingForm({
         (m) => m.kind === "DIGITAL" || physicalAllowed,
       )
     : [];
-
   const selectedMethod = availableMethods.find((m) => m.id === selectedPaymentMethodId) ?? null;
 
+  function goTo(next: Step) {
+    setStep(next);
+  }
+
   function elegirSalida(id: string) {
+    const salida = departures.find((d) => d.id === id);
+    const tope = salida ? Math.min(MAX_PASSENGERS, Math.max(1, salida.available)) : 1;
     setSelectedDepartureId(id);
     setSelectedPaymentMethodId(null);
-    const salida = departures.find((d) => d.id === id);
-    const tope = salida ? Math.min(6, salida.available) : 1;
-    const nuevaCantidad = Math.min(passengerCount, Math.max(1, tope));
-    setPassengerCount(nuevaCantidad);
-    setCompanions((prev) => ajustarAcompanantes(prev, nuevaCantidad));
-    setStep(2);
+    setCompanions((prev) => prev.slice(0, tope - 1));
+    goTo(2);
   }
 
-  function cambiarCantidad(cantidad: number) {
-    setPassengerCount(cantidad);
-    setCompanions((prev) => ajustarAcompanantes(prev, cantidad));
+  function empezarDeNuevo() {
+    clearBookingDraft();
+    setSelectedDepartureId(null);
+    setCompanions([]);
+    setPoliciesAccepted(false);
+    setSelectedPaymentMethodId(null);
+    setRestored(false);
+    goTo(1);
   }
 
-  function ajustarAcompanantes(prev: CompanionForm[], cantidad: number): CompanionForm[] {
-    const necesarios = Math.max(0, cantidad - 1);
-    const copia = [...prev];
-    while (copia.length < necesarios) copia.push(emptyCompanion());
-    copia.length = necesarios;
-    return copia;
-  }
-
-  function actualizarAcompanante(indice: number, campo: keyof CompanionForm, valor: string) {
-    setCompanions((prev) => prev.map((c, i) => (i === indice ? { ...c, [campo]: valor } : c)));
-  }
-
-  const paso2Valido =
-    selectedDeparture !== null &&
-    maxPassengers > 0 &&
-    companions.every(
-      (c) =>
-        c.fullName.trim().length >= 3 &&
-        isValidIdNumber(c.idNumber) &&
-        isValidBirthYear(Number.parseInt(c.birthYear, 10) || 0),
-    );
+  const summary = selectedDeparture ? (
+    <p className="tabular flex flex-wrap items-baseline justify-between gap-x-3">
+      <span>
+        {passengersText(passengerCount)}, con la tasa del terminal
+      </span>
+      <span className="text-base text-tinta">
+        Total <strong className="font-bold">{formatCents(cost.totalCents, "USD")}</strong>
+      </span>
+    </p>
+  ) : null;
 
   return (
-    <div className="flex flex-col gap-6 pb-24">
-      <StepIndicator step={step} labels={STEP_LABELS} />
+    <div ref={topRef} className="flex scroll-mt-4 flex-col gap-6 pb-40">
+      <Stepper steps={STEP_LABELS} current={step} label="Pasos para reservar" />
+
+      {restored ? (
+        <Alert
+          tone="info"
+          title="Seguimos con tu reserva en curso"
+          action={
+            <button type="button" onClick={empezarDeNuevo} className={buttonClass("fantasma", undefined, "sm")}>
+              Empezar de nuevo
+            </button>
+          }
+        >
+          Guardamos lo que ya habías elegido. Puedes seguir desde aquí.
+        </Alert>
+      ) : null}
+
+      {!documents.hasIdDocument ? (
+        <Alert
+          tone="alerta"
+          role="none"
+          title="Antes de confirmar, sube la foto de tu cédula"
+          action={
+            <Link href={DOCUMENTS_RETURN_HREF} className={buttonClass("secundario", undefined, "sm")}>
+              Subir la foto
+            </Link>
+          }
+        >
+          Sin ella no podemos confirmar tu reserva. Lo que elijas aquí queda guardado mientras la subes.
+        </Alert>
+      ) : null}
+
+      <h2
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-xl font-bold tracking-tight text-tinta outline-none"
+      >
+        <span className="sr-only">
+          Paso {step} de {STEP_LABELS.length}:{" "}
+        </span>
+        {STEP_TITLES[step]}
+      </h2>
 
       {step === 1 ? (
         <StepDepartures
@@ -192,6 +328,8 @@ export default function BookingForm({
             setDestination(next.destination);
           }}
           now={now}
+          selectedDepartureId={selectedDepartureId}
+          taxPerPassengerUsd={taxPerPassengerUsd}
           onSelect={elegirSalida}
         />
       ) : null}
@@ -201,25 +339,25 @@ export default function BookingForm({
           departure={selectedDeparture}
           now={now}
           maxPassengers={maxPassengers}
-          passengerCount={passengerCount}
-          onChangeCantidad={cambiarCantidad}
+          holderName={passenger.fullName}
           companions={companions}
-          onChangeCompanion={actualizarAcompanante}
+          onChangeCompanions={setCompanions}
           viajaMenor={viajaMenor}
-          canContinue={paso2Valido}
-          onBack={() => setStep(1)}
-          onNext={() => setStep(3)}
+          hasTravelPermit={documents.hasTravelPermit}
+          summary={summary}
+          onChangeDeparture={() => goTo(1)}
+          onBack={() => goTo(1)}
+          onNext={() => goTo(3)}
         />
       ) : null}
 
       {step === 3 && selectedDeparture ? (
         <StepPolicies
-          departure={selectedDeparture}
-          now={now}
           accepted={policiesAccepted}
           onChangeAccepted={setPoliciesAccepted}
-          onBack={() => setStep(2)}
-          onNext={() => setStep(4)}
+          summary={summary}
+          onBack={() => goTo(2)}
+          onNext={() => goTo(4)}
         />
       ) : null}
 
@@ -228,19 +366,32 @@ export default function BookingForm({
           departure={selectedDeparture}
           now={now}
           availableMethods={availableMethods}
+          physicalAllowed={physicalAllowed}
           selectedMethod={selectedMethod}
-          selectedPaymentMethodId={selectedPaymentMethodId}
           onChangePaymentMethod={setSelectedPaymentMethodId}
           passengerCount={passengerCount}
-          fareUsd={fareUsd}
-          fareTotal={fareTotal}
-          taxPerPassenger={tax}
-          taxTotal={taxTotal}
-          total={total}
+          cost={cost}
+          exchangeRates={exchangeRates}
           companions={companions}
           policiesAccepted={policiesAccepted}
-          onBack={() => setStep(3)}
+          summary={summary}
+          onBack={() => goTo(3)}
+          onGoToStep={goTo}
         />
+      ) : null}
+
+      {step > 1 && !selectedDeparture ? (
+        <Alert
+          tone="alerta"
+          title="Esa salida ya no está disponible"
+          action={
+            <button type="button" onClick={() => goTo(1)} className={buttonClass("primario", undefined, "sm")}>
+              Elegir otra salida
+            </button>
+          }
+        >
+          Puede que se haya llenado o que ya haya salido.
+        </Alert>
       ) : null}
     </div>
   );
