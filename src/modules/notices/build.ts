@@ -42,7 +42,7 @@ export interface NoticeInput {
   reservations: NoticeReservationInput[];
 }
 
-/** Estados finales de una reserva: no ocupan cupo y no generan más avisos. */
+/** Estados finales de una reserva: no ocupan puesto y no generan más avisos. */
 const ESTADOS_FINALES = new Set(["LIBERADA", "CANCELADA", "ABORDADA", "NO_SHOW"]);
 
 const NIVEL_ORDEN: Record<NoticeLevel, number> = { alerta: 0, info: 1, exito: 2 };
@@ -65,8 +65,8 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
     avisos.push({
       kind: "RESERVA_POR_LIBERAR",
       level: "alerta",
-      title: "Tu reserva está por liberarse",
-      body: `Faltan ${restante} para que se libere el cupo si no completas el pago.`,
+      title: "Paga pronto para no perder tu puesto",
+      body: `Te quedan ${restante} para pagar. Si no pagas, tu puesto queda libre para otra persona.`,
       at: reserva.expiresAt,
       href,
       reservationCode: reserva.code,
@@ -78,10 +78,10 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
     avisos.push({
       kind: "COMPROBANTE_RECHAZADO",
       level: "alerta",
-      title: "Tu comprobante fue rechazado",
+      title: "No pudimos aceptar tu pago",
       body: motivo
-        ? `No pudimos validar tu comprobante. Motivo: ${motivo}.`
-        : "No pudimos validar tu comprobante. Carga uno nuevo para continuar.",
+        ? `Revisamos tu comprobante y no lo aceptamos. Motivo: ${motivo}. Envía otro para seguir.`
+        : "Revisamos tu comprobante y no lo aceptamos. Envía otro para seguir.",
       at: reserva.latestProof.createdAt,
       href,
       reservationCode: reserva.code,
@@ -92,8 +92,8 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
     avisos.push({
       kind: "COMPROBANTE_EN_VALIDACION",
       level: "info",
-      title: "Tu comprobante está en validación",
-      body: "Estamos revisando tu comprobante. Te avisaremos cuando se confirme el pago.",
+      title: "Estamos revisando tu pago",
+      body: "Ya recibimos tu comprobante. Te avisaremos cuando confirmemos el pago.",
       at: reserva.latestProof?.createdAt ?? now,
       href,
       reservationCode: reserva.code,
@@ -108,10 +108,10 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
     avisos.push({
       kind: "RECONFIRMAR_PAGO_EN_SITIO",
       level: "alerta",
-      title: "Reconfirma tu pago en sitio",
+      title: "Confirma que vas a pagar en la taquilla",
       body: `Tu viaje ${reserva.origin} → ${reserva.destination} sale el ${formatCaracasDateTime24(
         reserva.departsAt,
-      )}. Reconfirma o el cupo se liberará.`,
+      )}. Confirma que viajas o tu puesto quedará libre.`,
       at: reserva.departsAt,
       href,
       reservationCode: reserva.code,
@@ -125,7 +125,7 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
       title: "Tu ticket está listo",
       body: `${reserva.origin} → ${reserva.destination}, sale el ${formatCaracasDateTime24(
         reserva.departsAt,
-      )}. Presenta el código QR al abordar.`,
+      )}. Muestra el código QR al abordar.`,
       at: reserva.departsAt,
       href,
       reservationCode: reserva.code,
@@ -144,7 +144,7 @@ export function buildNotices(input: NoticeInput, now: Date = new Date()): Notice
       kind: "DOCUMENTO_FALTANTE",
       level: "alerta",
       title: "Falta la foto de tu cédula",
-      body: "Carga la foto de tu cédula para poder completar una reserva.",
+      body: "Sube una foto de tu cédula para poder reservar tu pasaje.",
       at: now,
       href: "/mi/documentos",
     });

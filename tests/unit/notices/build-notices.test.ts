@@ -254,4 +254,37 @@ describe("buildNotices", () => {
       "TICKET_LISTO",
     ]);
   });
+  it("escribe todos los avisos en lenguaje llano, sin jerga interna", () => {
+    const avisos = buildNotices(
+      {
+        hasIdDocument: false,
+        reservations: [
+          reserva({
+            code: "TR-0913-1PAX-EEEE",
+            status: "PENDIENTE_PAGO",
+            expiresAt: new Date(AHORA.getTime() + 30 * 60_000),
+          }),
+          reserva({
+            code: "TR-0913-1PAX-FFFF",
+            status: "EN_VALIDACION",
+            latestProof: { status: "RECHAZADO", rejectionReason: null, createdAt: AHORA },
+          }),
+          reserva({
+            code: "TR-0913-1PAX-GGGG",
+            status: "PAGO_EN_SITIO",
+            departsAt: new Date(AHORA.getTime() + 20 * 3_600_000),
+          }),
+          reserva({ code: "TR-0913-1PAX-HHHH", status: "PAGADA", hasTicket: true }),
+        ],
+      },
+      AHORA,
+    );
+    expect(new Set(avisos.map((a) => a.kind)).size).toBe(6);
+    for (const aviso of avisos) {
+      const texto = `${aviso.title} ${aviso.body}`.toLowerCase();
+      for (const jerga of ["cupo", "en sitio", "validación", "validar", "reconfirma", "serial"]) {
+        expect(texto).not.toContain(jerga);
+      }
+    }
+  });
 });

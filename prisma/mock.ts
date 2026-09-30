@@ -12,10 +12,13 @@
  *       pnpm mock --reset    (borra los datos de operación y los vuelve a crear)
  */
 import { randomUUID } from "node:crypto";
+import { copyFile, mkdir } from "node:fs/promises";
+import path from "node:path";
 import { PrismaClient, Prisma } from "@prisma/client";
 import type { Currency, PaymentMethod, ReservationStatus } from "@prisma/client";
 import argon2 from "argon2";
 import { formatMoney } from "@/lib/decimal";
+import { getEnv } from "@/lib/env";
 import { formatCaracasDateTime24 } from "@/lib/time";
 
 const prisma = new PrismaClient();
@@ -142,6 +145,31 @@ function dec(valor: Prisma.Decimal | string | number): Prisma.Decimal {
 
 function redondear(valor: Prisma.Decimal): Prisma.Decimal {
   return valor.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+}
+
+/** Imágenes de demostración versionadas en el repositorio. */
+const IMAGEN_COMPROBANTE = path.resolve("prisma/mock-assets/comprobante-demo.png");
+const IMAGEN_CEDULA = path.resolve("prisma/mock-assets/cedula-demo.png");
+
+/**
+ * Copia una imagen de demostración a cada ruta relativa generada, dentro de la
+ * misma carpeta de subidas que usa `src/lib/storage.ts` (UPLOADS_DIR), para
+ * que el visor del panel y la sección de documentos no muestren imágenes rotas.
+ */
+async function escribirImagenes(origen: string, rutas: readonly string[]): Promise<void> {
+  const base = path.resolve(getEnv().UPLOADS_DIR);
+  for (let i = 0; i < rutas.length; i += 100) {
+    await Promise.all(
+      rutas.slice(i, i + 100).map(async (relativa) => {
+        const destino = path.resolve(base, relativa);
+        if (!destino.startsWith(base + path.sep)) {
+          throw new Error(`Ruta de imagen fuera de la carpeta de subidas: ${relativa}`);
+        }
+        await mkdir(path.dirname(destino), { recursive: true });
+        await copyFile(origen, destino);
+      }),
+    );
+  }
 }
 
 async function limpiarOperacion(): Promise<void> {
@@ -821,6 +849,10 @@ async function main(): Promise<void> {
   await insertar("Bitácora", bitacora, (l) =>
     prisma.auditLog.createMany({ data: l, skipDuplicates: true }),
   );
+
+  process.stdout.write("Escribiendo imágenes de demostración...\n");
+  await escribirImagenes(IMAGEN_CEDULA, documentos.map((d) => d.filePath));
+  await escribirImagenes(IMAGEN_COMPROBANTE, comprobantes.map((c) => c.imagePath));
 
   // --- Resumen ------------------------------------------------------------
   const desde = new Date(ahora.getTime() - 24 * 3_600_000);
