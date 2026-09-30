@@ -14,13 +14,19 @@ import { MESSAGE_STATUS_LABELS, messageStatusTone } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { isTemplateKey, renderStoredPreview } from "@/modules/messaging";
-import { countLabel } from "../_shared/format";
+import { countLabel, formatCount, formatPhone } from "../_shared/format";
 import { DISCLOSURE_SUMMARY_CLASS, DisclosureChevron, Pagination } from "../_shared/lists";
 import { withQuery } from "../_shared/period";
 import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
 import { MESSAGES_PATH, payloadToParams, templateName } from "./messages";
 
 export const MESSAGES_PAGE_SIZE = 50;
+
+/** Cabeceras de la tabla, compartidas con su silueta de carga. */
+const MESSAGE_COLUMNS = ["Para", "Mensaje", "Estado", "Enviado"] as const;
+
+/** Diferencia desde la que el envío se considera fuera de la hora programada (un reintento, por ejemplo). */
+const SCHEDULE_GAP_MS = 60_000;
 
 /** Con más caracteres que estos, el texto se recorta a dos líneas y se abre con "Ver mensaje completo". */
 const LONG_TEXT = 140;
@@ -77,6 +83,30 @@ function MessageStatusBlock({ message }: { message: MessageRow }) {
         </details>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Cuándo salió el mensaje. La hora programada solo se agrega si todavía no
+ * sale o si salió en otro momento (un reintento): casi siempre coinciden y
+ * repetirla en cada fila era ruido.
+ */
+function SendTime({ message }: { message: MessageRow }) {
+  const scheduled = formatCaracasDateTime24(message.scheduledFor);
+  if (!message.sentAt) {
+    return (
+      <span className="flex flex-col">
+        <span className="text-tinta-suave">{message.status === "FALLIDO" ? "No salió" : "Todavía no"}</span>
+        <span className="tabular text-sm text-tinta-suave">Programado para el {scheduled}</span>
+      </span>
+    );
+  }
+  const differs = Math.abs(message.sentAt.getTime() - message.scheduledFor.getTime()) >= SCHEDULE_GAP_MS;
+  return (
+    <span className="flex flex-col">
+      <span className="tabular font-medium text-tinta">{formatCaracasDateTime24(message.sentAt)}</span>
+      {differs ? <span className="tabular text-sm text-tinta-suave">Programado para el {scheduled}</span> : null}
+    </span>
   );
 }
 
@@ -147,7 +177,7 @@ export async function MessagesList({
 
   const rows: MessageRow[] = messages.map((m) => ({
     id: m.id,
-    phone: m.phone,
+    phone: formatPhone(m.phone),
     name: templateName(m.templateKey),
     text: isTemplateKey(m.templateKey)
       ? renderStoredPreview(m.templateKey, payloadToParams(m.payload))
@@ -159,11 +189,20 @@ export async function MessagesList({
     lastError: m.lastError,
   }));
 
+  const firstShown = (page - 1) * MESSAGES_PAGE_SIZE + 1;
+  const lastShown = firstShown + rows.length - 1;
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm font-semibold text-tinta-suave">
-        {countLabel(total, "mensaje", "mensajes")}, del más reciente al más antiguo.
+        {countLabel(total, "mensaje", "mensajes")}, del más reciente al más antiguo
+        {totalPages > 1
+          ? `. Estás viendo del ${formatCount(firstShown)} al ${formatCount(lastShown)}.`
+          : "."}
       </p>
+
+      {/* Arriba también, para no tener que bajar toda la lista para cambiar de página. */}
+      <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} label="Páginas, arriba de la lista" />
 
       <TableShell
         mobile={
@@ -181,19 +220,11 @@ export async function MessagesList({
                   <MessageStatusBlock message={m} />
                 </div>
                 <MessageText text={m.text} />
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  <div className="min-w-0">
-                    <dt className="text-sm text-tinta-suave">Programado</dt>
-                    <dd className="tabular text-[15px] font-medium text-tinta">
-                      {formatCaracasDateTime24(m.scheduledFor)}
-                    </dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-sm text-tinta-suave">Enviado</dt>
-                    <dd className="tabular text-[15px] font-medium text-tinta">
-                      {m.sentAt ? formatCaracasDateTime24(m.sentAt) : "Todavía no"}
-                    </dd>
-                  </div>
+                <dl>
+                  <dt className="text-sm text-tinta-suave">Enviado</dt>
+                  <dd className="text-[15px]">
+                    <SendTime message={m} />
+                  </dd>
                 </dl>
               </li>
             ))}
@@ -204,21 +235,11 @@ export async function MessagesList({
           <caption className="sr-only">Mensajes a pasajeros</caption>
           <thead>
             <tr className="border-b border-borde">
-              <th scope="col" className={PANEL_TH_CLASS}>
-                Para
-              </th>
-              <th scope="col" className={cx(PANEL_TH_CLASS, "w-1/2")}>
-                Mensaje
-              </th>
-              <th scope="col" className={PANEL_TH_CLASS}>
-                Estado
-              </th>
-              <th scope="col" className={PANEL_TH_CLASS}>
-                Programado
-              </th>
-              <th scope="col" className={PANEL_TH_CLASS}>
-                Enviado
-              </th>
+              {MESSAGE_COLUMNS.map((column) => (
+                <th key={column} scope="col" className={cx(PANEL_TH_CLASS, column === "Mensaje" && "w-1/2")}>
+                  {column}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -232,9 +253,8 @@ export async function MessagesList({
                 <td className={cx(PANEL_TD_CLASS, "align-top")}>
                   <MessageStatusBlock message={m} />
                 </td>
-                <td className={cx(PANEL_TD_CLASS, "tabular align-top")}>{formatCaracasDateTime24(m.scheduledFor)}</td>
-                <td className={cx(PANEL_TD_CLASS, "tabular align-top")}>
-                  {m.sentAt ? formatCaracasDateTime24(m.sentAt) : <span className="text-tinta-suave">Todavía no</span>}
+                <td className={cx(PANEL_TD_CLASS, "align-top")}>
+                  <SendTime message={m} />
                 </td>
               </tr>
             ))}
@@ -247,12 +267,12 @@ export async function MessagesList({
   );
 }
 
-/** Silueta de la lista de mensajes: línea del total y la tabla. */
+/** Silueta de la lista de mensajes: línea del total y la tabla con sus cabeceras reales. */
 export function MessagesListSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-72" />
-      <TableSkeleton rows={8} columns={5} />
+      <TableSkeleton columns={MESSAGE_COLUMNS} rows={8} mobileStatus mobileDetails={1} />
     </div>
   );
 }

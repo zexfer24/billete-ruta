@@ -28,18 +28,22 @@ const initialState: SubirComprobanteState = { error: null, success: false };
  * `key` numérica: al pulsar "Enviar otro comprobante" se incrementa y todo el
  * subárbol (incluido el estado de `useActionState`) se remonta desde cero.
  * Con `collapsedLabel`, el formulario empieza oculto detrás de un botón (por
- * ejemplo, cuando ya hay un comprobante en revisión).
+ * ejemplo, cuando ya hay un comprobante en revisión). `collapsedVariant`
+ * baja ese botón a "fantasma" cuando no hace falta enviar nada más, para que
+ * no parezca un paso pendiente.
  */
 export default function PayForm({
   reservationId,
   paymentMethods,
   defaultMethodId,
   collapsedLabel,
+  collapsedVariant = "secundario",
 }: {
   reservationId: string;
   paymentMethods: MetodoVM[];
   defaultMethodId?: string;
   collapsedLabel?: string;
+  collapsedVariant?: "secundario" | "fantasma";
 }) {
   const [formKey, setFormKey] = useState(0);
   const [open, setOpen] = useState(!collapsedLabel);
@@ -58,7 +62,11 @@ export default function PayForm({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={buttonClass("secundario", "w-full")}
+        className={
+          collapsedVariant === "fantasma"
+            ? buttonClass("fantasma", "-ml-3 self-start")
+            : buttonClass("secundario", "w-full")
+        }
       >
         {collapsedLabel}
       </button>

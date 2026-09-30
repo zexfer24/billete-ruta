@@ -1,6 +1,8 @@
 import type { Currency } from "@prisma/client";
+import { formatInTimeZone } from "date-fns-tz";
+import { es } from "date-fns/locale/es";
 import type { NoticeKind } from "@/modules/notices";
-import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
+import { BUSINESS_TZ, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import type { PillTone } from "./ui-classes";
 
 /**
@@ -66,6 +68,25 @@ export function reservationActionLabel(status: string, balance: string): string 
   }
 }
 
+/**
+ * Orden de urgencia de una reserva para el pasajero (menor = más urgente):
+ * primero lo que se pierde si no paga, luego lo que espera algo de él o de
+ * la agencia y al final lo que ya está listo. Sirve para desempatar reservas
+ * de una misma salida; nunca sustituye a la hora de salida como primer orden.
+ */
+const URGENCY_ORDER: Record<string, number> = {
+  PENDIENTE_PAGO: 0,
+  ABONADA: 1,
+  PAGO_EN_SITIO: 2,
+  EN_VALIDACION: 3,
+  PAGADA: 4,
+  ABORDADA: 5,
+};
+
+export function reservationUrgency(status: string): number {
+  return URGENCY_ORDER[status] ?? 9;
+}
+
 /** Frase que explica en qué va el pago de una reserva y qué falta. */
 export function paymentPhrase(status: string, balance: string): string {
   switch (status) {
@@ -98,15 +119,28 @@ export function paymentPhrase(status: string, balance: string): string {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Hora con su día en palabras, en hora de Caracas y formato de 24 horas:
- * "hoy a las 14:30", "mañana a las 08:00" o "el 12/10 a las 08:00".
+ * Día y hora en palabras, sin artículo, en hora de Caracas y formato de 24
+ * horas: "hoy a las 14:30", "mañana a las 08:00", "ayer a las 19:00" o
+ * "lun 12 oct a las 08:00". Es el único formato de fecha con hora de la app
+ * del pasajero, para que una misma pantalla no mezcle "01/10/2026" con
+ * "jueves 1 de octubre".
  */
-export function whenPhrase(date: Date, now: Date = new Date()): string {
+export function dayTimePhrase(date: Date, now: Date = new Date()): string {
   const day = formatCaracasDate(date);
   const time = formatCaracasTime24(date);
   if (day === formatCaracasDate(now)) return `hoy a las ${time}`;
   if (day === formatCaracasDate(new Date(now.getTime() + DAY_MS))) return `mañana a las ${time}`;
-  return `el ${formatCaracas(date, "dd/MM")} a las ${time}`;
+  if (day === formatCaracasDate(new Date(now.getTime() - DAY_MS))) return `ayer a las ${time}`;
+  return `${formatInTimeZone(date, BUSINESS_TZ, "EEE d MMM", { locale: es })} a las ${time}`;
+}
+
+/**
+ * La misma frase lista para ir detrás de un verbo o de "hasta": "hoy a las
+ * 14:30", "mañana a las 08:00" o "el lun 12 oct a las 08:00".
+ */
+export function whenPhrase(date: Date, now: Date = new Date()): string {
+  const phrase = dayTimePhrase(date, now);
+  return /^(hoy|mañana|ayer) /.test(phrase) ? phrase : `el ${phrase}`;
 }
 
 /** Encabezado de un grupo de mensajes por día: "Hoy", "Ayer" o la fecha. */
@@ -146,7 +180,7 @@ const NOTICE_ACTIONS: Record<NoticeKind, string> = {
   DOCUMENTO_FALTANTE: "Subir la foto",
   RESERVA_POR_LIBERAR: "Pagar ahora",
   COMPROBANTE_RECHAZADO: "Enviar otro comprobante",
-  COMPROBANTE_EN_VALIDACION: "Ver mi reserva",
+  COMPROBANTE_EN_VALIDACION: "Ver mi viaje",
   RECONFIRMAR_PAGO_EN_SITIO: "Ver cómo pagar",
   TICKET_LISTO: "Ver mi ticket",
 };

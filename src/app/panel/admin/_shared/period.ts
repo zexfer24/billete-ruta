@@ -31,6 +31,9 @@ export const ADMIN_PERIOD_LABELS: Record<AdminPeriod, string> = {
   fechas: "Otras fechas",
 };
 
+/** Textos de las pestañas de periodo, en su orden: los usan las pestañas reales y su silueta de carga. */
+export const ADMIN_PERIOD_TAB_LABELS: readonly string[] = ADMIN_PERIODS.map((period) => ADMIN_PERIOD_LABELS[period]);
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Un valor de URL que no es una fecha AAAA-MM-DD (o que viene repetido) se descarta sin romper la página. */

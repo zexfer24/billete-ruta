@@ -77,7 +77,7 @@ export default async function AbordajePage({
           }
           action={
             <Link href={hojaHref} className={panelButtonClass("secundario")}>
-              Ir a la salida
+              {salida.status === "PROGRAMADA" ? "Ir a iniciar el embarque" : "Ver la hoja de la salida"}
             </Link>
           }
         >

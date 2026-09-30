@@ -6,14 +6,16 @@ import { PanelFeedback } from "@/components/panel-feedback";
 import { SkeletonScreen } from "@/components/skeleton";
 import { IconPlus } from "@/components/icons";
 import { PanelPageHeader, PanelTabs, panelButtonClass } from "@/components/panel-ui";
+import { errorMessage, okMessage } from "../_dashboard/search-params";
 import { SkeletonSidePanel } from "../_shared/skeletons";
 import { CreateDeparturePanel, DeparturesList } from "./departures-list";
 import { DeparturesListSkeleton } from "./departures-skeleton";
+import { proximasHref } from "./links";
 
 export const metadata: Metadata = { title: "Salidas" };
 
 /** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
-const OK_LABELS: Record<string, string> = {
+const OK_LABELS: Readonly<Record<string, string>> = {
   "salida-creada": "Salida creada. Ya aparece en la lista y los pasajeros pueden comprar pasajes.",
 };
 
@@ -30,12 +32,13 @@ export default async function SalidasPage({
   const { agencyId } = await requireAgencyUser("departures.manage");
   const params = await searchParams;
   const historial = texto(params.ver) === "historial";
+  const todosLosDias = !historial && texto(params.dias) === "todos";
   const crearAbierto = texto(params.crear) === "1";
-  const error = texto(params.error);
-  const ok = texto(params.ok);
+  const error = errorMessage(params.error);
+  const ok = okMessage(OK_LABELS, params.ok);
 
-  const crearHref = historial ? "/panel/salidas?ver=historial&crear=1" : "/panel/salidas?crear=1";
-  const closeHref = historial ? "/panel/salidas?ver=historial" : "/panel/salidas";
+  const crearHref = proximasHref({ historial, todosLosDias, crear: true });
+  const closeHref = proximasHref({ historial, todosLosDias });
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,17 +61,17 @@ export default async function SalidasPage({
         ]}
       />
 
-      {!crearAbierto ? <PanelFeedback error={error} ok={ok ? OK_LABELS[ok] : undefined} /> : null}
+      {!crearAbierto ? <PanelFeedback error={error} ok={ok} /> : null}
 
       <Suspense
-        key={historial ? "historial" : "proximas"}
+        key={historial ? "historial" : todosLosDias ? "proximas-todas" : "proximas"}
         fallback={
           <SkeletonScreen label="Cargando las salidas…">
             <DeparturesListSkeleton />
           </SkeletonScreen>
         }
       >
-        <DeparturesList agencyId={agencyId} historial={historial} crearHref={crearHref} />
+        <DeparturesList agencyId={agencyId} historial={historial} todosLosDias={todosLosDias} crearHref={crearHref} />
       </Suspense>
 
       {crearAbierto ? (

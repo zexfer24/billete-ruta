@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type InputHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes } from "react";
 import { IconAlertCircle, IconCamera, IconCheckCircle, IconDocument, IconUpload } from "./icons";
 import { cx, formatFileSize } from "./ui-classes";
 
@@ -18,9 +18,13 @@ export interface FileFieldProps
   maxSizeMb?: number;
   /** Texto del botón antes de elegir, por ejemplo "Tomar o elegir la foto". */
   buttonLabel?: string;
+  /** Línea bajo el botón mientras no hay archivo; por defecto dice "foto" o "archivo" según `accept`. */
+  emptyLabel?: string;
   id?: string;
   className?: string;
 }
+
+const ERROR_CLASS = "flex items-start gap-1.5 text-sm font-semibold leading-snug text-peligro";
 
 interface ChosenFile {
   name: string;
@@ -28,12 +32,34 @@ interface ChosenFile {
   previewUrl: string | null;
 }
 
+/** El campo solo acepta imágenes (o abre la cámara): se le habla de "foto". */
+function acceptsOnlyImages(accept: string | undefined, capture: FileFieldProps["capture"]): boolean {
+  if (capture) return true;
+  if (!accept) return false;
+  const types = accept.split(",").map((type) => type.trim()).filter(Boolean);
+  return types.length > 0 && types.every((type) => type.startsWith("image/"));
+}
+
+/** Primer control del formulario que no pasa la validación nativa. */
+function firstInvalidControl(form: HTMLFormElement): Element | undefined {
+  return Array.from(form.elements).find(
+    (element) =>
+      (element instanceof HTMLInputElement ||
+        element instanceof HTMLSelectElement ||
+        element instanceof HTMLTextAreaElement) &&
+      element.willValidate &&
+      !element.validity.valid,
+  );
+}
+
 /**
  * Campo para subir un archivo con la apariencia de `Field`: etiqueta visible,
  * una zona grande que abre el selector (o la cámara con `capture`), el nombre
  * y el peso del archivo elegido y una vista previa si es una imagen. El
  * control nativo sigue siendo el que recibe el foco y el teclado. Se limpia
- * solo cuando el formulario se reinicia tras un envío correcto.
+ * solo cuando el formulario se reinicia tras un envío correcto. Si es
+ * obligatorio y se envía vacío, en vez de la burbuja nativa del navegador
+ * (que saldría pegada al control oculto) muestra su propio error bajo la zona.
  */
 export function FileField({
   label,
@@ -44,9 +70,11 @@ export function FileField({
   capture,
   maxSizeMb,
   buttonLabel,
+  emptyLabel,
   id,
   className,
   onChange,
+  onInvalid,
   ...inputProps
 }: FileFieldProps) {
   const fieldId = id ?? name;
@@ -56,10 +84,15 @@ export function FileField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [chosen, setChosen] = useState<ChosenFile | null>(null);
   const [sizeError, setSizeError] = useState<string | null>(null);
+  // Error propio de "falta el archivo", en lugar de la burbuja nativa.
+  const [missingError, setMissingError] = useState<string | null>(null);
   // El error que vino del servidor deja de mostrarse en cuanto se elige otro archivo.
   const [touched, setTouched] = useState(false);
 
-  const shownError = sizeError ?? (touched ? null : error) ?? null;
+  const isPhoto = acceptsOnlyImages(inputProps.accept, capture);
+  const shownError = sizeError ?? missingError ?? (touched ? null : error) ?? null;
+  // El error de peso aparece al elegir (región cortés); los demás llegan al enviar.
+  const errorIsAlert = !sizeError && (Boolean(missingError) || Boolean(errorAfterSubmit));
   const describedBy = [hintId, shownError ? errorId : undefined].filter(Boolean).join(" ") || undefined;
 
   // Libera la URL de la vista previa al cambiar de archivo o al desmontar.
@@ -77,6 +110,7 @@ export function FileField({
     function handleReset() {
       setChosen(null);
       setSizeError(null);
+      setMissingError(null);
       setTouched(false);
       inputRef.current?.setCustomValidity("");
     }
@@ -88,6 +122,7 @@ export function FileField({
     const input = event.currentTarget;
     const file = input.files?.[0];
     setTouched(true);
+    setMissingError(null);
 
     if (!file) {
       setChosen(null);
@@ -108,6 +143,19 @@ export function FileField({
     }
 
     onChange?.(event);
+  }
+
+  function handleInvalid(event: FormEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    // Sin burbuja nativa: el error se muestra bajo la zona que la persona ve.
+    event.preventDefault();
+    if (input.validity.valueMissing) {
+      setMissingError(isPhoto ? "Elige la foto antes de enviar." : "Elige el archivo antes de enviar.");
+    }
+    // Solo toma el foco si es el primer campo con problemas del formulario.
+    const form = input.form;
+    if (!form || firstInvalidControl(form) === input) input.focus();
+    onInvalid?.(event);
   }
 
   const idleLabel = buttonLabel ?? (capture ? "Tomar o elegir una foto" : "Elegir un archivo");
@@ -131,6 +179,7 @@ export function FileField({
         aria-invalid={shownError ? true : undefined}
         className="peer sr-only"
         onChange={handleChange}
+        onInvalid={handleInvalid}
         {...inputProps}
       />
       <label
@@ -174,7 +223,9 @@ export function FileField({
           ) : (
             <>
               <span className="text-base font-semibold text-marca-700">{idleLabel}</span>
-              <span className="text-sm text-tinta-suave">Aún no has elegido ninguno</span>
+              <span className="text-sm text-tinta-suave">
+                {emptyLabel ?? (isPhoto ? "Aún no has elegido ninguna foto" : "Aún no has elegido ningún archivo")}
+              </span>
             </>
           )}
         </span>
@@ -185,13 +236,17 @@ export function FileField({
           {hint}
         </p>
       ) : null}
+      {/* Una sola región viva por mensaje: el error tras enviar va como alerta
+          fuera de la región cortés, nunca anidado dentro de ella. */}
+      {shownError && errorIsAlert ? (
+        <p id={errorId} role="alert" className={ERROR_CLASS}>
+          <IconAlertCircle className="mt-px size-4 shrink-0" />
+          <span>{shownError}</span>
+        </p>
+      ) : null}
       <div aria-live="polite">
-        {shownError ? (
-          <p
-            id={errorId}
-            role={errorAfterSubmit && !sizeError ? "alert" : undefined}
-            className="flex items-start gap-1.5 text-sm font-semibold leading-snug text-peligro"
-          >
+        {shownError && !errorIsAlert ? (
+          <p id={errorId} className={ERROR_CLASS}>
             <IconAlertCircle className="mt-px size-4 shrink-0" />
             <span>{shownError}</span>
           </p>

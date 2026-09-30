@@ -40,43 +40,43 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
     params: ["nombre", "pasajeros", "serial"],
     buttons: [],
     preview:
-      "¡Hola {{nombre}}! Recibimos tu solicitud para {{pasajeros}} pasajero(s). Tu reserva {{serial}} está en revisión. Te enviaremos el ticket oficial en cuanto validemos el pago.",
+      "¡Hola {{nombre}}! Recibimos tu reserva {{serial}}. Pasajeros: {{pasajeros}}. Cuando revisemos tu pago, te enviaremos el ticket.",
   },
   reserva_condicional: {
     params: ["nombre", "serial", "monto", "salida"],
     buttons: [],
     preview:
-      "¡Hola {{nombre}}! Tu reserva {{serial}} quedó registrada como Pago en Sitio por {{monto}}. Salida: {{salida}}. Deberás reconfirmar por este medio antes del viaje o el cupo se liberará.",
+      "¡Hola {{nombre}}! Tu reserva {{serial}} quedó registrada para pagar en la taquilla. Total: {{monto}}. Salida: {{salida}}. Paga antes de que falten 12 horas para la salida o tu puesto quedará libre.",
   },
   abono_registrado: {
     params: ["nombre", "serial", "abonado", "saldo"],
     buttons: [],
     preview:
-      "Hola {{nombre}}, registramos tu abono de {{abonado}} en la reserva {{serial}}. Saldo pendiente: {{saldo}}. Puedes completar el pago desde tu cuenta.",
+      "Hola {{nombre}}, recibimos tu pago de {{abonado}} para la reserva {{serial}}. Te falta pagar {{saldo}}. Puedes completar el pago desde tu cuenta.",
   },
   ticket_emitido: {
     params: ["nombre", "serial", "salida", "punto"],
     buttons: [],
     preview:
-      "¡Listo {{nombre}}! Tu pago fue validado por completo. Ticket {{serial}}. Salida: {{salida}}. Punto de encuentro: {{punto}}. Te adjuntamos el ticket con su código QR.",
+      "¡Listo, {{nombre}}! Recibimos tu pago completo. Código del ticket: {{serial}}. Salida: {{salida}}. Punto de encuentro: {{punto}}. Te adjuntamos el ticket con su código QR.",
   },
   pago_rechazado: {
     params: ["nombre", "serial", "motivo"],
     buttons: [],
     preview:
-      "Hola {{nombre}}, no pudimos validar el comprobante de la reserva {{serial}}. Motivo: {{motivo}}. Puedes cargar uno nuevo desde tu cuenta.",
+      "Hola {{nombre}}, no pudimos aceptar el comprobante de la reserva {{serial}}. Motivo: {{motivo}}. Puedes enviar otro desde tu cuenta.",
   },
   recordatorio_24h: {
     params: ["nombre", "serial", "salida", "punto", "recomendaciones"],
     buttons: [],
     preview:
-      "Hola {{nombre}}, tu viaje {{serial}} sale {{salida}} desde {{punto}}. {{recomendaciones}}",
+      "Hola {{nombre}}, tu viaje {{serial}} sale el {{salida}} desde {{punto}}. {{recomendaciones}}",
   },
   reconfirmacion_pago_sitio: {
     params: ["nombre", "serial", "salida", "monto"],
     buttons: ["RECONFIRMAR"],
     preview:
-      "Hola {{nombre}}, tu reserva {{serial}} es de Pago en Sitio ({{monto}}) y sale {{salida}}. Confirma que viajas o liberaremos el cupo.",
+      "Hola {{nombre}}, tu viaje {{serial}} sale el {{salida}}. Total a pagar en la taquilla: {{monto}}. Paga antes de que falten 12 horas para la salida o tu puesto quedará libre.",
   },
   confirmacion_2h: {
     params: ["nombre", "serial"],
@@ -87,13 +87,13 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
     params: ["nombre", "serial"],
     buttons: [],
     preview:
-      "Hola {{nombre}}, liberamos el cupo de la reserva {{serial}} porque no recibimos el pago ni la reconfirmación a tiempo. Puedes reservar de nuevo si aún hay disponibilidad.",
+      "Hola {{nombre}}, tu puesto de la reserva {{serial}} quedó libre porque no recibimos el pago a tiempo. Puedes reservar de nuevo si aún hay puestos.",
   },
   cupo_disponible_lista_espera: {
     params: ["nombre", "salida", "enlace", "vigencia"],
     buttons: [],
     preview:
-      "Hola {{nombre}}, se liberó un cupo para la salida {{salida}}. Completa tu reserva aquí: {{enlace}} — el cupo se mantiene por {{vigencia}}.",
+      "Hola {{nombre}}, se liberó un puesto en la salida del {{salida}}. Te lo guardamos por {{vigencia}}. Completa tu reserva aquí: {{enlace}}",
   },
 };
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { IconCalendar } from "@/components/icons";
-import { PANEL_LABEL_CLASS, PanelTabs, panelButtonClass, panelInputClass } from "@/components/panel-ui";
+import { PANEL_LABEL_CLASS, panelButtonClass, panelInputClass } from "@/components/panel-ui";
+import { AdminTabs } from "./admin-tabs";
 import { describeAdminRange, periodQuery, periodTabs, type AdminRange } from "./period";
 
 /**
@@ -35,7 +36,7 @@ export function PeriodFilter({
 
   return (
     <div className="flex flex-col gap-3">
-      <PanelTabs label="Periodo" tabs={tabs.map(({ href, label, active }) => ({ href, label, active }))} />
+      <AdminTabs label="Periodo" tabs={tabs.map(({ href, label, active }) => ({ href, label, active }))} />
 
       {showForm ? (
         <form

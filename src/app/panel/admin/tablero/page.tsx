@@ -47,7 +47,7 @@ export default async function TableroAdminPage({
       <PeriodFilter
         path="/panel/admin/tablero"
         range={range}
-        caption="Recorridos, usuarios nuevos y gráfico"
+        caption="Viajes, usuarios nuevos y gráfico"
       />
 
       <Suspense key={rangeKey(range)} fallback={<PeriodDataSkeleton />}>

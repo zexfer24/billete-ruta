@@ -21,13 +21,25 @@ declare global {
   }
 }
 
-/** Lo que muestra la zona de resultado, grande y a todo color. */
+/**
+ * Lo que muestra el escáner tras buscar o confirmar. `falta` es un aviso
+ * junto al campo (no se escribió nada); los demás abren el veredicto a
+ * pantalla completa, en verde o en rojo.
+ */
 type Resultado =
+  | { kind: "falta" }
   | { kind: "ticket"; ticket: BoardingTicket }
   | { kind: "rechazo"; title: string; message: string }
-  | { kind: "listo"; count: number; code: string };
+  | { kind: "listo"; count: number; code: string; names: string[] };
 
 const FALLA_CONEXION = "No pudimos conectar con el sistema. Revisa la conexión a internet e inténtalo de nuevo.";
+
+/** Botones del veredicto: blancos y grandes sobre el fondo verde o rojo, con foco blanco. */
+const VEREDICTO_FOCO = "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white";
+const VEREDICTO_BOTON_PRINCIPAL =
+  "inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-control bg-white px-6 text-lg font-semibold transition-opacity duration-150 ease-out hover:opacity-90 disabled:opacity-80 motion-reduce:transition-none";
+const VEREDICTO_BOTON_SECUNDARIO =
+  "inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-control border-2 border-white px-6 text-base font-semibold text-white transition-colors duration-150 ease-out hover:bg-white/10 motion-reduce:transition-none";
 
 /**
  * Botón con estado de espera para las acciones del escáner, que corren en el
@@ -41,6 +53,7 @@ function PendingButton({
   type = "button",
   onClick,
   disabled,
+  buttonRef,
 }: {
   pending: boolean;
   pendingLabel: string;
@@ -49,9 +62,11 @@ function PendingButton({
   type?: "button" | "submit";
   onClick?: () => void;
   disabled?: boolean;
+  buttonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   return (
     <button
+      ref={buttonRef}
       type={type}
       onClick={onClick}
       disabled={disabled || pending}
@@ -71,14 +86,118 @@ function PendingButton({
 }
 
 /**
+ * Veredicto a pantalla completa (spec 7.2): fondo verde o rojo, icono muy
+ * grande, el título y el nombre en letra grande, para leerlo de un vistazo en
+ * la puerta del bus. Usa el `<dialog>` nativo en modo modal: tapa el resto de
+ * la página, atrapa el foco y se cierra con Escape (que hace lo mismo que el
+ * botón principal de cerrar). Sin animaciones.
+ */
+function Veredicto({
+  tone,
+  title,
+  name,
+  children,
+  primary,
+  secondary,
+  onDismiss,
+}: {
+  tone: "exito" | "peligro";
+  title: string;
+  name?: string;
+  children?: ReactNode;
+  primary: { label: string; onClick: () => void; pending?: boolean; pendingLabel?: string };
+  secondary?: { label: string; onClick: () => void };
+  /** Qué hacer con Escape. */
+  onDismiss: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const bodyId = useId();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (!dialog.open) dialog.showModal();
+    primaryRef.current?.focus();
+    return () => {
+      document.body.style.overflow = overflow;
+      if (dialog.open) dialog.close();
+    };
+  }, []);
+
+  const Icon = tone === "exito" ? IconCheckCircle : IconXCircle;
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      aria-describedby={bodyId}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!primary.pending) onDismiss();
+      }}
+      onClose={() => {
+        // Si el navegador lo cerró por su cuenta (Escape repetido), el estado se
+        // pone al día. Un cierre seguido de una reapertura (React en desarrollo)
+        // llega con el diálogo ya abierto y se ignora.
+        if (!dialogRef.current?.open) onDismiss();
+      }}
+      className={cx(
+        "fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none border-0 p-0 text-white",
+        tone === "exito" ? "bg-exito" : "bg-peligro",
+      )}
+    >
+      <div className="flex min-h-full flex-col items-center justify-center gap-6 overflow-y-auto px-6 py-10 text-center">
+        <Icon className="size-24 shrink-0 text-white" />
+        <div className="flex flex-col gap-3">
+          <h2 id={titleId} className="text-4xl font-bold tracking-tight sm:text-5xl">
+            {title}
+          </h2>
+          {name ? <p className="text-3xl font-bold leading-tight">{name}</p> : null}
+        </div>
+        <div id={bodyId} className="flex max-w-lg flex-col gap-2 text-xl leading-relaxed">
+          {children}
+        </div>
+        <div className="flex w-full max-w-sm flex-col gap-3">
+          <PendingButton
+            buttonRef={primaryRef}
+            pending={Boolean(primary.pending)}
+            pendingLabel={primary.pendingLabel ?? "Registrando…"}
+            onClick={primary.onClick}
+            className={cx(VEREDICTO_BOTON_PRINCIPAL, VEREDICTO_FOCO, tone === "exito" ? "text-exito" : "text-peligro")}
+          >
+            {primary.label}
+          </PendingButton>
+          {secondary ? (
+            <button
+              type="button"
+              onClick={secondary.onClick}
+              disabled={primary.pending}
+              className={cx(VEREDICTO_BOTON_SECUNDARIO, VEREDICTO_FOCO)}
+            >
+              {secondary.label}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+/**
  * Escáner de abordaje en la puerta del bus: el operador escribe el código del
- * ticket o lo lee con la cámara, ve en grande si el pasajero puede subir
- * (verde) o no (rojo, con el motivo y qué hacer) y confirma quiénes suben.
- * Tras cada abordaje el foco vuelve al campo del código para el siguiente.
+ * ticket o lo lee con la cámara y ve a pantalla completa si el pasajero puede
+ * subir (verde, con el nombre del titular) o no (rojo, con el motivo y qué
+ * hacer). Luego confirma quiénes suben. Tras cada abordaje el foco vuelve al
+ * campo del código para el siguiente.
  */
 export function AbordajeScanner({ departureId }: { departureId: string }) {
   const [code, setCode] = useState("");
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [veredicto, setVeredicto] = useState(false);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [buscando, setBuscando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -93,44 +212,41 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
   const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const codeId = useId();
   const codeHintId = `${codeId}-ayuda`;
+  const codeErrorId = `${codeId}-error`;
+
+  const mostrar = useCallback((nuevo: Resultado) => {
+    setResultado(nuevo);
+    setVeredicto(nuevo.kind !== "falta");
+  }, []);
 
   const buscar = useCallback(
     async (valor: string) => {
       const limpio = valor.trim();
       if (!limpio) {
-        setResultado({
-          kind: "rechazo",
-          title: "Falta el código",
-          message: "Escribe el código del ticket o escanea su QR.",
-        });
+        mostrar({ kind: "falta" });
         inputRef.current?.focus();
         return;
       }
       setBuscando(true);
       setResultado(null);
+      setVeredicto(false);
       try {
         const r = await findForBoardingAction(departureId, limpio);
         if (r.ticket) {
           const ticket = r.ticket;
-          setResultado({ kind: "ticket", ticket });
           // Solo se preseleccionan los que no han subido: los que ya abordaron no se reenvían.
           setSeleccionados(new Set(ticket.passengers.filter((p) => !p.boardedAtLabel).map((p) => p.id)));
-          requestAnimationFrame(() => tituloTicketRef.current?.focus());
+          mostrar({ kind: "ticket", ticket });
         } else {
-          setResultado({
-            kind: "rechazo",
-            title: "No puede abordar",
-            message: r.error ?? "No encontramos ese ticket.",
-          });
-          requestAnimationFrame(() => inputRef.current?.select());
+          mostrar({ kind: "rechazo", title: "No puede abordar", message: r.error ?? "No encontramos ese ticket." });
         }
       } catch {
-        setResultado({ kind: "rechazo", title: "No se pudo buscar", message: FALLA_CONEXION });
+        mostrar({ kind: "rechazo", title: "No se pudo buscar", message: FALLA_CONEXION });
       } finally {
         setBuscando(false);
       }
     },
-    [departureId],
+    [departureId, mostrar],
   );
 
   const detenerCamara = useCallback(() => {
@@ -196,25 +312,33 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
     }
   }
 
+  /** Vuelve al campo del código, vacío, para el siguiente ticket. */
   function limpiar() {
     setResultado(null);
+    setVeredicto(false);
     setCode("");
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  /** Cierra el veredicto verde y deja ver el ticket para elegir quiénes suben. */
+  function verTicket() {
+    setVeredicto(false);
+    requestAnimationFrame(() => tituloTicketRef.current?.focus());
+  }
+
   async function abordar(ticket: BoardingTicket) {
     setConfirmando(true);
+    const nombres = ticket.passengers.filter((p) => seleccionados.has(p.id) && !p.boardedAtLabel).map((p) => p.fullName);
     try {
       const r = await confirmBoardingAction(ticket.reservationId, [...seleccionados]);
       if (r.error) {
-        setResultado({ kind: "rechazo", title: "No se registró el abordaje", message: r.error });
+        mostrar({ kind: "rechazo", title: "No se registró el abordaje", message: r.error });
       } else {
-        setResultado({ kind: "listo", count: r.boarded ?? seleccionados.size, code: ticket.code });
+        mostrar({ kind: "listo", count: r.boarded ?? seleccionados.size, code: ticket.code, names: nombres });
         setCode("");
-        requestAnimationFrame(() => inputRef.current?.focus());
       }
     } catch {
-      setResultado({ kind: "rechazo", title: "No se registró el abordaje", message: FALLA_CONEXION });
+      mostrar({ kind: "rechazo", title: "No se registró el abordaje", message: FALLA_CONEXION });
     } finally {
       setConfirmando(false);
     }
@@ -228,6 +352,8 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
       return copia;
     });
   }
+
+  const falta = resultado?.kind === "falta";
 
   return (
     <div className="flex flex-col gap-5">
@@ -250,19 +376,29 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
               ref={inputRef}
               id={codeId}
               value={code}
-              onChange={(e) => setCode(e.target.value)}
-              aria-describedby={codeHintId}
+              onChange={(e) => {
+                setCode(e.target.value);
+                if (falta) setResultado(null);
+              }}
+              aria-describedby={falta ? `${codeHintId} ${codeErrorId}` : codeHintId}
+              aria-invalid={falta ? true : undefined}
               autoFocus
               autoComplete="off"
               autoCapitalize="characters"
               spellCheck={false}
               enterKeyHint="search"
-              placeholder="TR-0910-2PAX-AB12"
               className={panelInputClass("tabular min-h-14 text-xl font-semibold uppercase tracking-wide")}
             />
             <p id={codeHintId} className="text-sm leading-snug text-tinta-suave">
-              Está impreso en el ticket, debajo del código QR.
+              Está impreso en el ticket, debajo del código QR. Por ejemplo:{" "}
+              <span className="tabular whitespace-nowrap">TR-0910-2PAX-AB12</span>.
             </p>
+            {falta ? (
+              <p id={codeErrorId} role="alert" className="flex items-center gap-1.5 text-sm font-semibold text-peligro">
+                <IconXCircle className="size-4 shrink-0" />
+                Escribe el código del ticket o escanea su QR.
+              </p>
+            ) : null}
           </div>
           <PendingButton
             type="submit"
@@ -305,56 +441,118 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
         />
       </section>
 
-      <div aria-live="polite">
-        {buscando ? (
-          <p role="status" className="flex items-center justify-center gap-2 py-4 text-base text-tinta-suave">
-            <IconSpinner className="size-5 animate-spin motion-reduce:animate-none" />
-            Buscando el ticket…
+      {buscando ? (
+        <p role="status" className="flex items-center justify-center gap-2 py-4 text-base text-tinta-suave">
+          <IconSpinner className="size-5 animate-spin motion-reduce:animate-none" />
+          Buscando el ticket…
+        </p>
+      ) : null}
+
+      {resultado?.kind === "ticket" && !veredicto ? (
+        <TicketResult
+          ticket={resultado.ticket}
+          seleccionados={seleccionados}
+          onToggle={alternar}
+          onConfirm={() => void abordar(resultado.ticket)}
+          onCancel={limpiar}
+          confirmando={confirmando}
+          tituloRef={tituloTicketRef}
+        />
+      ) : null}
+
+      {veredicto && resultado?.kind === "ticket" ? (
+        <TicketVeredicto
+          key={`ticket-${resultado.ticket.reservationId}`}
+          ticket={resultado.ticket}
+          confirmando={confirmando}
+          onConfirm={() => void abordar(resultado.ticket)}
+          onChoose={verTicket}
+          onCancel={limpiar}
+        />
+      ) : null}
+
+      {veredicto && resultado?.kind === "rechazo" ? (
+        <Veredicto
+          key={`rechazo-${resultado.title}-${resultado.message}`}
+          tone="peligro"
+          title={resultado.title}
+          primary={{ label: "Buscar otro ticket", onClick: limpiar }}
+          onDismiss={limpiar}
+        >
+          <p>{resultado.message}</p>
+        </Veredicto>
+      ) : null}
+
+      {veredicto && resultado?.kind === "listo" ? (
+        <Veredicto
+          key={`listo-${resultado.code}`}
+          tone="exito"
+          title={`Listo: ${plural(resultado.count, "pasajero a bordo", "pasajeros a bordo")}`}
+          primary={{ label: "Escanear el siguiente", onClick: limpiar }}
+          onDismiss={limpiar}
+        >
+          {resultado.names.length > 0 ? (
+            <ul className="flex flex-col gap-1 text-2xl font-semibold">
+              {resultado.names.map((nombre, i) => (
+                <li key={`${i}-${nombre}`}>{nombre}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p>
+            Ticket <span className="tabular font-semibold">{resultado.code}</span>
           </p>
-        ) : null}
-
-        {resultado?.kind === "rechazo" ? (
-          <section
-            role="alert"
-            className="flex flex-col items-center gap-3 rounded-tarjeta border-2 border-peligro bg-peligro-suave p-6 text-center"
-          >
-            <IconXCircle className="size-14 text-peligro" />
-            <h2 className="text-2xl font-bold tracking-tight text-peligro">{resultado.title}</h2>
-            <p className="text-lg leading-relaxed text-tinta">{resultado.message}</p>
-            <button type="button" onClick={limpiar} className={panelButtonClass("secundario", "lg", "mt-1 w-full")}>
-              Buscar otro ticket
-            </button>
-          </section>
-        ) : null}
-
-        {resultado?.kind === "listo" ? (
-          <section
-            role="status"
-            className="flex flex-col items-center gap-2 rounded-tarjeta border-2 border-exito bg-exito-suave p-6 text-center"
-          >
-            <IconCheckCircle className="size-14 text-exito" />
-            <h2 className="text-2xl font-bold tracking-tight text-exito">
-              Listo: {plural(resultado.count, "pasajero a bordo", "pasajeros a bordo")}
-            </h2>
-            <p className="text-base leading-relaxed text-tinta">
-              Ticket <span className="tabular font-semibold">{resultado.code}</span>. Ya puedes buscar el siguiente.
-            </p>
-          </section>
-        ) : null}
-
-        {resultado?.kind === "ticket" ? (
-          <TicketResult
-            ticket={resultado.ticket}
-            seleccionados={seleccionados}
-            onToggle={alternar}
-            onConfirm={() => void abordar(resultado.ticket)}
-            onCancel={limpiar}
-            confirmando={confirmando}
-            tituloRef={tituloTicketRef}
-          />
-        ) : null}
-      </div>
+        </Veredicto>
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * Veredicto verde de un ticket válido: el titular en grande y qué sigue. Si
+ * solo falta subir una persona y no hay saldo, se confirma desde aquí mismo;
+ * si no, se pasa a elegir quiénes suben.
+ */
+function TicketVeredicto({
+  ticket,
+  confirmando,
+  onConfirm,
+  onChoose,
+  onCancel,
+}: {
+  ticket: BoardingTicket;
+  confirmando: boolean;
+  onConfirm: () => void;
+  onChoose: () => void;
+  onCancel: () => void;
+}) {
+  const porSubir = ticket.passengers.filter((p) => !p.boardedAtLabel);
+  const directo = porSubir.length === 1 && !ticket.balanceLabel;
+  return (
+    <Veredicto
+      tone="exito"
+      title={porSubir.length > 0 ? "Puede abordar" : "Ya subieron todos"}
+      name={ticket.holderName}
+      primary={
+        directo
+          ? {
+              label: "Confirmar abordaje",
+              onClick: onConfirm,
+              pending: confirmando,
+              pendingLabel: "Registrando abordaje…",
+            }
+          : { label: porSubir.length > 0 ? "Elegir quiénes suben" : "Ver el ticket", onClick: onChoose }
+      }
+      secondary={directo ? { label: "Ver el ticket", onClick: onChoose } : { label: "Buscar otro ticket", onClick: onCancel }}
+      onDismiss={onChoose}
+    >
+      <p>
+        Ticket <span className="tabular font-semibold">{ticket.code}</span> ·{" "}
+        {plural(ticket.passengers.length, "pasajero", "pasajeros")}
+      </p>
+      {ticket.balanceLabel ? (
+        <p className="font-bold">Falta cobrar {ticket.balanceLabel} antes de que suba.</p>
+      ) : null}
+    </Veredicto>
   );
 }
 

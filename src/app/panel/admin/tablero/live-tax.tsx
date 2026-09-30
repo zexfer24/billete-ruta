@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IconLive, IconRefresh, IconWarning } from "@/components/icons";
 import { Pill } from "@/components/ui";
 import { panelButtonClass } from "@/components/ui-classes";
@@ -38,35 +38,51 @@ function isTableroResponse(value: unknown): value is TableroApiResponse {
  * tablero. Se actualiza sola cada 30 segundos consultando
  * /api/admin/tablero, solo mientras la pestaña está a la vista (al volver a
  * ella se actualiza enseguida). Si no puede actualizar, lo dice en ámbar con
- * la hora de la última cifra y ofrece intentarlo de nuevo; el cambio de
- * estado se anuncia a los lectores de pantalla.
+ * la hora de la última cifra y ofrece intentarlo de nuevo. A los lectores de
+ * pantalla solo se les anuncia el cambio de estado (se perdió o se recuperó
+ * la conexión), no cada consulta: la hora de actualización es texto quieto.
  */
 export function LiveTaxCard({ initial }: { initial: TaxSnapshot }) {
   const [tax, setTax] = useState<TaxSnapshot>(initial);
   const [stale, setStale] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const staleRef = useRef(false);
+
+  /** Cambia el estado de conexión y lo anuncia solo cuando de verdad cambia. */
+  const updateStale = useCallback((next: boolean) => {
+    if (staleRef.current !== next) {
+      setAnnouncement(
+        next
+          ? "No pudimos actualizar la tasa de salida. Se muestra la última cifra."
+          : "Conexión recuperada. La tasa de salida está al día.",
+      );
+    }
+    staleRef.current = next;
+    setStale(next);
+  }, []);
 
   const poll = useCallback(async (): Promise<void> => {
     setChecking(true);
     try {
       const response = await fetch("/api/admin/tablero", { cache: "no-store" });
       if (!response.ok) {
-        setStale(true);
+        updateStale(true);
         return;
       }
       const data: unknown = await response.json();
       if (!isTableroResponse(data)) {
-        setStale(true);
+        updateStale(true);
         return;
       }
       setTax({ ...data.tax, generatedAt: data.generatedAt });
-      setStale(false);
+      updateStale(false);
     } catch {
-      setStale(true);
+      updateStale(true);
     } finally {
       setChecking(false);
     }
-  }, []);
+  }, [updateStale]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
@@ -134,7 +150,7 @@ export function LiveTaxCard({ initial }: { initial: TaxSnapshot }) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-borde pt-3">
-        <p aria-live="polite" className="tabular text-sm leading-snug text-tinta-suave">
+        <p className="tabular text-sm leading-snug text-tinta-suave">
           {stale
             ? `No pudimos actualizar la cifra. Es la de las ${updatedAt}; lo intentamos de nuevo en 30 segundos.`
             : `Actualizado a las ${updatedAt}.`}
@@ -153,6 +169,9 @@ export function LiveTaxCard({ initial }: { initial: TaxSnapshot }) {
           </button>
         ) : null}
       </div>
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
     </section>
   );
 }

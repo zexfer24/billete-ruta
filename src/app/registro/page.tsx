@@ -5,6 +5,7 @@ import { Alert } from "@/components/alert";
 import { firstParam, loginHref, PUBLIC_TEXT_LINK_CLASS } from "../_publico/links";
 import { PublicCard, PublicShell } from "../_publico/public-shell";
 import { RegisterForm } from "./register-form";
+import { COUNTER_NOTICE_TEXT, COUNTER_NOTICE_TITLE, REGISTER_DESCRIPTION, REGISTER_TITLE } from "./texts";
 
 export const metadata: Metadata = { title: "Crear cuenta" };
 
@@ -13,18 +14,14 @@ export default async function RegistroPage({
 }: {
   searchParams: Promise<{ next?: string | string[] }>;
 }) {
-  // Un `next` repetido, externo o mal formado se descarta: al terminar se va a /mi.
+  // Un `next` repetido, externo o mal formado se descarta: al terminar se va a /mi/documentos.
   const next = safeNext(firstParam((await searchParams).next)) ?? undefined;
 
   return (
     <PublicShell>
-      <PublicCard
-        title="Crea tu cuenta"
-        description="Con tu cuenta reservas tus pasajes, pagas y guardas tus tickets."
-      >
-        <Alert tone="info" role="none" title="¿Te registraron en la taquilla?">
-          Llena este mismo formulario con la cédula, el teléfono y el año de nacimiento que diste
-          allí. No se crea otra cuenta: se activa la tuya y eliges tu contraseña.
+      <PublicCard title={REGISTER_TITLE} description={REGISTER_DESCRIPTION}>
+        <Alert tone="info" role="none" title={COUNTER_NOTICE_TITLE}>
+          {COUNTER_NOTICE_TEXT}
         </Alert>
         <RegisterForm next={next} />
       </PublicCard>

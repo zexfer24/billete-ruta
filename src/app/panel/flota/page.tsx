@@ -6,6 +6,7 @@ import { requireAgencyUser } from "@/modules/auth";
 import { SkeletonScreen } from "@/components/skeleton";
 import { IconPlus } from "@/components/icons";
 import { PanelPageHeader, panelButtonClass } from "@/components/panel-ui";
+import { errorMessage } from "../_dashboard/search-params";
 import { FleetBody, type FleetView } from "./fleet-body";
 import { FleetBodySkeleton } from "./fleet-skeleton";
 
@@ -72,7 +73,7 @@ export default async function FlotaPage({
           vista={vista}
           registrar={registrar}
           editar={editar}
-          error={texto(params.error)}
+          error={errorMessage(params.error)}
           errorField={texto(params.campo)}
           ok={texto(params.ok)}
         />

@@ -64,7 +64,11 @@ export function PanelPageHeader({
             <p className="mt-1.5 text-base leading-relaxed text-tinta-suave">{description}</p>
           ) : null}
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        {/* En el teléfono la caja de acciones no pasa del ancho disponible y sus
+            botones bajan de línea; desde `sm` conserva su ancho natural. */}
+        {actions ? (
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>
+        ) : null}
       </div>
     </div>
   );
@@ -159,21 +163,24 @@ export interface PanelTab {
 }
 
 /**
- * Pestañas segmentadas de 44 px, desplazables en pantallas angostas. Son
- * enlaces de navegación: la activa lleva `aria-current="page"` y un contador
- * opcional dice cuántos elementos hay en cada una.
+ * Pestañas segmentadas de 44 px. Son enlaces de navegación: la activa lleva
+ * `aria-current="page"` y un contador opcional dice cuántos elementos hay en
+ * cada una. Cuando no caben en una fila bajan a la siguiente en vez de
+ * desplazarse de lado: así todas las opciones y la pestaña activa se ven
+ * siempre, sin depender de adivinar que la tira se desliza. En el teléfono
+ * cada fila se reparte el ancho para que el control se lea como un bloque.
  */
 export function PanelTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) {
   return (
-    <nav aria-label={label} className="-m-1 overflow-x-auto p-1">
-      <div className="inline-flex min-w-full gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1">
+    <nav aria-label={label}>
+      <div className="flex w-full flex-wrap gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1">
         {tabs.map((tab) => (
           <Link
             key={tab.href}
             href={tab.href}
             aria-current={tab.active ? "page" : undefined}
             className={cx(
-              "foco inline-flex min-h-11 shrink-0 items-center gap-2 rounded-control px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none",
+              "foco inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none sm:grow-0 sm:justify-start",
               tab.active
                 ? "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200"
                 : "text-tinta-suave hover:bg-lienzo hover:text-tinta",
@@ -237,12 +244,15 @@ export function MobileCard({
 }) {
   return (
     <li className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-tinta">{title}</p>
+      {/* El estado va siempre arriba a la derecha: el título envuelve su propio
+          texto en vez de empujar la pastilla a otra línea, así las tarjetas
+          vecinas quedan alineadas sin importar el largo de la ruta. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-base font-semibold text-tinta">{title}</p>
           {subtitle ? <p className="text-sm text-tinta-suave">{subtitle}</p> : null}
         </div>
-        {status ? <div className="shrink-0">{status}</div> : null}
+        {status ? <div className="max-w-[55%] shrink-0">{status}</div> : null}
       </div>
       {details && details.length > 0 ? (
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
@@ -278,7 +288,7 @@ export function SectionCard({
           <h2 className="text-lg font-semibold text-tinta">{title}</h2>
           {description ? <p className="mt-1 text-sm leading-snug text-tinta-suave">{description}</p> : null}
         </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
+        {action ? <div className="min-w-0 max-w-full sm:shrink-0">{action}</div> : null}
       </div>
       <div className="p-5">{children}</div>
     </section>

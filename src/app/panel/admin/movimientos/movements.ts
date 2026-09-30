@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatCaracasDateTime24, formatDuration } from "@/lib/time";
+import { formatCaracas, formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24, formatDuration } from "@/lib/time";
 import type { AgencyMovementRow } from "@/modules/reports";
 import { periodParamsSchema, periodQuery, withQuery, type AdminRange } from "../_shared/period";
 
@@ -46,6 +46,19 @@ export function tripStatus(trip: {
   if (trip.arrivedAt) return "FINALIZADA";
   if (trip.departedAt) return "EN_RUTA";
   return "MANIFIESTO_CERRADO";
+}
+
+/**
+ * Hora de un hito del viaje para la tabla, que ya muestra la fecha una sola
+ * vez: "08:17" si cae el mismo día que `reference`, y "30/09 08:17" si cae
+ * otro día (una llegada de madrugada, por ejemplo). Sin hora da una raya.
+ */
+export function hourFrom(date: Date | null, reference: Date | null): string {
+  if (!date) return "—";
+  if (reference && formatCaracasDate(date) !== formatCaracasDate(reference)) {
+    return formatCaracas(date, "dd/MM HH:mm");
+  }
+  return formatCaracasTime24(date);
 }
 
 /** Separador de columnas: punto y coma, el que Excel espera en español (la coma es el decimal). */

@@ -19,7 +19,15 @@ interface HourTotal {
  * monto de cada hora", accesibles también en pantallas táctiles y con lector
  * de pantalla.
  */
-export function TaxByHourChart({ hours, severalDays }: { hours: HourTotal[]; severalDays: boolean }) {
+export function TaxByHourChart({
+  title,
+  hours,
+  severalDays,
+}: {
+  title: string;
+  hours: HourTotal[];
+  severalDays: boolean;
+}) {
   const description = severalDays
     ? "Suma de todos los días del periodo, según la hora en que se pagó cada reserva."
     : "Según la hora en que se pagó cada reserva.";
@@ -32,7 +40,7 @@ export function TaxByHourChart({ hours, severalDays }: { hours: HourTotal[]; sev
 
   if (!peak || total.lte(ZERO)) {
     return (
-      <SectionCard title="Tasa cobrada por hora del día" description={description}>
+      <SectionCard title={title} description={description}>
         <EmptyState
           icon={<IconChart />}
           title="No se cobró tasa de salida en este periodo"
@@ -48,7 +56,7 @@ export function TaxByHourChart({ hours, severalDays }: { hours: HourTotal[]; sev
   const paidHours = hours.filter((h) => h.totalUsd.gt(ZERO));
 
   return (
-    <SectionCard title="Tasa cobrada por hora del día" description={description}>
+    <SectionCard title={title} description={description}>
       <div className="flex flex-col gap-5">
         <p className="text-base leading-relaxed text-tinta">
           La hora con más cobro fue las <strong className="tabular">{peak.hour}</strong>, con{" "}
@@ -106,7 +114,7 @@ export function TaxByHourChart({ hours, severalDays }: { hours: HourTotal[]; sev
             </div>
           </div>
           <figcaption className="text-sm text-tinta-suave">
-            Horas del día, de 00 a 23, en hora de Caracas. La barra más oscura es la hora con más cobro.
+            Horas del día, de 00 a 23. La barra más oscura es la hora con más cobro.
           </figcaption>
         </figure>
 

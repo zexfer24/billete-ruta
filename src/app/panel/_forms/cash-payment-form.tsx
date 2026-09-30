@@ -8,6 +8,21 @@ import { PanelField, panelFieldAria } from "./panel-field";
 
 const CURRENCIES: readonly Currency[] = ["USD", "VES", "COP", "USDT"];
 
+/**
+ * Qué tasa se usa al cobrar, según la moneda de la reserva (regla de negocio):
+ * en la moneda de la reserva, la tasa congelada con la que se hizo; en otra
+ * moneda local, la tasa vigente de hoy. Dólares y USDT van uno a uno.
+ */
+function conversionHint(currency: Currency): string {
+  if (currency === "VES") {
+    return "Si cobras en bolívares, se usa la tasa con la que se hizo la reserva; en pesos colombianos, la tasa vigente de hoy. Dólares y USDT van uno a uno.";
+  }
+  if (currency === "COP") {
+    return "Si cobras en pesos colombianos, se usa la tasa con la que se hizo la reserva; en bolívares, la tasa vigente de hoy. Dólares y USDT van uno a uno.";
+  }
+  return "Si cobras en bolívares o en pesos colombianos, se convierte con la tasa vigente de hoy. Dólares y USDT van uno a uno.";
+}
+
 /** Nombre de cada moneda junto a su código, para quien no reconoce la sigla. */
 const CURRENCY_NAMES: Record<Currency, string> = {
   USD: "USD · dólares",
@@ -47,7 +62,9 @@ function HiddenFields({ hidden }: { hidden?: Record<string, string> }) {
  * el monto se precarga con el saldo pendiente.
  */
 export function CashPaymentForm(props: CashPaymentFormProps) {
-  const ayudaCodigo = "Está impreso en el ticket, debajo del código QR.";
+  // El ejemplo va en la ayuda y no como marcador: un código gris dentro del
+  // campo parece un valor ya escrito.
+  const ayudaCodigo = "Está impreso en el ticket, debajo del código QR. Por ejemplo: TR-0911-3PAX-Y962.";
   const ayudaMonto = "Puedes usar coma o punto para los céntimos, por ejemplo 12,50.";
 
   return (
@@ -64,9 +81,7 @@ export function CashPaymentForm(props: CashPaymentFormProps) {
           <div className="flex flex-col gap-1 rounded-control border border-borde bg-lienzo px-4 py-3">
             <p className="text-sm font-semibold text-tinta-suave">Falta por cobrar</p>
             <p className="tabular text-2xl font-bold text-tinta">{formatUsdString(props.balanceUsd)}</p>
-            <p className="text-sm leading-snug text-tinta-suave">
-              Si cobras en otra moneda, se convierte con la tasa de cambio vigente.
-            </p>
+            <p className="text-sm leading-snug text-tinta-suave">{conversionHint(props.currency)}</p>
             {props.amountInCurrencyHint ? (
               <p className="text-sm leading-snug text-tinta-suave">{props.amountInCurrencyHint}</p>
             ) : null}
@@ -81,7 +96,6 @@ export function CashPaymentForm(props: CashPaymentFormProps) {
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
-            placeholder="TR-0911-3PAX-Y962"
             className={panelInputClass("tabular uppercase")}
             {...panelFieldAria("cobro-codigo", ayudaCodigo)}
           />

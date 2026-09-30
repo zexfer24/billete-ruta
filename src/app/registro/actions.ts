@@ -123,6 +123,7 @@ export async function registrarAction(
     throw error;
   }
 
-  // Quien venía de reservar una salida vuelve a ella; si no, al inicio de su cuenta.
-  redirect(safeNext(parsed.data.next) ?? "/mi");
+  // Quien venía de reservar una salida vuelve a ella; si no, a subir la foto
+  // de su cédula, el paso que le falta para poder reservar.
+  redirect(safeNext(parsed.data.next) ?? "/mi/documentos");
 }

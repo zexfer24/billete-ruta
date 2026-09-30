@@ -40,8 +40,8 @@ export function SearchCard({
   const baseId = useId();
 
   return (
-    <div className="rounded-tarjeta bg-marca-700 p-4 text-white sm:p-5">
-      {title ? <h2 className="mb-3 text-lg font-semibold text-white">{title}</h2> : null}
+    <div className={CARD_CLASS}>
+      {title ? <h2 className={TITLE_CLASS}>{title}</h2> : null}
       <div className="flex items-center gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <PlaceSelect
@@ -64,17 +64,64 @@ export function SearchCard({
         <button
           type="button"
           onClick={() => onChange({ origin: destination, destination: origin })}
-          className="foco-sobre-marca flex min-h-14 w-16 shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-control bg-white/10 px-1 text-sm font-semibold text-white transition-colors duration-150 ease-out hover:bg-white/20 motion-reduce:transition-none"
+          className={`foco-sobre-marca cursor-pointer transition-colors duration-150 ease-out hover:bg-white/20 motion-reduce:transition-none ${SWAP_CLASS}`}
         >
           <IconSwap aria-hidden="true" className="size-5" />
           Invertir
           <span className="sr-only"> origen y destino</span>
         </button>
       </div>
-      {children ? <div className="mt-4 flex flex-wrap items-center gap-2">{children}</div> : null}
+      {children ? <div className={ACTIONS_CLASS}>{children}</div> : null}
     </div>
   );
 }
+
+/**
+ * La misma tarjeta, quieta y sin controles, para los skeletons (spec 6.5):
+ * etiquetas, valores iniciales ("Cualquier origen", "Cualquier destino") y
+ * el botón "Invertir" se pintan reales para que la silueta coincida con el
+ * buscador que llega después. Va dentro de una zona `aria-hidden`.
+ */
+export function SearchCardPreview({ title, children }: { title?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className={CARD_CLASS}>
+      {title ? <p className={TITLE_CLASS}>{title}</p> : null}
+      <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <PlacePreview label="¿De dónde sales?" value="Cualquier origen" />
+          <PlacePreview label="¿A dónde vas?" value="Cualquier destino" />
+        </div>
+        <div className={SWAP_CLASS}>
+          <IconSwap aria-hidden="true" className="size-5" />
+          Invertir
+        </div>
+      </div>
+      {children ? <div className={ACTIONS_CLASS}>{children}</div> : null}
+    </div>
+  );
+}
+
+function PlacePreview({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="relative">
+      <span className={PLACE_LABEL_CLASS}>{label}</span>
+      <span className={`block ${PLACE_CONTROL_CLASS}`}>{value}</span>
+      <IconChevronDown aria-hidden="true" className={CHEVRON_CLASS} />
+    </div>
+  );
+}
+
+// Clases compartidas por el buscador y su vista quieta, para que no se separen.
+const CARD_CLASS = "rounded-tarjeta bg-marca-700 p-4 text-white sm:p-5";
+const TITLE_CLASS = "mb-3 text-lg font-semibold text-white";
+const ACTIONS_CLASS = "mt-4 flex flex-wrap items-center gap-2";
+const SWAP_CLASS =
+  "flex min-h-14 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-control bg-white/10 px-1 text-sm font-semibold text-white";
+const PLACE_LABEL_CLASS =
+  "pointer-events-none absolute left-4 top-2 text-sm font-medium leading-5 text-tinta-suave";
+const PLACE_CONTROL_CLASS =
+  "min-h-14 w-full truncate rounded-control bg-superficie pb-2 pl-4 pr-11 pt-7 text-base font-semibold text-tinta";
+const CHEVRON_CLASS = "pointer-events-none absolute right-4 top-1/2 size-5 -translate-y-1/2 text-tinta-suave";
 
 function PlaceSelect({
   id,
@@ -97,17 +144,14 @@ function PlaceSelect({
 
   return (
     <div className="relative">
-      <label
-        htmlFor={id}
-        className="pointer-events-none absolute left-4 top-2 text-sm font-medium leading-5 text-tinta-suave"
-      >
+      <label htmlFor={id} className={PLACE_LABEL_CLASS}>
         {label}
       </label>
       <select
         id={id}
         value={value}
         onChange={(evento) => onChange(evento.target.value)}
-        className="foco-sobre-marca block min-h-14 w-full cursor-pointer appearance-none truncate rounded-control bg-superficie pb-2 pl-4 pr-11 pt-7 text-base font-semibold text-tinta"
+        className={`foco-sobre-marca block cursor-pointer appearance-none ${PLACE_CONTROL_CLASS}`}
       >
         <option value="">{placeholder}</option>
         {opciones.map((opcion) => (
@@ -116,10 +160,7 @@ function PlaceSelect({
           </option>
         ))}
       </select>
-      <IconChevronDown
-        aria-hidden="true"
-        className="pointer-events-none absolute right-4 top-1/2 size-5 -translate-y-1/2 text-tinta-suave"
-      />
+      <IconChevronDown aria-hidden="true" className={CHEVRON_CLASS} />
     </div>
   );
 }

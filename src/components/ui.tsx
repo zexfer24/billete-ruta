@@ -70,6 +70,37 @@ export function FieldError({
   );
 }
 
+/**
+ * Lugar del error bajo un campo, con una sola región viva por mensaje. El
+ * error que llega tras enviar va como `role="alert"` fuera de la región
+ * cortés; el que aparece mientras se escribe entra en la región
+ * `aria-live="polite"`, que existe siempre para que el lector lo note. Nunca
+ * se anidan las dos, porque varios lectores leerían el mismo error dos veces.
+ */
+export function FieldErrorSlot({
+  id,
+  error,
+  afterSubmit = false,
+}: {
+  id: string;
+  error?: ReactNode;
+  afterSubmit?: boolean;
+}) {
+  const hasError = error !== undefined && error !== null && error !== false && error !== "";
+  return (
+    <>
+      {hasError && afterSubmit ? (
+        <FieldError id={id} afterSubmit>
+          {error}
+        </FieldError>
+      ) : null}
+      <div aria-live="polite">
+        {hasError && !afterSubmit ? <FieldError id={id}>{error}</FieldError> : null}
+      </div>
+    </>
+  );
+}
+
 /** Ids de ayuda y error de un campo, y el valor de `aria-describedby` que los une. */
 function describedBy(fieldId: string, hint?: ReactNode, error?: ReactNode) {
   const hintId = hint ? `${fieldId}-hint` : undefined;
@@ -114,13 +145,7 @@ export function Field({ label, name, hint, error, errorAfterSubmit, id, classNam
         {...inputProps}
       />
       {ids.hintId ? <FieldHint id={ids.hintId}>{hint}</FieldHint> : null}
-      <div aria-live="polite">
-        {ids.errorId ? (
-          <FieldError id={ids.errorId} afterSubmit={errorAfterSubmit}>
-            {error}
-          </FieldError>
-        ) : null}
-      </div>
+      <FieldErrorSlot id={`${fieldId}-error`} error={error} afterSubmit={errorAfterSubmit} />
     </div>
   );
 }
@@ -178,13 +203,7 @@ export function Select({
         <IconChevronDown className="pointer-events-none absolute right-4 top-1/2 size-5 -translate-y-1/2 text-tinta-suave" />
       </div>
       {ids.hintId ? <FieldHint id={ids.hintId}>{hint}</FieldHint> : null}
-      <div aria-live="polite">
-        {ids.errorId ? (
-          <FieldError id={ids.errorId} afterSubmit={errorAfterSubmit}>
-            {error}
-          </FieldError>
-        ) : null}
-      </div>
+      <FieldErrorSlot id={`${fieldId}-error`} error={error} afterSubmit={errorAfterSubmit} />
     </div>
   );
 }

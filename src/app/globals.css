@@ -146,6 +146,30 @@ body {
   }
 }
 
+/*
+ * Foco no oculto (WCAG 2.2, 2.4.11). Al tabular, el navegador lleva el
+ * elemento enfocado al borde de la ventana sin contar las barras fijas; el
+ * relleno de desplazamiento del documento reserva su alto para que nunca
+ * tapen el foco. Cada barra se marca con un atributo `data-*`:
+ * - `data-barra-inferior`: barra de navegación inferior del pasajero (BottomNav).
+ * - `data-acciones-fijas`: barra de botones del asistente de reserva (StickyActions),
+ *   que se apila encima de la anterior.
+ * - `data-barra-panel`: barra superior pegajosa del panel por debajo de `lg`.
+ */
+html:has([data-barra-inferior]) {
+  scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+html:has([data-acciones-fijas]) {
+  scroll-padding-bottom: calc(12rem + env(safe-area-inset-bottom));
+}
+
+@media (width < 64rem) {
+  html:has([data-barra-panel]) {
+    scroll-padding-top: 5rem;
+  }
+}
+
 /* Las cifras de dinero, puestos, horas y códigos se leen mejor con dígitos de ancho fijo. */
 .tabular {
   font-variant-numeric: tabular-nums;

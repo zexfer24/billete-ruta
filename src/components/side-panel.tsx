@@ -8,7 +8,8 @@ import { IconClose } from "./icons";
  * recibe un parámetro de búsqueda y se cierra navegando a `closeHref`. Tiene
  * un título claro, un botón "Cerrar" de 44 px con foco visible y se cierra
  * también con Escape o tocando el fondo. El foco queda dentro del panel
- * mientras está abierto (`CloseOnEscape`).
+ * mientras está abierto y vuelve al enlace que lo abrió al cerrarse
+ * (`CloseOnEscape`).
  */
 export function SidePanel({
   title,
@@ -37,8 +38,10 @@ export function SidePanel({
         aria-labelledby="panel-lateral-titulo"
         tabIndex={-1}
         id="panel-lateral"
-        className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto animate-[panel-entrada_180ms_ease-out] border-l border-borde bg-superficie text-tinta shadow-2 outline-none motion-reduce:animate-none"
+        className="relative flex h-full w-full max-w-xl scroll-pt-32 flex-col overflow-y-auto animate-[panel-entrada_180ms_ease-out] border-l border-borde bg-superficie text-tinta shadow-2 outline-none motion-reduce:animate-none"
       >
+        {/* La cabecera es pegajosa: `scroll-pt-32` del panel (su propio contenedor de
+            desplazamiento) evita que tape el campo enfocado al retroceder con Mayús+Tab. */}
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-borde bg-superficie px-5 py-4 sm:px-6">
           <div className="min-w-0 pt-1.5">
             <h2 id="panel-lateral-titulo" className="text-xl font-bold leading-snug tracking-tight">

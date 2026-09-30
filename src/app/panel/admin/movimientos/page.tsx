@@ -6,9 +6,8 @@ import { listAgencies } from "@/modules/agencies";
 import { requirePanelUser } from "@/modules/auth";
 import { PeriodFilter } from "../_shared/period-filter";
 import { rangeKey, resolveAdminRange } from "../_shared/period";
-import { TableSkeleton } from "../_shared/skeletons";
 import { movementsCsvHref, movementsHref, parseMovementsParams } from "./movements";
-import { MovementsList } from "./movements-list";
+import { MovementsList, MovementsListSkeleton } from "./movements-list";
 import { TripDetailPanel, TripDetailPanelSkeleton } from "./trip-detail";
 
 export const metadata: Metadata = { title: "Movimientos de las agencias" };
@@ -73,7 +72,7 @@ export default async function MovimientosAdminPage({
         }
       />
 
-      <Suspense key={`${rangeKey(range)}|${agencyId ?? "todas"}`} fallback={<TableSkeleton rows={8} columns={8} />}>
+      <Suspense key={`${rangeKey(range)}|${agencyId ?? "todas"}`} fallback={<MovementsListSkeleton />}>
         <MovementsList range={range} agencyId={agencyId} agencyName={agency?.name} selectedTrip={params.viaje} />
       </Suspense>
 

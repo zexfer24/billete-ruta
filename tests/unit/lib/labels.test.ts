@@ -88,11 +88,11 @@ describe("PROOF_STATUS_LABELS", () => {
 
 describe("MESSAGE_STATUS_LABELS", () => {
   it("traduce los cinco estados de MessageStatus", () => {
-    expect(MESSAGE_STATUS_LABELS.ENCOLADO).toBe("Encolado");
+    expect(MESSAGE_STATUS_LABELS.ENCOLADO).toBe("En espera");
     expect(MESSAGE_STATUS_LABELS.ENVIADO).toBe("Enviado");
     expect(MESSAGE_STATUS_LABELS.ENTREGADO).toBe("Entregado");
     expect(MESSAGE_STATUS_LABELS.LEIDO).toBe("Leído");
-    expect(MESSAGE_STATUS_LABELS.FALLIDO).toBe("Fallido");
+    expect(MESSAGE_STATUS_LABELS.FALLIDO).toBe("No se pudo enviar");
   });
 
   it("tiene exactamente los cinco estados del enum", () => {

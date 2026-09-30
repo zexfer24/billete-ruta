@@ -8,17 +8,12 @@ import {
   RESERVATION_VIEWS,
 } from "@/modules/reports";
 import type { ReservationView } from "@/modules/reports";
+import type { AgencyDepartureRow } from "@/modules/catalog";
 import { countPendingProofs, getProofReview } from "@/modules/payments";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { SidePanel } from "@/components/side-panel";
 import { PanelFeedback } from "@/components/panel-feedback";
-import {
-  PANEL_LABEL_CLASS,
-  PanelPageHeader,
-  PanelTabs,
-  panelButtonClass,
-  panelInputClass,
-} from "@/components/panel-ui";
+import { PANEL_LABEL_CLASS, PanelPageHeader, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { IconCash, IconChevronDown, IconDownload, IconSearch } from "@/components/icons";
 import { CashPaymentForm } from "@/app/panel/_forms/cash-payment-form";
 import { errorMessage, firstParam, okMessage, type RawSearchParam } from "../_dashboard/search-params";
@@ -29,6 +24,7 @@ import { ProofQueueList, ReservationList } from "./passenger-list";
 import { ListSkeleton, PanelBodySkeleton } from "./skeletons";
 import { parsePasajerosFilters, uuidParam } from "./filters";
 import { pasajerosUrl } from "./urls";
+import { ViewTabs } from "./view-tabs";
 
 export const metadata = { title: "Pasajeros y pagos" };
 
@@ -60,6 +56,79 @@ const VIEW_DESCRIPTIONS: Record<ReservationView, string> = {
   "sin-efecto": "Reservas liberadas, canceladas o de pasajeros que no se presentaron.",
   todas: "Todas las reservas de tu agencia, de la más nueva a la más antigua.",
 };
+
+/**
+ * Filtros de las vistas de reservas (salida y búsqueda). Van dentro del mismo
+ * `<Suspense>` que la lista: la lista de salidas del selector no retrasa la
+ * cabecera ni las pestañas, y los filtros llegan junto con los datos.
+ */
+async function ReservationFilters({
+  vista,
+  salida,
+  buscar,
+  departures,
+}: {
+  vista: ReservationView;
+  salida?: string;
+  buscar?: string;
+  departures: Promise<AgencyDepartureRow[]>;
+}) {
+  const salidas = await departures;
+  const salidaFueraDeLista = salida !== undefined && !salidas.some((d) => d.id === salida);
+  const hayFiltros = Boolean(salida || buscar);
+
+  return (
+    <form
+      method="get"
+      role="search"
+      aria-label="Filtrar reservas"
+      className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 md:flex-row md:flex-wrap md:items-end"
+    >
+      <input type="hidden" name="vista" value={vista} />
+      <label className={`${PANEL_LABEL_CLASS} md:w-80`}>
+        Salida
+        <span className="relative">
+          <select
+            name="salida"
+            defaultValue={salida ?? ""}
+            className={panelInputClass("cursor-pointer appearance-none pr-10")}
+          >
+            <option value="">Cualquier salida</option>
+            {salidaFueraDeLista ? <option value={salida}>La salida elegida en el enlace</option> : null}
+            {salidas.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.routeName} · {formatCaracasDateTime24(d.departsAt)}
+              </option>
+            ))}
+          </select>
+          <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-5 -translate-y-1/2 text-tinta-suave" />
+        </span>
+      </label>
+      <label className={`${PANEL_LABEL_CLASS} md:min-w-64 md:flex-1`}>
+        Buscar
+        <input
+          type="search"
+          name="buscar"
+          defaultValue={buscar ?? ""}
+          maxLength={80}
+          placeholder="Nombre, cédula o código"
+          className={panelInputClass()}
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className={panelButtonClass("secundario")}>
+          <IconSearch className="size-5" />
+          Buscar
+        </button>
+        {hayFiltros ? (
+          <Link href={pasajerosUrl({ vista })} className={panelButtonClass("fantasma")}>
+            Quitar los filtros
+          </Link>
+        ) : null}
+      </div>
+    </form>
+  );
+}
 
 /** Panel lateral de detalle de reserva: se carga dentro de su `<Suspense>`. */
 async function ReservationPanelContent({
@@ -117,8 +186,11 @@ async function ProofPanelContent({
 /**
  * "Pasajeros y pagos" (spec 7.2): pestañas con contador, filtros, la lista
  * (tabla en escritorio, tarjetas en pantallas angostas) y el detalle en un
- * panel lateral. La lista y el panel cargan dentro de su propio
- * `<Suspense>`, así las pestañas responden al instante.
+ * panel lateral. La cabecera y las pestañas esperan solo los contadores; los
+ * filtros con la lista y el panel lateral cargan dentro de su propio
+ * `<Suspense>`. Como un cambio de pestaña, filtro o página solo cambia los
+ * `searchParams`, la pantalla anterior sigue visible hasta que llega la
+ * nueva: la pestaña pulsada lo indica al instante (`ViewTabs`).
  */
 export default async function PasajerosPage({
   searchParams,
@@ -139,23 +211,23 @@ export default async function PasajerosPage({
 
   const pendientesP = countPendingProofs(agencyId);
   const conteosP = countAgencyReservationViews(agencyId, { departureId: salida, search: buscar });
-  const salidasP = listAgencyDepartures(agencyId, {
-    from: new Date(Date.now() - 30 * 24 * 3_600_000),
-    order: "desc",
-  });
   // Evita el aviso de rechazo sin manejar mientras se espera la primera consulta.
   conteosP.catch(() => undefined);
-  salidasP.catch(() => undefined);
 
   // Sin vista en la URL (por ejemplo, desde el menú con su insignia), se abre
   // "Por revisar" si hay comprobantes esperando; si no, "Todas".
   const pendientes = await pendientesP;
   const vista: ReservationView = filtros.vista ?? (pendientes > 0 ? "por-revisar" : "todas");
   const esPorRevisar = vista === "por-revisar";
-  const [conteos, salidas] = await Promise.all([conteosP, salidasP]);
+  // Las salidas del selector solo hacen falta en las vistas con filtros, y
+  // las espera `ReservationFilters` dentro de su `<Suspense>`.
+  const salidasP = esPorRevisar
+    ? null
+    : listAgencyDepartures(agencyId, { from: new Date(Date.now() - 30 * 24 * 3_600_000), order: "desc" });
+  salidasP?.catch(() => undefined);
+  const conteos = await conteosP;
 
   const panelAbierto = registrarCobro || Boolean(reservaId) || Boolean(comprobanteId);
-  const hayFiltros = Boolean(salida || buscar);
 
   const hiddenFiltros: Record<string, string> = { vista };
   if (pagina > 1) hiddenFiltros.pagina = String(pagina);
@@ -164,7 +236,6 @@ export default async function PasajerosPage({
 
   const closeHref = pasajerosUrl({ vista, salida, buscar, pagina });
   const exportHref = panelFeedbackUrl("/panel/pasajeros/exportar", { vista, salida, buscar });
-  const salidaFueraDeLista = salida !== undefined && !salidas.some((d) => d.id === salida);
   const listKey = [vista, salida ?? "", buscar ?? "", pagina].join("|");
 
   return (
@@ -195,7 +266,7 @@ export default async function PasajerosPage({
       <PanelFeedback ok={panelAbierto ? undefined : ok} error={panelAbierto ? undefined : error} />
 
       <div className="flex flex-col gap-3">
-        <PanelTabs
+        <ViewTabs
           label="Situación de las reservas"
           tabs={RESERVATION_VIEWS.map((v) => ({
             href: pasajerosUrl({ vista: v, salida, buscar }),
@@ -207,71 +278,22 @@ export default async function PasajerosPage({
         <p className="text-[15px] text-tinta-suave">{VIEW_DESCRIPTIONS[vista]}</p>
       </div>
 
-      {esPorRevisar ? null : (
-        <form
-          method="get"
-          role="search"
-          aria-label="Filtrar reservas"
-          className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 md:flex-row md:flex-wrap md:items-end"
-        >
-          <input type="hidden" name="vista" value={vista} />
-          <label className={`${PANEL_LABEL_CLASS} md:w-80`}>
-            Salida
-            <span className="relative">
-              <select
-                name="salida"
-                defaultValue={salida ?? ""}
-                className={panelInputClass("cursor-pointer appearance-none pr-10")}
-              >
-                <option value="">Cualquier salida</option>
-                {salidaFueraDeLista ? <option value={salida}>La salida elegida en el enlace</option> : null}
-                {salidas.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.routeName} · {formatCaracasDateTime24(d.departsAt)}
-                  </option>
-                ))}
-              </select>
-              <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-5 -translate-y-1/2 text-tinta-suave" />
-            </span>
-          </label>
-          <label className={`${PANEL_LABEL_CLASS} md:min-w-64 md:flex-1`}>
-            Buscar
-            <input
-              type="search"
-              name="buscar"
-              defaultValue={buscar ?? ""}
-              maxLength={80}
-              placeholder="Nombre, cédula o código del ticket"
-              className={panelInputClass()}
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className={panelButtonClass("secundario")}>
-              <IconSearch className="size-5" />
-              Buscar
-            </button>
-            {hayFiltros ? (
-              <Link href={pasajerosUrl({ vista })} className={panelButtonClass("fantasma")}>
-                Quitar los filtros
-              </Link>
-            ) : null}
-          </div>
-        </form>
-      )}
-
-      <Suspense key={listKey} fallback={<ListSkeleton />}>
-        {esPorRevisar ? (
+      <Suspense key={listKey} fallback={<ListSkeleton filters={!esPorRevisar} />}>
+        {esPorRevisar || !salidasP ? (
           <ProofQueueList agencyId={agencyId} page={pagina} selectedProofId={comprobanteId} okCode={okCode} />
         ) : (
-          <ReservationList
-            agencyId={agencyId}
-            vista={vista}
-            salida={salida}
-            buscar={buscar}
-            page={pagina}
-            selectedReservationId={reservaId}
-            okCode={okCode}
-          />
+          <div className="flex flex-col gap-6">
+            <ReservationFilters vista={vista} salida={salida} buscar={buscar} departures={salidasP} />
+            <ReservationList
+              agencyId={agencyId}
+              vista={vista}
+              salida={salida}
+              buscar={buscar}
+              page={pagina}
+              selectedReservationId={reservaId}
+              okCode={okCode}
+            />
+          </div>
         )}
       </Suspense>
 

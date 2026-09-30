@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { AgencyFleetStatus } from "@/modules/reports";
 import { UNIT_STATE_LABELS, unitStateTone, type UnitState } from "@/lib/labels";
+import { countLabel } from "./text";
+import { FLEET_SECTION } from "./section-texts";
 import { EmptyState, SectionCard, StatusBadge, panelButtonClass } from "@/components/panel-ui";
 import { IconChevronRight, IconUsers } from "@/components/icons";
 import { describeUnitTrip } from "../_shared/unit-trip";
@@ -13,6 +15,32 @@ const ORDEN_RESUMEN: readonly UnitState[] = [
   "DISPONIBLE",
   "FUERA_DE_SERVICIO",
 ];
+
+/** Cómo se dice cada estado de un bus en una frase ("3 buses con viaje asignado"). */
+const BUS_STATE_PHRASES: Record<UnitState, { singular: string; plural: string }> = {
+  EN_RUTA: { singular: "bus en ruta", plural: "buses en ruta" },
+  EMBARCANDO: { singular: "bus embarcando", plural: "buses embarcando" },
+  ASIGNADO: { singular: "bus con viaje asignado", plural: "buses con viaje asignado" },
+  DISPONIBLE: { singular: "bus disponible", plural: "buses disponibles" },
+  FUERA_DE_SERVICIO: { singular: "bus fuera de servicio", plural: "buses fuera de servicio" },
+};
+
+/**
+ * Línea del viaje de un chofer: placa, ruta y hora. Si además tiene otras
+ * salidas programadas en los próximos 7 días lo dice en palabras ("y otro
+ * viaje esta semana") en vez de "+N más". La lista de próximas salidas llega
+ * recortada a tres, así que con tres no se da una cifra exacta.
+ */
+function driverTripLine(chofer: AgencyFleetStatus["drivers"][number], now: Date): string {
+  const viaje = describeUnitTrip({ current: chofer.current, upcoming: chofer.upcoming.slice(0, 1) }, now);
+  if (!viaje) return "Sin viajes asignados esta semana";
+  const placa = chofer.current?.vehiclePlate ?? chofer.upcoming[0]?.vehiclePlate;
+  const enCurso = chofer.current?.status === "EN_RUTA" || chofer.current?.status === "MANIFIESTO_CERRADO";
+  const otros = enCurso ? 0 : chofer.upcoming.length - 1;
+  const linea = [placa, viaje.title, viaje.detail].filter(Boolean).join(" · ");
+  if (otros <= 0) return linea;
+  return `${linea}, y ${otros === 1 ? "otro viaje" : "otros viajes"} esta semana`;
+}
 
 /** Máximo de choferes que muestra la lista antes de remitir a la flota completa. */
 const MAX_FILAS = 5;
@@ -37,11 +65,11 @@ export async function FleetBlock({
 
   return (
     <SectionCard
-      title="Choferes y buses"
-      description="Quién está en ruta, quién embarca y quién tiene viaje asignado."
+      title={FLEET_SECTION.title}
+      description={FLEET_SECTION.description}
       action={
         <Link href="/panel/flota" className={panelButtonClass("secundario")}>
-          Ver la flota
+          {FLEET_SECTION.actionLabel}
         </Link>
       }
     >
@@ -60,12 +88,16 @@ export async function FleetBlock({
         <div className="flex flex-col gap-4">
           {resumen.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold text-tinta-suave">Buses por estado</p>
+              <h3 className="text-base font-semibold text-tinta">Buses</h3>
               <ul className="flex flex-wrap gap-2">
                 {resumen.map((estado) => (
                   <li key={estado}>
                     <StatusBadge
-                      label={`${UNIT_STATE_LABELS[estado]}: ${flota.vehicleSummary[estado]}`}
+                      label={countLabel(
+                        flota.vehicleSummary[estado],
+                        BUS_STATE_PHRASES[estado].singular,
+                        BUS_STATE_PHRASES[estado].plural,
+                      )}
                       tone={unitStateTone(estado)}
                     />
                   </li>
@@ -74,24 +106,23 @@ export async function FleetBlock({
             </div>
           ) : null}
 
-          <ul className="flex flex-col divide-y divide-borde">
-            {visibles.map((chofer) => {
-              const viaje = describeUnitTrip({ current: chofer.current, upcoming: chofer.upcoming }, now);
-              const placa = chofer.current?.vehiclePlate ?? chofer.upcoming[0]?.vehiclePlate;
-              const linea = viaje
-                ? [placa, viaje.title, viaje.detail].filter(Boolean).join(" · ")
-                : "Sin viajes asignados esta semana";
-              return (
-                <li key={chofer.id} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold text-tinta">{chofer.fullName}</p>
-                    <StatusBadge label={UNIT_STATE_LABELS[chofer.state]} tone={unitStateTone(chofer.state)} />
-                  </div>
-                  <p className="tabular text-sm text-tinta-suave">{linea}</p>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-base font-semibold text-tinta">Choferes</h3>
+            <ul className="flex flex-col divide-y divide-borde">
+              {visibles.map((chofer) => {
+                const linea = driverTripLine(chofer, now);
+                return (
+                  <li key={chofer.id} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold text-tinta">{chofer.fullName}</p>
+                      <StatusBadge label={UNIT_STATE_LABELS[chofer.state]} tone={unitStateTone(chofer.state)} />
+                    </div>
+                    <p className="tabular text-sm text-tinta-suave">{linea}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
 
           {relevantes.length > MAX_FILAS ? (
             <Link

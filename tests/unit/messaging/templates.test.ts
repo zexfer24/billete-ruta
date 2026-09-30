@@ -100,3 +100,30 @@ describe("renderStoredPreview", () => {
     );
   });
 });
+
+describe("textos de las plantillas", () => {
+  it("usan lenguaje llano: sin plurales con paréntesis ni jerga interna", () => {
+    for (const key of TEMPLATE_KEYS) {
+      const params = Object.fromEntries(templateParams(key).map((p) => [p, "X"]));
+      const texto = renderPreview(key, params).toLowerCase();
+      for (const jerga of ["(s)", "cupo", "en sitio", "validar", "validado", "validemos", "reconfirm", "serial", "por este medio"]) {
+        expect(texto, `${key} contiene "${jerga}"`).not.toContain(jerga);
+      }
+    }
+  });
+
+  it("el pago en la taquilla explica el plazo real de 12 horas", () => {
+    for (const key of ["reserva_condicional", "reconfirmacion_pago_sitio"] as const) {
+      const params = Object.fromEntries(templateParams(key).map((p) => [p, "X"]));
+      const texto = renderPreview(key, params);
+      expect(texto).toContain("taquilla");
+      expect(texto).toContain("falten 12 horas para la salida");
+      expect(texto).toContain("puesto");
+    }
+  });
+
+  it("la solicitud recibida no necesita plural para el número de pasajeros", () => {
+    const uno = renderPreview("solicitud_recibida", { nombre: "Ana", pasajeros: "1", serial: "TR-1" });
+    expect(uno).toContain("Pasajeros: 1.");
+  });
+});

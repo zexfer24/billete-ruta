@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { listAgencyPassengers, listPendingProofQueue } from "@/modules/reports";
 import type { AgencyPassengerRow, ReservationView } from "@/modules/reports";
+import type { ProofCoverage } from "@/modules/payments";
 import { formatMoney, toDecimal } from "@/lib/decimal";
 import { maskIdNumber } from "@/lib/identity";
 import { formatCaracas, formatCaracasDateTime24 } from "@/lib/time";
@@ -50,6 +51,21 @@ const EMPTY_BY_VIEW: Record<Exclude<ReservationView, "por-revisar">, { title: st
 function rowSituation(row: AgencyPassengerRow): { label: string; tone: StatusTone } {
   if (row.hasPendingProof) return { label: "Comprobante por revisar", tone: "alerta" };
   return { label: reservationStatusLabel(row.status), tone: reservationStatusTone(row.status) };
+}
+
+/**
+ * Cómo queda la reserva si se aprueba el comprobante, el mismo dato que el
+ * panel lateral llama "Saldo después". No se muestra el saldo de antes: junto
+ * a "Completa el pago" parecía que el pasajero seguía debiendo ese monto.
+ */
+function afterApproval(coverage: ProofCoverage): string {
+  return coverage.balanceAfterUsd.greaterThan(0)
+    ? `Quedan ${formatMoney(coverage.balanceAfterUsd, "USD")} por pagar`
+    : "Queda pagada";
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
 /** Barra de lo pagado sobre el total, con lo que falta. */
@@ -194,8 +210,14 @@ export async function ProofQueueList({
                 subtitle={`${row.maskedHolderIdNumber} · ${row.code}`}
                 status={<StatusBadge label={badge.label} tone={badge.tone} />}
                 details={[
-                  { label: "Monto enviado", value: formatMoney(row.amount, row.currency) },
-                  { label: "Falta pagar", value: formatMoney(row.balanceUsd, "USD") },
+                  {
+                    label: "Monto enviado",
+                    value:
+                      row.currency === "USD"
+                        ? formatMoney(row.amount, row.currency)
+                        : `${formatMoney(row.amount, row.currency)} (≈ ${formatMoney(row.amountUsd, "USD")})`,
+                  },
+                  { label: "Si lo apruebas", value: afterApproval(row.coverage) },
                   { label: "Viaje", value: row.routeName },
                   { label: "Salida", value: formatCaracasDateTime24(row.departsAt) },
                 ]}
@@ -260,7 +282,7 @@ export async function ProofQueueList({
                   <td className={PANEL_TD_CLASS}>
                     <StatusBadge label={badge.label} tone={badge.tone} />
                     <span className="tabular mt-1 block text-tinta-suave">
-                      Falta {formatMoney(row.balanceUsd, "USD")}
+                      Si lo apruebas: {lowerFirst(afterApproval(row.coverage))}
                     </span>
                   </td>
                   <td className={`${PANEL_TD_CLASS} text-right`}>

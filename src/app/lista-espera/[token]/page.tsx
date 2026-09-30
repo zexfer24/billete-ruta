@@ -6,7 +6,8 @@ import { getWaitlistClaim } from "@/modules/booking";
 import { listBookableDepartures } from "@/modules/catalog";
 import { currentPassenger } from "@/modules/auth";
 import { Alert } from "@/components/alert";
-import { DepartureRow, type DepartureRowData } from "@/components/departure-row";
+import { DepartureCard } from "@/components/departure-board";
+import type { DepartureRowData } from "@/components/departure-row";
 import { IconCheckCircle, IconClock, IconInfo, IconSeat } from "@/components/icons";
 import { buttonClass, Pill } from "@/components/ui";
 import { passengerHref } from "../../_publico/links";
@@ -99,7 +100,7 @@ export default async function ListaEsperaPage({
           <p>Después, el puesto pasa a la siguiente persona de la lista.</p>
         </Alert>
 
-        <DepartureRow departure={salida} now={now} hideSeats />
+        <DepartureCard departure={salida} now={now} hideSeats />
 
         <p className="flex items-center gap-2 text-base font-semibold text-tinta">
           <IconSeat aria-hidden="true" className="size-5 shrink-0 text-marca-600" />

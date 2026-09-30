@@ -6,13 +6,11 @@ import {
   SkeletonTable,
 } from "../../_shared/skeletons";
 
-/** Silueta de la hoja de salida: cabecera, tres cifras, los pasos del viaje y la lista de pasajeros. */
+/** Silueta de la hoja de salida: cabecera, los pasos del viaje, tres cifras y la lista de pasajeros. */
 export default function SalidaDetalleLoading() {
   return (
     <SkeletonScreen label="Cargando la salida…" className="flex flex-col gap-6">
       <SkeletonPageHeader back="Volver a salidas" badge />
-      <SkeletonStatCards count={3} />
-
       <SkeletonSectionCard title="Pasos del viaje">
         <div className="flex flex-col gap-6">
           {[0, 1, 2].map((paso) => (
@@ -28,12 +26,15 @@ export default function SalidaDetalleLoading() {
         </div>
       </SkeletonSectionCard>
 
+      <SkeletonStatCards count={3} />
+
       <SkeletonSectionCard title="Pasajeros">
         <SkeletonTable
-          columns={["Pasajero", "Cédula", "Código del ticket", "Pago", "Abordaje"]}
+          columns={["Pasajero", "Cédula", "Código de reserva", "Pago", "Abordaje"]}
           rows={6}
-          cardDetails={3}
+          cardDetails={2}
           cardAction={false}
+          mobileVariant="filas"
         />
       </SkeletonSectionCard>
     </SkeletonScreen>

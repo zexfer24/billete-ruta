@@ -1,3 +1,4 @@
+import { DepartureBoardSkeleton } from "@/components/departure-board";
 import { Skeleton, SkeletonScreen, SkeletonText } from "@/components/skeleton";
 import { Card } from "@/components/ui";
 import { PrimaryButtonSkeleton } from "../../_publico/form-skeleton";
@@ -20,7 +21,7 @@ export default function ListaEsperaLoading() {
             <SkeletonText lines={2} />
           </div>
           <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-32 w-full rounded-tarjeta" />
+          <DepartureBoardSkeleton rows={1} />
           <Skeleton className="h-6 w-3/5 rounded-pastilla" />
           <PrimaryButtonSkeleton />
         </Card>

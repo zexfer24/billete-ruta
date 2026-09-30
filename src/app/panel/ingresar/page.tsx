@@ -26,7 +26,7 @@ export default async function IngresarPanelPage() {
       </p>
       <p className="text-[15px] text-tinta-suave">
         ¿Eres pasajero?{" "}
-        <Link href="/ingresar" className="foco rounded-sm font-semibold text-marca-700 underline underline-offset-2">
+        <Link href="/ingresar" className="foco -mx-1 inline-flex min-h-11 items-center rounded-sm px-1 font-semibold text-marca-700 underline underline-offset-2">
           Entra por aquí
         </Link>
       </p>

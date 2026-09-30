@@ -60,7 +60,7 @@ export function PublicCard({
     <Card className="flex flex-col gap-5 sm:p-6">
       <div className="flex flex-col gap-2">
         {eyebrow ? <div>{eyebrow}</div> : null}
-        <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">{title}</h1>
+        <h1 className="text-balance text-2xl font-bold tracking-tight text-tinta sm:text-3xl">{title}</h1>
         {description ? <p className="text-base leading-relaxed text-tinta-suave">{description}</p> : null}
       </div>
       {children}

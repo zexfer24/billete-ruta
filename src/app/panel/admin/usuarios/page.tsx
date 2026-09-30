@@ -74,7 +74,7 @@ export default async function UsuariosAdminPage({
           ) : null}
         </div>
         <p id="q-ayuda" className="text-sm text-tinta-suave">
-          Ejemplos: V12345678, María Pérez o 4121234567 (el teléfono, sin el 0 del inicio ni espacios).
+          Ejemplos: V12345678, María Pérez o 0412 123 4567.
         </p>
       </form>
 

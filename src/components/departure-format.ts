@@ -1,4 +1,14 @@
-import { formatCaracas, formatCaracasDate, formatRelativeDeparture, minutesUntil } from "@/lib/time";
+import { formatInTimeZone } from "date-fns-tz";
+import { es } from "date-fns/locale/es";
+import {
+  BUSINESS_TZ,
+  formatCaracasDate,
+  formatCaracasTime24,
+  formatDuration,
+  formatRelativeDeparture,
+  minutesUntil,
+} from "@/lib/time";
+import { capitalize, dayTimePhrase } from "./passenger-copy";
 
 /**
  * Reglas puras de presentación de una salida, compartidas por el tablero de
@@ -24,14 +34,16 @@ export function seatsLevel(available: number): SeatsLevel {
 
 /**
  * Puestos libres en singular o plural, sin paréntesis (spec 1.2 y 8):
- * "Sin puestos", "Queda 1 puesto", "Quedan 3 puestos", "12 puestos".
+ * "Sin puestos", "Queda 1 puesto", "Quedan 3 puestos", "12 puestos libres".
+ * El caso normal dice "libres" para que no se lea como la capacidad del
+ * autobús.
  */
 export function seatsLabel(available: number): string {
   const nivel = seatsLevel(available);
   if (nivel === "agotado") return "Sin puestos";
   if (available === 1) return "Queda 1 puesto";
   if (nivel === "pocos") return `Quedan ${available} puestos`;
-  return `${available} puestos`;
+  return `${available} puestos libres`;
 }
 
 /**
@@ -59,14 +71,44 @@ export function departureUrgencyLabel(departsAt: Date, now: Date): string | null
   return formatRelativeDeparture(departsAt, now);
 }
 
+/** Un día en milisegundos. Caracas no cambia de hora en el año. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
- * Día de la salida cuando no es hoy (hora de Caracas): "Mañana" o "02/10".
- * Hoy devuelve `null`, porque basta con la hora.
+ * Día de la salida cuando no es hoy (hora de Caracas): "Mañana" o, más
+ * lejos, "Jue 1 oct", el mismo formato del ticket. Hoy devuelve `null`,
+ * porque basta con la hora.
  */
 export function departureDayLabel(departsAt: Date, now: Date): string | null {
   const dia = formatCaracasDate(departsAt);
   if (dia === formatCaracasDate(now)) return null;
-  const manana = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  if (dia === formatCaracasDate(manana)) return "Mañana";
-  return formatCaracas(departsAt, "dd/MM");
+  if (dia === formatCaracasDate(new Date(now.getTime() + DAY_MS))) return "Mañana";
+  return capitalize(formatInTimeZone(departsAt, BUSINESS_TZ, "EEE d MMM", { locale: es }));
+}
+
+/**
+ * Cuándo sale, en una frase que se entiende sola, para las tarjetas del
+ * pasajero: "Sale ahora", "Sale en 15 min", "Sale a las 13:00" (hoy),
+ * "Mañana a las 07:00" o "Jue 1 oct a las 07:00", y "Salió" si ya pasó.
+ * Con `dayInHeading` el día ya lo dice el título del grupo, así que para
+ * otros días basta "Sale a las 07:00". El panel sigue usando
+ * `formatRelativeDeparture`.
+ */
+export function departureWhenLabel(
+  departsAt: Date,
+  now: Date,
+  { dayInHeading = false }: { dayInHeading?: boolean } = {},
+): string {
+  if (minutesUntil(departsAt, now) < URGENT_DEPARTURE_MINUTES) {
+    return formatRelativeDeparture(departsAt, now);
+  }
+  if (dayInHeading || formatCaracasDate(departsAt) === formatCaracasDate(now)) {
+    return `Sale a las ${formatCaracasTime24(departsAt)}`;
+  }
+  return capitalize(dayTimePhrase(departsAt, now));
+}
+
+/** Duración estimada con su texto, para que no quede un "9 h" suelto: "Duración: 9 h". */
+export function tripDurationLabel(minutes: number): string {
+  return `Duración: ${formatDuration(minutes)}`;
 }

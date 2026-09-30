@@ -35,7 +35,6 @@ export default function TaquillaLoading() {
               <Skeleton className="h-7 w-14 sm:w-16" />
               <div className="flex flex-1 flex-col gap-2">
                 <Skeleton className="h-5 w-1/2 rounded-pastilla" />
-                <Skeleton className="h-4 w-1/3 rounded-pastilla" />
                 <div className="flex gap-2">
                   <Skeleton className="h-6 w-28 rounded-pastilla" />
                   <Skeleton className="h-5 w-40 rounded-pastilla" />

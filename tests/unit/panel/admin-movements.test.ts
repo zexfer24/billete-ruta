@@ -3,6 +3,7 @@ import type { AgencyMovementRow } from "@/modules/reports";
 import { resolveAdminRange } from "@/app/panel/admin/_shared/period";
 import {
   csvCell,
+  hourFrom,
   movementsCsv,
   movementsCsvHref,
   movementsHref,
@@ -44,6 +45,15 @@ describe("tripStatus", () => {
     expect(tripStatus({ departedAt: null, arrivedAt: null })).toBe("MANIFIESTO_CERRADO");
     expect(tripStatus({ departedAt: at, arrivedAt: null })).toBe("EN_RUTA");
     expect(tripStatus({ departedAt: at, arrivedAt: at })).toBe("FINALIZADA");
+  });
+});
+
+describe("hourFrom", () => {
+  it("da solo la hora el mismo día y agrega el día cuando cambia", () => {
+    const departed = new Date("2026-09-29T22:07:00Z"); // 18:07 del 29/09 en Caracas
+    expect(hourFrom(new Date("2026-09-29T23:30:00Z"), departed)).toBe("19:30");
+    expect(hourFrom(new Date("2026-09-30T12:17:00Z"), departed)).toBe("30/09 08:17");
+    expect(hourFrom(null, departed)).toBe("—");
   });
 });
 

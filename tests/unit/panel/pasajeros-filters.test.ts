@@ -65,11 +65,26 @@ describe("buildPassengersCsv", () => {
 
   it("pone la cabecera en lenguaje llano y una fila por reserva", () => {
     const [cabecera, linea] = buildPassengersCsv([fila]).split("\r\n");
-    expect(cabecera?.startsWith('"Código del ticket","Titular","Cédula"')).toBe(true);
+    expect(cabecera?.startsWith('"Código del ticket";"Titular";"Cédula"')).toBe(true);
     expect(linea).toContain('"TR-0930-1PAX-AB12"');
     expect(linea).toContain('"V*****678"');
     expect(linea).toContain('"30/09/2026 10:00"');
     expect(linea).toContain('"Taquilla"');
+  });
+
+  it("separa con punto y coma y escribe los montos con coma decimal, para el Excel en español", () => {
+    const csv = buildPassengersCsv([{ ...fila, totalUsd: "40", paidUsd: "12.5", balanceUsd: "27.5" }]);
+    const linea = csv.split("\r\n")[1];
+    expect(linea).toContain('"40,00";"12,50";"27,50"');
+    expect(linea).not.toContain('","');
+  });
+
+  it("neutraliza un nombre que Excel ejecutaría como fórmula", () => {
+    const csv = buildPassengersCsv([{ ...fila, holderName: '=HYPERLINK("http://x","clic")' }]);
+    expect(csv).toContain(`"'=HYPERLINK(""http://x"",""clic"")"`);
+    for (const inicio of ["+", "-", "@"]) {
+      expect(buildPassengersCsv([{ ...fila, holderName: `${inicio}1` }])).toContain(`"'${inicio}1"`);
+    }
   });
 
   it("duplica las comillas de los valores", () => {

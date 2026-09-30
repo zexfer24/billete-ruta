@@ -38,6 +38,12 @@ interface TicketCardProps {
   qrDataUrl?: string;
   /** Con enlace, la tarjeta compacta entera lleva al detalle y dice qué hacer ahí. */
   href?: string;
+  /**
+   * Solo en la tarjeta grande: calla la frase de pago ("Estamos revisando tu
+   * comprobante…") cuando la página ya la explica justo debajo, para no
+   * decir lo mismo dos veces. La barra de pago se sigue mostrando.
+   */
+  hidePaymentPhrase?: boolean;
   children?: ReactNode;
 }
 
@@ -87,7 +93,7 @@ function Perforation({ inactive }: { inactive: boolean }) {
  * presentarse) se muestra apagada para no confundirla con un ticket válido.
  * La versión compacta, con `href`, es un enlace entero que dice qué hacer.
  */
-export function TicketCard({ data, size, qrDataUrl, href, children }: TicketCardProps) {
+export function TicketCard({ data, size, qrDataUrl, href, hidePaymentPhrase = false, children }: TicketCardProps) {
   const inactive = isInactiveReservation(data.status);
   const balance = formatUsdString(data.balanceUsd);
   // La flecha es visual; el lector de pantalla oye "Caracas a Valencia".
@@ -161,7 +167,7 @@ export function TicketCard({ data, size, qrDataUrl, href, children }: TicketCard
                 </p>
               </div>
             </div>
-          ) : (
+          ) : !inactive || !hidePaymentPhrase ? (
             <div className="flex flex-col gap-2">
               {!inactive ? (
                 <ProgressBar
@@ -171,9 +177,11 @@ export function TicketCard({ data, size, qrDataUrl, href, children }: TicketCard
                   label={`Pagaste ${formatUsdString(data.paidUsd)} de ${formatUsdString(data.totalUsd)}`}
                 />
               ) : null}
-              <p className="text-base text-tinta">{paymentPhrase(data.status, balance)}</p>
+              {hidePaymentPhrase ? null : (
+                <p className="text-base text-tinta">{paymentPhrase(data.status, balance)}</p>
+              )}
             </div>
-          )}
+          ) : null}
 
           <div className="rounded-control bg-lienzo px-4 py-3">
             <p className="text-sm text-tinta-suave">{showQr ? "Código del ticket" : "Código de reserva"}</p>

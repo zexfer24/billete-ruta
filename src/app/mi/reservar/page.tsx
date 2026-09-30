@@ -14,6 +14,7 @@ import { formatCaracasDateTime24 } from "@/lib/time";
 import { buttonClass, EmptyState } from "@/components/ui";
 import { IconBus } from "@/components/icons";
 import BookingForm, { type DepartureVM, type PaymentMethodVM } from "./booking-form";
+import { DAY_KEY_PATTERN } from "./departure-days";
 
 export const metadata: Metadata = {
   title: "Reservar un viaje",
@@ -25,7 +26,15 @@ const paramsSchema = z.object({
   pasajeros: z.coerce.number().int().min(1).max(6).optional().catch(undefined),
   origen: z.string().max(120).optional().catch(undefined),
   destino: z.string().max(120).optional().catch(undefined),
+  /** Día elegido en el paso 1 ("2026-10-01"), para conservarlo al recargar. */
+  dia: z.string().regex(DAY_KEY_PATTERN).optional().catch(undefined),
 });
+
+/**
+ * Horizonte de salidas del asistente: una semana. Lo que sale más tarde aún
+ * no se ofrece, para que la lista de días siga siendo corta.
+ */
+const HORIZONTE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default async function ReservarPage({
   searchParams,
@@ -37,14 +46,22 @@ export default async function ReservarPage({
   const params = parsed.success ? parsed.data : {};
   const now = new Date();
 
-  const [salidas, origenesDestinos, tasaSalida, documentos, tasaVes, tasaCop] = await Promise.all([
-    listBookableDepartures({ onlyWithSeats: false }, now),
+  const [salidasSemana, sinHorizonte, origenesDestinos, tasaSalida, documentos, tasaVes, tasaCop] = await Promise.all([
+    listBookableDepartures({ to: new Date(now.getTime() + HORIZONTE_MS), onlyWithSeats: false }, now),
+    // Un enlace con `departureId` (por ejemplo, de la lista de espera) puede apuntar más allá de la semana.
+    params.departureId ? listBookableDepartures({ onlyWithSeats: false }, now) : Promise.resolve([]),
     listOriginsAndDestinations(),
     getCurrentDepartureTax(),
     listDocuments(pasajero.id),
     getCurrentExchangeRate("VES", now),
     getCurrentExchangeRate("COP", now),
   ]);
+
+  const pedida =
+    params.departureId && !salidasSemana.some((s) => s.id === params.departureId)
+      ? sinHorizonte.find((s) => s.id === params.departureId)
+      : undefined;
+  const salidas = pedida ? [...salidasSemana, pedida] : salidasSemana;
 
   const departures: DepartureVM[] = salidas.map((s) => ({
     id: s.id,
@@ -114,7 +131,7 @@ export default async function ReservarPage({
           paymentMethodsByAgency={paymentMethodsByAgency}
           taxPerPassengerUsd={tasaSalida.toFixed(2)}
           exchangeRates={exchangeRates}
-          passenger={{ fullName: pasajero.fullName, birthYear: pasajero.birthYear }}
+          passenger={{ accountId: pasajero.id, fullName: pasajero.fullName, birthYear: pasajero.birthYear }}
           documents={{
             hasIdDocument: documentos.some((doc) => doc.type === "CEDULA"),
             hasTravelPermit: documentos.some((doc) => doc.type === "PERMISO_VIAJE"),
@@ -123,6 +140,7 @@ export default async function ReservarPage({
           initialDestination={params.destino}
           initialDepartureId={params.departureId}
           initialPassengerCount={params.pasajeros}
+          initialDay={params.dia}
           nowIso={now.toISOString()}
         />
       )}

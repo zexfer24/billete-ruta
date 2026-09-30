@@ -1,5 +1,5 @@
-import { Skeleton, SkeletonScreen } from "@/components/skeleton";
-import { SkeletonPageHeader, SkeletonTabs } from "../_shared/skeletons";
+import { SkeletonScreen } from "@/components/skeleton";
+import { SkeletonPageHeader, SkeletonPeriodChips, SkeletonTabs } from "../_shared/skeletons";
 import { ReportDataSkeleton } from "./report-skeleton";
 
 /** Silueta de reportes: cabecera, pestañas de tipo y de periodo, fechas plegadas, cifras y tabla. */
@@ -11,10 +11,7 @@ export default function ReportesLoading() {
         description="Cuánto cobró tu agencia en cada ruta y qué viajes hicieron tus choferes."
       />
       <SkeletonTabs labels={["Recaudación", "Viajes de choferes"]} />
-      <div className="flex flex-col gap-3">
-        <SkeletonTabs labels={["Últimas 24 h", "Hoy", "7 días", "30 días"]} />
-        <Skeleton className="h-12 w-full rounded-tarjeta" />
-      </div>
+      <SkeletonPeriodChips labels={["Últimas 24 h", "Hoy", "7 días", "30 días"]} extra="Otras fechas" />
       <ReportDataSkeleton vista="recaudacion" />
     </SkeletonScreen>
   );

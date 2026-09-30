@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { agencyColor, agencyInitials } from "@/lib/brand";
+import { agencyColor } from "@/lib/brand";
 import { formatCaracasTime24 } from "@/lib/time";
 import {
   departureDayLabel,
@@ -35,9 +35,13 @@ const SEATS_TONE_CLASSES = {
   normal: "text-tinta-suave",
 } as const;
 
+/** Tarjeta del tablero: bloque de color a la izquierda y los datos a la derecha. */
+const CARD_CLASS =
+  "flex min-h-24 items-stretch overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1";
+
 /**
  * Tablero de próximas salidas. Cada salida es una tarjeta con el bloque de
- * color de su agencia a la izquierda (hora grande e iniciales), el destino, el
+ * color de su agencia a la izquierda (hora grande y, si no es hoy, el día), el destino, el
  * origen y la agencia, los puestos libres, el precio por persona y, si se
  * puede tocar, la pista "Reservar". La hora se muestra una sola vez; si falta
  * menos de una hora se agrega "Sale en N min".
@@ -65,20 +69,18 @@ export function DepartureBoard({
       {lista.map((departure) => {
         const href = hrefFor?.(departure.id);
         const contenido = <BoardItem departure={departure} now={now} interactive={Boolean(href)} />;
-        const claseTarjeta =
-          "flex min-h-24 items-stretch overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1";
 
         return (
           <li key={departure.id}>
             {href ? (
               <Link
                 href={href}
-                className={`foco ${claseTarjeta} transition-colors duration-150 ease-out hover:border-marca-200 hover:bg-marca-50/60 motion-reduce:transition-none`}
+                className={`foco ${CARD_CLASS} transition-colors duration-150 ease-out hover:border-marca-200 hover:bg-marca-50/60 motion-reduce:transition-none`}
               >
                 {contenido}
               </Link>
             ) : (
-              <div className={claseTarjeta}>{contenido}</div>
+              <div className={CARD_CLASS}>{contenido}</div>
             )}
           </li>
         );
@@ -87,17 +89,40 @@ export function DepartureBoard({
   );
 }
 
+/**
+ * Una salida suelta con la tarjeta del tablero, sin enlace: para mostrar la
+ * salida guardada en otra pantalla (la lista de espera) igual que en la
+ * portada. `hideSeats` oculta los puestos libres cuando la cantidad que
+ * importa es otra.
+ */
+export function DepartureCard({
+  departure,
+  now,
+  hideSeats = false,
+}: {
+  departure: DepartureRowData;
+  now: Date;
+  hideSeats?: boolean;
+}) {
+  return (
+    <div className={CARD_CLASS}>
+      <BoardItem departure={departure} now={now} interactive={false} hideSeats={hideSeats} />
+    </div>
+  );
+}
+
 function BoardItem({
   departure,
   now,
   interactive,
+  hideSeats = false,
 }: {
   departure: DepartureRowData;
   now: Date;
   interactive: boolean;
+  hideSeats?: boolean;
 }) {
   const color = agencyColor(departure.agencyId);
-  const iniciales = agencyInitials(departure.agencyName);
   const dia = departureDayLabel(departure.departsAt, now);
   const urgencia = departureUrgencyLabel(departure.departsAt, now);
   const nivelPuestos = seatsLevel(departure.available);
@@ -113,11 +138,6 @@ function BoardItem({
           {formatCaracasTime24(departure.departsAt)}
         </span>
         {dia ? <span className="tabular text-sm font-semibold leading-tight">{dia}</span> : null}
-        {iniciales ? (
-          <span aria-hidden="true" className="text-sm font-bold leading-tight tracking-tight">
-            {iniciales}
-          </span>
-        ) : null}
       </div>
 
       <div className="flex min-w-0 flex-1 items-center gap-3 p-3 sm:p-4">
@@ -130,16 +150,20 @@ function BoardItem({
             Desde {departure.origin}
             {departure.agencyName ? ` · ${departure.agencyName}` : null}
           </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className={`tabular text-sm ${SEATS_TONE_CLASSES[nivelPuestos]}`}>
-              {seatsLabel(departure.available)}
-            </span>
-            {urgencia ? (
-              <Pill tone="alerta" icon={<IconClock />}>
-                {urgencia}
-              </Pill>
-            ) : null}
-          </div>
+          {hideSeats && !urgencia ? null : (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {hideSeats ? null : (
+                <span className={`tabular text-sm ${SEATS_TONE_CLASSES[nivelPuestos]}`}>
+                  {seatsLabel(departure.available)}
+                </span>
+              )}
+              {urgencia ? (
+                <Pill tone="alerta" icon={<IconClock />}>
+                  {urgencia}
+                </Pill>
+              ) : null}
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-1 text-right">
@@ -160,8 +184,10 @@ function BoardItem({
 }
 
 /**
- * Silueta de carga del tablero: mismas tarjetas de 96 px con el bloque de la
- * agencia a la izquierda. Va dentro del `SkeletonScreen` de cada pantalla.
+ * Silueta de carga del tablero: mismas tarjetas con el bloque de la agencia a
+ * la izquierda. En el teléfono miden unos 120 px, porque el origen y la
+ * agencia ocupan dos líneas; desde `sm`, 96 px. Va dentro del
+ * `SkeletonScreen` de cada pantalla.
  */
 export function DepartureBoardSkeleton({ rows = 4 }: { rows?: number }) {
   return (
@@ -169,7 +195,7 @@ export function DepartureBoardSkeleton({ rows = 4 }: { rows?: number }) {
       {Array.from({ length: Math.max(1, rows) }, (_, index) => (
         <div
           key={index}
-          className="flex min-h-24 items-stretch overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1"
+          className="flex min-h-30 items-stretch overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1 sm:min-h-24"
         >
           <Skeleton className="w-20 shrink-0 rounded-none" />
           <div className="flex min-w-0 flex-1 items-center gap-3 p-3 sm:p-4">

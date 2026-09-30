@@ -116,8 +116,26 @@ describe("buildNotices", () => {
       },
       AHORA,
     );
+    // AHORA es 08:00 en Caracas: sale mañana a las 04:00 y el plazo vence hoy a las 16:00.
+    const limite = new Date(departsAt.getTime() - 12 * 3_600_000);
     expect(avisos).toHaveLength(1);
-    expect(avisos[0]).toMatchObject({ kind: "RECONFIRMAR_PAGO_EN_SITIO", level: "alerta", at: departsAt });
+    expect(avisos[0]).toMatchObject({ kind: "RECONFIRMAR_PAGO_EN_SITIO", level: "alerta", at: limite });
+    expect(avisos[0]?.title).toContain("taquilla");
+    expect(avisos[0]?.body).toContain("sale mañana a las 04:00");
+    expect(avisos[0]?.body).toContain("Tienes hasta hoy a las 16:00 para pagar en la taquilla");
+    expect(`${avisos[0]?.title} ${avisos[0]?.body}`).not.toContain("Confirma");
+  });
+
+  it("pago en sitio con el plazo de 12 horas vencido ya no ofrece pagar", () => {
+    const departsAt = new Date(AHORA.getTime() + 10 * 3_600_000);
+    const avisos = buildNotices(
+      {
+        hasIdDocument: true,
+        reservations: [reserva({ status: "PAGO_EN_SITIO", departsAt, reconfirmedAt: null })],
+      },
+      AHORA,
+    );
+    expect(avisos).toEqual([]);
   });
 
   it("pago en sitio a treinta horas de la salida no avisa todavía", () => {
@@ -171,6 +189,21 @@ describe("buildNotices", () => {
     expect(avisos[0]).toMatchObject({ kind: "TICKET_LISTO", level: "exito", at: departsAt });
     expect(avisos[0]?.body).toContain("Caracas");
     expect(avisos[0]?.body).toContain("Maracaibo");
+    expect(avisos[0]?.body).toContain("sale hoy a las 13:00");
+  });
+
+  it("un viaje de otro día dice el día de la semana, el día y el mes, como el detalle", () => {
+    // 10:00Z del 1 de octubre son las 06:00 del jueves 1 de octubre en Caracas.
+    const departsAt = new Date("2026-10-01T10:00:00.000Z");
+    const avisos = buildNotices(
+      {
+        hasIdDocument: true,
+        reservations: [reserva({ status: "PAGADA", departsAt, hasTicket: true })],
+      },
+      AHORA,
+    );
+    expect(avisos[0]?.body).toContain("sale el jue 1 oct a las 06:00");
+    expect(avisos[0]?.body).not.toMatch(/\d{2}\/\d{2}/);
   });
 
   it("una reserva pagada sin ticket todavía no avisa ticket listo", () => {

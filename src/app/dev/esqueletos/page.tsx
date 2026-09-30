@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { AppHeader } from "@/components/app-header";
+import { AppHeader, AppHeaderAction } from "@/components/app-header";
+import { IconDocument, IconExit } from "@/components/icons";
 
 import PortadaLoading from "@/app/(portada)/loading";
 import IngresarLoading from "@/app/ingresar/loading";
@@ -41,8 +42,8 @@ export const metadata: Metadata = {
  *   lista de espera, acceso del personal), a todo el ancho.
  * - `mi`: bajo el layout de `/mi`, con la cabecera morada arriba y la
  *   columna de la app del pasajero.
- * - `panel`: dentro del contenido del panel de agencia o del terminal, en
- *   un contenedor de escritorio.
+ * - `panel`: dentro del contenido del panel de agencia o del terminal, al
+ *   ancho de la ventana (en el teléfono se ven sus variantes móviles).
  */
 type Frame = "publico" | "mi" | "panel";
 
@@ -178,7 +179,7 @@ function anchorFor(entry: GalleryEntry): string {
 const FRAME_LABELS: Record<Frame, string> = {
   publico: "Pantalla completa",
   mi: "Bajo el layout de /mi",
-  panel: "Contenido del panel, escritorio",
+  panel: "Contenido del panel, al ancho de la ventana",
 };
 
 /** El skeleton dentro del marco que tendría en su pantalla real. */
@@ -189,7 +190,18 @@ function FrameBody({ entry }: { entry: GalleryEntry }) {
     return (
       <div className="bg-lienzo pb-8">
         {/* Imita la cabecera del layout de /mi, que no se ve en el skeleton solo. */}
-        <AppHeader titleAs="p" title="Hola, pasajero" subtitle="Cabecera de ejemplo del layout de /mi" />
+        <AppHeader
+          titleAs="p"
+          title="Hola, pasajero"
+          subtitle="Cabecera de ejemplo del layout de /mi"
+          right={
+            <>
+              {/* Las mismas acciones que el layout real; aquí no navegan (sobre todo "Salir"). */}
+              <AppHeaderAction href="#" label="Documentos" icon={<IconDocument />} />
+              <AppHeaderAction href="#" label="Salir" icon={<IconExit />} plain />
+            </>
+          }
+        />
         <div className="mx-auto w-full max-w-md px-4 pt-5 md:max-w-2xl">
           <Component />
         </div>
@@ -199,11 +211,11 @@ function FrameBody({ entry }: { entry: GalleryEntry }) {
 
   if (entry.frame === "panel") {
     return (
-      <div className="overflow-x-auto bg-lienzo">
-        <div className="min-w-[64rem] px-8 py-8">
-          <div className="mx-auto max-w-7xl">
-            <Component />
-          </div>
+      // Sin ancho mínimo: a 375 px se ven las variantes móviles (tarjetas
+      // `md:hidden`) y en escritorio las tablas, como en la pantalla real.
+      <div className="bg-lienzo px-4 py-6 lg:px-8 lg:py-8">
+        <div className="mx-auto max-w-7xl">
+          <Component />
         </div>
       </div>
     );

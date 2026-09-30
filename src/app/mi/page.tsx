@@ -12,7 +12,7 @@ import { DepartureBoard } from "@/components/departure-board";
 import type { DepartureRowData } from "@/components/departure-row";
 import { Isotipo } from "@/components/logo";
 import { IconCamera, IconChevronRight } from "@/components/icons";
-import { reservationActionLabel } from "@/components/passenger-copy";
+import { reservationActionLabel, reservationUrgency } from "@/components/passenger-copy";
 
 export const metadata: Metadata = {
   title: "Inicio",
@@ -29,6 +29,9 @@ const ESTADOS_PROXIMO_VIAJE = [
 
 const SEIS_HORAS_MS = 6 * 60 * 60 * 1000;
 
+/** Próximas reservas que se leen para elegir la del héroe; basta con cubrir una salida. */
+const LIMITE_PROXIMAS = 12;
+
 /** Enlace de texto con área táctil de 44 px, para "Ver todos". */
 const ENLACE_SECCION =
   "foco inline-flex min-h-11 items-center gap-1 rounded-control px-1 font-semibold text-marca-700 hover:underline";
@@ -37,24 +40,42 @@ const ENLACE_SECCION =
  * Inicio del pasajero (spec 7.1): arriba la acción que toca ahora, en grande
  * (pagar, ver el ticket, subir la cédula o reservar); debajo, como mucho un
  * aviso con el enlace al resto, y las salidas de las próximas horas.
+ *
+ * El héroe es la reserva de la salida más cercana. Si en esa misma salida hay
+ * varias reservas, va la más urgente (primero lo que se pierde si no se
+ * paga) y, a igual urgencia, la de código menor, para que el resultado no
+ * dependa del orden de la base. Una reserva de una salida más lejana nunca
+ * sube por urgencia: para eso está el aviso de "reserva por liberar".
  */
 export default async function MiInicioPage() {
   const pasajero = await requirePassenger();
   const now = new Date();
 
-  const [avisos, proximaReserva, salidas] = await Promise.all([
+  const dondeProximas = {
+    accountId: pasajero.id,
+    status: { in: [...ESTADOS_PROXIMO_VIAJE] },
+    departure: { departsAt: { gt: now } },
+  };
+
+  const [avisos, proximas, totalProximas, salidas] = await Promise.all([
     listNoticesForAccount(pasajero.id),
-    prisma.reservation.findFirst({
-      where: {
-        accountId: pasajero.id,
-        status: { in: [...ESTADOS_PROXIMO_VIAJE] },
-        departure: { departsAt: { gt: now } },
-      },
-      orderBy: { departure: { departsAt: "asc" } },
+    prisma.reservation.findMany({
+      where: dondeProximas,
+      orderBy: [{ departure: { departsAt: "asc" } }, { code: "asc" }],
+      take: LIMITE_PROXIMAS,
       include: { departure: { include: { route: { include: { agency: true } } } } },
     }),
+    prisma.reservation.count({ where: dondeProximas }),
     listBookableDepartures({ to: new Date(now.getTime() + SEIS_HORAS_MS), onlyWithSeats: true }, now),
   ]);
+
+  const primeraSalida = proximas[0]?.departureId;
+  const proximaReserva =
+    proximas
+      .filter((reserva) => reserva.departureId === primeraSalida)
+      .sort(
+        (a, b) => reservationUrgency(a.status) - reservationUrgency(b.status) || a.code.localeCompare(b.code),
+      )[0] ?? null;
 
   const faltaCedula = avisos.some((aviso) => aviso.kind === "DOCUMENTO_FALTANTE");
 
@@ -109,6 +130,12 @@ export default async function MiInicioPage() {
             >
               {reservationActionLabel(ticketData.status, formatUsdString(ticketData.balanceUsd))}
             </Link>
+            {totalProximas > 1 ? (
+              <Link href="/mi/reservas" className={`${ENLACE_SECCION} self-center`}>
+                Tienes {totalProximas} viajes próximos · Ver todos
+                <IconChevronRight aria-hidden="true" className="size-4" />
+              </Link>
+            ) : null}
           </>
         ) : heroEsCedula ? (
           <>

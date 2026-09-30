@@ -9,7 +9,7 @@ export default function SalidasLoading() {
       <SkeletonPageHeader
         title="Salidas"
         description="Programa los viajes de tu agencia y abre cada uno para embarcar a los pasajeros."
-        action
+        action="Crear salida"
       />
       <SkeletonTabs labels={["Próximas", "Historial"]} />
       <DeparturesListSkeleton />

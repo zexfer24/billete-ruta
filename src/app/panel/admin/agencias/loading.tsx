@@ -1,6 +1,7 @@
-import { PanelPageHeader } from "@/components/panel-ui";
-import { Skeleton, SkeletonScreen } from "@/components/skeleton";
-import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { IconPlus } from "@/components/icons";
+import { PanelPageHeader, panelButtonClass } from "@/components/panel-ui";
+import { SkeletonScreen } from "@/components/skeleton";
+import { AgenciesListSkeleton } from "./agencies-list";
 
 /** Silueta de agencias: el total y la tabla de agencias con su acción. */
 export default function AgenciasAdminLoading() {
@@ -9,12 +10,14 @@ export default function AgenciasAdminLoading() {
       <PanelPageHeader
         title="Agencias del terminal"
         description="Las agencias que venden pasajes en el terminal, con su flota y su personal. Aquí registras una agencia nueva o la desactivas."
-        actions={<Skeleton className="h-11 w-44" />}
+        actions={
+          <span aria-hidden="true" className={panelButtonClass("primario")}>
+            <IconPlus className="size-5 shrink-0" />
+            Registrar agencia
+          </span>
+        }
       />
-      <div className="flex flex-col gap-3">
-        <LineSkeleton className="w-60" />
-        <TableSkeleton rows={4} columns={6} mobileCards={3} />
-      </div>
+      <AgenciesListSkeleton />
     </SkeletonScreen>
   );
 }

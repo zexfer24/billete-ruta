@@ -5,6 +5,11 @@
  * en la misma pestaña. Es una comodidad: si el almacenamiento no está
  * disponible, el asistente funciona igual desde cero. Se borra al crear la
  * reserva, al empezar de nuevo y a las dos horas.
+ *
+ * El borrador lleva el id de la cuenta que lo escribió: si en la misma
+ * pestaña ingresa otra persona (un equipo compartido), no se le restauran
+ * los acompañantes ni las condiciones aceptadas de la anterior, y el
+ * borrador ajeno se borra.
  */
 
 export const BOOKING_DRAFT_KEY = "ticketruta:reserva-en-curso";
@@ -19,7 +24,9 @@ export interface BookingDraftCompanion {
 }
 
 export interface BookingDraft {
-  version: 1;
+  version: 2;
+  /** Cuenta del pasajero que escribió el borrador. */
+  accountId: string;
   savedAt: number;
   step: 1 | 2 | 3 | 4;
   departureId: string;
@@ -38,8 +45,11 @@ function isCompanion(value: unknown): value is BookingDraftCompanion {
   );
 }
 
-/** Valida un borrador leído del navegador; cualquier cosa rara se descarta. */
-export function parseBookingDraft(raw: string | null, now: number): BookingDraft | null {
+/**
+ * Valida un borrador leído del navegador; cualquier cosa rara se descarta,
+ * igual que el borrador de otra cuenta.
+ */
+export function parseBookingDraft(raw: string | null, now: number, accountId: string): BookingDraft | null {
   if (!raw) return null;
   let value: unknown;
   try {
@@ -49,7 +59,10 @@ export function parseBookingDraft(raw: string | null, now: number): BookingDraft
   }
   if (!value || typeof value !== "object") return null;
   const draft = value as Record<string, unknown>;
-  if (draft.version !== 1) return null;
+  if (draft.version !== 2) return null;
+  if (typeof draft.accountId !== "string" || draft.accountId === "" || draft.accountId !== accountId) {
+    return null;
+  }
   if (typeof draft.savedAt !== "number" || now - draft.savedAt > MAX_AGE_MS || draft.savedAt > now + 60_000) {
     return null;
   }
@@ -61,7 +74,8 @@ export function parseBookingDraft(raw: string | null, now: number): BookingDraft
   if (typeof draft.policiesAccepted !== "boolean") return null;
   if (draft.paymentMethodId !== null && typeof draft.paymentMethodId !== "string") return null;
   return {
-    version: 1,
+    version: 2,
+    accountId: draft.accountId,
     savedAt: draft.savedAt,
     step: draft.step,
     departureId: draft.departureId,
@@ -71,9 +85,13 @@ export function parseBookingDraft(raw: string | null, now: number): BookingDraft
   };
 }
 
-export function readBookingDraft(): BookingDraft | null {
+/** Lee el borrador de esta cuenta. Si el guardado no sirve o es de otra cuenta, lo borra. */
+export function readBookingDraft(accountId: string): BookingDraft | null {
   try {
-    return parseBookingDraft(window.sessionStorage.getItem(BOOKING_DRAFT_KEY), Date.now());
+    const raw = window.sessionStorage.getItem(BOOKING_DRAFT_KEY);
+    const draft = parseBookingDraft(raw, Date.now(), accountId);
+    if (!draft && raw !== null) window.sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+    return draft;
   } catch {
     return null;
   }
@@ -83,7 +101,7 @@ export function writeBookingDraft(draft: Omit<BookingDraft, "version" | "savedAt
   try {
     window.sessionStorage.setItem(
       BOOKING_DRAFT_KEY,
-      JSON.stringify({ version: 1, savedAt: Date.now(), ...draft } satisfies BookingDraft),
+      JSON.stringify({ version: 2, savedAt: Date.now(), ...draft } satisfies BookingDraft),
     );
   } catch {
     // Sin almacenamiento (ventana privada, sitio bloqueado): el asistente sigue sin borrador.

@@ -81,13 +81,16 @@ export function HowItWorks() {
   );
 }
 
-/** Pie de la portada: logo del terminal, nota de horario y acceso del personal. */
+/**
+ * Pie de la portada: logo del terminal, una nota llana de que las horas son
+ * las de Venezuela (sin jerga de formatos, spec 6.4) y el acceso del personal.
+ */
 export function PortadaFooter() {
   return (
     <footer className={`${PORTADA_COLUMN} pb-[max(2rem,env(safe-area-inset-bottom))]`}>
       <div className="flex flex-col items-center gap-3 border-t border-borde pt-6 text-center">
         <LogoLockup tone="marca" label="Terminal de pasajeros" />
-        <p className="text-sm text-tinta-suave">Horas en formato de 24 horas, hora de Caracas.</p>
+        <p className="text-sm text-tinta-suave">Todas las horas son de Venezuela.</p>
         <Link
           href="/panel/ingresar"
           className="foco inline-flex min-h-11 items-center gap-2 rounded-pastilla px-4 text-sm font-semibold text-tinta-suave transition-colors duration-150 ease-out hover:bg-marca-50 hover:text-marca-700 motion-reduce:transition-none"

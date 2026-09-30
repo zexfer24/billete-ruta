@@ -61,7 +61,9 @@ export function BottomNavBadge({ count }: { count: number }) {
 
 /**
  * Barra de navegación de cuatro destinos (spec 6.4): fija abajo en todos los
- * anchos, con el contenido centrado y el mismo ancho máximo que la página.
+ * anchos. En el teléfono ocupa todo el ancho; desde `md` es una tarjeta
+ * centrada con el mismo ancho máximo que la página (`max-w-2xl`), con las
+ * esquinas superiores redondeadas, en vez de una franja de lado a lado.
  * El destino activo va en morado, con una pastilla detrás del icono y
  * `aria-current="page"`.
  */
@@ -73,9 +75,9 @@ export function BottomNav({ noticeCount = 0 }: BottomNavProps) {
   return (
     <nav
       aria-label="Principal"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-borde bg-superficie pb-[env(safe-area-inset-bottom)] shadow-2"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-borde bg-superficie pb-[env(safe-area-inset-bottom)] shadow-2 md:mx-auto md:w-full md:max-w-2xl md:rounded-t-tarjeta md:border-x md:px-2"
     >
-      <div className="mx-auto flex w-full max-w-md md:max-w-2xl">
+      <div className="mx-auto flex w-full max-w-md md:max-w-none">
         {ITEMS.map(({ href, label, Icon }) => {
           const active = isActive(pathname, href);
 

@@ -3,12 +3,12 @@ import { formatMoney } from "@/lib/decimal";
 import { formatCaracas, formatCaracasDate, formatCaracasTime24, type DashboardPeriod } from "@/lib/time";
 import { StatCard } from "@/components/panel-ui";
 import { IconBus, IconCash, IconClock, IconTicket } from "@/components/icons";
-import { countLabel, joinPhrases } from "./text";
+import { countLabel, joinPhrases, porCobrarDetail } from "./text";
 
 /**
  * Las cuatro cifras del periodo (spec 1.3: nunca más de cuatro a la vez), cada
- * una con una frase que le da contexto y un enlace a su detalle. "Por cobrar
- * ahora" es en vivo; las otras tres dependen del periodo elegido.
+ * una con una frase que le da contexto y un enlace a su detalle. "Reservas por
+ * cobrar" es en vivo; las otras tres dependen del periodo elegido.
  */
 export async function FiguresBlock({
   summary,
@@ -24,13 +24,7 @@ export async function FiguresBlock({
   const [resumen, emitidos] = await Promise.all([summary, tickets]);
   const { pendingTickets, departures, revenue } = resumen;
 
-  const detallePorCobrar =
-    joinPhrases([
-      pendingTickets.proofsToReview > 0 &&
-        countLabel(pendingTickets.proofsToReview, "comprobante por revisar", "comprobantes por revisar"),
-      pendingTickets.payOnSite > 0 &&
-        countLabel(pendingTickets.payOnSite, "paga en la taquilla", "pagan en la taquilla"),
-    ]) || (pendingTickets.total > 0 ? "Esperan el pago del pasajero" : "Ninguna reserva debe dinero");
+  const detallePorCobrar = porCobrarDetail(pendingTickets.total, pendingTickets.payOnSite);
 
   const detalleSalidas =
     joinPhrases([
@@ -52,7 +46,7 @@ export async function FiguresBlock({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
-        label="Por cobrar ahora"
+        label="Reservas por cobrar"
         value={pendingTickets.total}
         detail={detallePorCobrar}
         href="/panel/pasajeros?vista=por-cobrar"

@@ -14,7 +14,7 @@ import {
 import type { AgencyReservationDetail } from "@/modules/reports";
 import { CashPaymentForm } from "@/app/panel/_forms/cash-payment-form";
 import { countLabel } from "../_dashboard/text";
-import { coverageBadge, ProofActions, ProofHistoryTable } from "./proof-review";
+import { coverageBadge, PaymentHistory, ProofActions } from "./proof-review";
 import { Disclosure, DetailList } from "./disclosure";
 
 /** Título de una sección del panel lateral. */
@@ -214,7 +214,7 @@ export function ReservationDetailPanel({
       </section>
 
       <section className="flex flex-col gap-3">
-        <PanelSectionTitle>{`Pasajeros (${countLabel(passengers.length, "persona", "personas")})`}</PanelSectionTitle>
+        <PanelSectionTitle>{`Pasajeros · ${countLabel(passengers.length, "persona", "personas")}`}</PanelSectionTitle>
         <ul className="flex flex-col gap-2">
           {passengers.map((p) => (
             <li
@@ -264,9 +264,7 @@ export function ReservationDetailPanel({
             ) : null}
           </div>
         </Disclosure>
-        <Disclosure title={`Historial de pagos (${countLabel(history.length, "pago", "pagos")})`}>
-          <ProofHistoryTable history={history} />
-        </Disclosure>
+        <PaymentHistory history={history} />
       </div>
     </div>
   );

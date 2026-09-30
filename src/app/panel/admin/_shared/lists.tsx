@@ -90,15 +90,18 @@ export function Pagination({
   page,
   totalPages,
   hrefFor,
+  label = "Páginas",
 }: {
   page: number;
   totalPages: number;
   hrefFor: (page: number) => string;
+  /** Nombre de la navegación; cambia si hay dos en la misma pantalla (arriba y abajo de la lista). */
+  label?: string;
 }) {
   if (totalPages <= 1) return null;
 
   return (
-    <nav aria-label="Páginas" className="flex flex-wrap items-center justify-between gap-3">
+    <nav aria-label={label} className="flex flex-wrap items-center justify-between gap-3">
       <p className="tabular text-sm font-semibold text-tinta-suave">
         Página {formatCount(page)} de {formatCount(totalPages)}
       </p>

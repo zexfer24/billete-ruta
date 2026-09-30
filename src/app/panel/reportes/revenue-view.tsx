@@ -14,7 +14,7 @@ import {
   panelButtonClass,
 } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
-import { plural } from "../_shared/day-label";
+import { routeSubtitle } from "../_shared/route-text";
 import { ReportRangeLine } from "./report-range-line";
 import type { ReportRange } from "./range";
 
@@ -28,6 +28,12 @@ function sharePercent(parte: Prisma.Decimal, total: Prisma.Decimal): number | nu
 function Share({ percent }: { percent: number | null }) {
   if (percent === null) return <span className="text-tinta-suave">Sin cobros</span>;
   return <ProgressBar value={percent} max={100} label={`${percent} % del total`} />;
+}
+
+/** Origen y destino bajo el nombre de la ruta, solo si el nombre no los dice ya. */
+function RouteSubtitle({ row }: { row: RouteRevenueRow }) {
+  const texto = routeSubtitle(row.routeName, row.origin, row.destination);
+  return texto ? <p className="text-sm text-tinta-suave">{texto}</p> : null;
 }
 
 /**
@@ -66,6 +72,9 @@ export function RevenueView({
 
   const total = filas.reduce((acc, f) => round2(acc.add(f.totalUsd)), ZERO);
   const totalPagos = filas.reduce((acc, f) => acc + f.payments, 0);
+  // La ruta que más cobró (la primera si empatan): dice algo que la tabla no dice de un vistazo.
+  const mejor = filas.reduce((a, b) => (b.totalUsd.greaterThan(a.totalUsd) ? b : a));
+  const mejorParte = sharePercent(mejor.totalUsd, total);
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,9 +90,13 @@ export function RevenueView({
         />
         <StatCard label="Pagos registrados" value={totalPagos} detail="Cada abono cuenta por separado" icon={<IconChart />} />
         <StatCard
-          label="Rutas con cobros"
-          value={filas.length}
-          detail={plural(filas.length, "ruta vendió en el periodo", "rutas vendieron en el periodo")}
+          label="Ruta que más cobró"
+          value={formatMoney(mejor.totalUsd, "USD")}
+          detail={
+            filas.length === 1
+              ? `${mejor.routeName}, la única ruta con cobros`
+              : `${mejor.routeName}${mejorParte !== null ? `, ${mejorParte} % del total` : ""}`
+          }
           icon={<IconRoute />}
         />
       </div>
@@ -95,7 +108,7 @@ export function RevenueView({
               <MobileCard
                 key={f.routeId}
                 title={f.routeName}
-                subtitle={`${f.origin} → ${f.destination}`}
+                subtitle={routeSubtitle(f.routeName, f.origin, f.destination) ?? undefined}
                 details={[
                   { label: "Total cobrado", value: formatMoney(f.totalUsd, "USD") },
                   { label: "Pagos", value: f.payments },
@@ -124,9 +137,7 @@ export function RevenueView({
               <tr key={f.routeId} className="border-b border-borde last:border-0">
                 <td className={PANEL_TD_CLASS}>
                   <p className="font-semibold">{f.routeName}</p>
-                  <p className="text-sm text-tinta-suave">
-                    {f.origin} → {f.destination}
-                  </p>
+                  <RouteSubtitle row={f} />
                 </td>
                 <td className={cx(PANEL_TD_CLASS, "tabular text-right font-semibold")}>{formatMoney(f.totalUsd, "USD")}</td>
                 <td className={cx(PANEL_TD_CLASS, "tabular text-right")}>{f.payments}</td>

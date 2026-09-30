@@ -135,14 +135,22 @@ export function IconTicket(props: IconProps) {
   );
 }
 
-/** Cuadrícula QR simplificada. */
+/** Código QR: tres cuadros de esquina y módulos sueltos. */
 export function IconQr(props: IconProps) {
   return (
     <IconBase {...props}>
-      <rect x="3" y="3" width="7" height="7" />
-      <rect x="14" y="3" width="7" height="7" />
-      <rect x="3" y="14" width="7" height="7" />
-      <rect x="14" y="14" width="7" height="7" />
+      {/* Tres cuadros de esquina con su punto interior y módulos sueltos:
+          así se reconoce como QR incluso a 20–24 px, y no como una cuadrícula. */}
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="5.5" y="5.5" width="2" height="2" fill="currentColor" stroke="none" />
+      <rect x="16.5" y="5.5" width="2" height="2" fill="currentColor" stroke="none" />
+      <rect x="5.5" y="16.5" width="2" height="2" fill="currentColor" stroke="none" />
+      <path d="M14 14h3v3" />
+      <path d="M21 14v.01" />
+      <path d="M21 18v3h-3" />
+      <path d="M14 20.5v.5" />
     </IconBase>
   );
 }

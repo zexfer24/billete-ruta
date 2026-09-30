@@ -130,6 +130,27 @@ export function ProofActions({
   );
 }
 
+/**
+ * Historial de pagos plegable con su cantidad en palabras ("Historial de
+ * pagos · 2 pagos"). Sin pagos no hay nada que desplegar: se dice en la misma
+ * línea y no se ofrece un plegable vacío.
+ */
+export function PaymentHistory({ history }: { history: ProofHistoryItem[] }) {
+  if (history.length === 0) {
+    return (
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-control border border-borde bg-superficie px-4 py-2.5">
+        <p className="text-base font-semibold text-tinta">Historial de pagos</p>
+        <p className="text-[15px] text-tinta-suave">Sin pagos todavía</p>
+      </div>
+    );
+  }
+  return (
+    <Disclosure title={`Historial de pagos · ${countLabel(history.length, "pago", "pagos")}`}>
+      <ProofHistoryTable history={history} />
+    </Disclosure>
+  );
+}
+
 /** Historial de pagos de una reserva: comprobantes revisados y cobros en efectivo. */
 export function ProofHistoryTable({ history }: { history: ProofHistoryItem[] }) {
   if (history.length === 0) {
@@ -326,9 +347,7 @@ export function ProofReviewPanel({
             </Link>
           </div>
         </Disclosure>
-        <Disclosure title={`Historial de pagos (${countLabel(history.length, "pago", "pagos")})`}>
-          <ProofHistoryTable history={history} />
-        </Disclosure>
+        <PaymentHistory history={history} />
       </div>
     </div>
   );

@@ -12,7 +12,6 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { IconCheck, IconCheckCircle, IconClock, IconQr, IconSeat, IconUsers } from "@/components/icons";
 import {
   EmptyState,
-  MobileCard,
   PANEL_TD_CLASS,
   PANEL_TH_CLASS,
   PanelPageHeader,
@@ -23,6 +22,7 @@ import {
   panelButtonClass,
 } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
+import { errorMessage, okMessage } from "../../_dashboard/search-params";
 import { departureWhenText, plural } from "../../_shared/day-label";
 import { loadManifestOrNotFound } from "../../_shared/load-manifest";
 import { manifestSummary, passengerBoardingState, type ManifestSummary, type PassengerBoardingState } from "../../_shared/manifest-summary";
@@ -31,18 +31,27 @@ import { registerArrivalAction, registerDepartureAction, startBoardingAction } f
 export const metadata: Metadata = { title: "Detalle de la salida" };
 
 /** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
-const OK_LABELS: Record<string, string> = {
+const OK_LABELS: Readonly<Record<string, string>> = {
   embarque: "Embarque iniciado. Ya puedes abrir el escáner y revisar los tickets en la puerta.",
   salida: "Salida registrada. Cuando el bus llegue a destino, registra la llegada.",
   llegada: "Llegada registrada. El viaje quedó terminado.",
 };
 
-/** Etiqueta y tono de la columna de abordaje. */
+/**
+ * Etiqueta y tono de la columna de abordaje. "Por abordar" solo pide atención
+ * (ámbar) cuando el embarque ya empezó; antes es un estado normal y va neutro,
+ * para que la lista no se llene de color de alerta sin nada que atender.
+ */
 const BOARDING_BADGE: Record<PassengerBoardingState, { label: string; tone: StatusTone }> = {
   "a-bordo": { label: "A bordo", tone: "exito" },
   "por-abordar": { label: "Por abordar", tone: "alerta" },
   "no-viaja": { label: "No viaja", tone: "neutro" },
 };
+
+function boardingBadge(estado: PassengerBoardingState, embarqueIniciado: boolean): { label: string; tone: StatusTone } {
+  const badge = BOARDING_BADGE[estado];
+  return estado === "por-abordar" && !embarqueIniciado ? { ...badge, tone: "neutro" } : badge;
+}
 
 /** Orden de la lista de pasajeros: primero quienes faltan por subir, al final quienes no viajan. */
 const BOARDING_ORDER: Record<PassengerBoardingState, number> = { "por-abordar": 0, "a-bordo": 1, "no-viaja": 2 };
@@ -66,7 +75,8 @@ type EstadoPaso = "hecho" | "actual" | "pendiente" | "omitido";
 /**
  * Hoja de una salida: los tres pasos del viaje (iniciar embarque, registrar
  * la salida y la llegada) con solo la acción que toca ahora, el conteo de
- * abordaje y la lista de pasajeros.
+ * abordaje y la lista de pasajeros. Los pasos van antes de las cifras para
+ * que, en el teléfono, el botón del paso actual se vea sin desplazarse.
  */
 export default async function SalidaDetallePage({
   params,
@@ -78,8 +88,8 @@ export default async function SalidaDetallePage({
   const { agencyId } = await requireAgencyUser("trips.manage");
   const { id } = await params;
   const query = await searchParams;
-  const error = typeof query.error === "string" ? query.error : undefined;
-  const ok = typeof query.ok === "string" ? OK_LABELS[query.ok] : undefined;
+  const error = errorMessage(query.error);
+  const ok = okMessage(OK_LABELS, query.ok);
 
   const salida = await loadManifestOrNotFound(id, agencyId);
 
@@ -93,6 +103,7 @@ export default async function SalidaDetallePage({
   const acciones = availableTripActions({ status: salida.status, boardingStartedAt, departedAt, arrivedAt });
   const resumen = manifestSummary({ capacity: salida.capacity, reservations: salida.reservations });
   const cancelada = salida.status === "CANCELADA";
+  const embarqueIniciado = salida.status !== "PROGRAMADA";
 
   // Solo el primer paso pendiente y disponible muestra su botón: así nunca
   // hay dos acciones del recorrido compitiendo en la pantalla.
@@ -145,29 +156,6 @@ export default async function SalidaDetallePage({
       />
 
       <PanelFeedback error={error} ok={ok} />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard
-          label="A bordo"
-          value={resumen.boarded}
-          detail={`de ${plural(resumen.expected, "pasajero esperado", "pasajeros esperados")}`}
-          tone="exito"
-          icon={<IconCheckCircle />}
-        />
-        <StatCard
-          label="Por abordar"
-          value={resumen.pending}
-          detail={resumen.pending === 0 ? "No falta nadie por subir" : "Todavía no han subido"}
-          tone={resumen.pending > 0 ? "alerta" : "neutro"}
-          icon={<IconClock />}
-        />
-        <StatCard
-          label="Puestos libres"
-          value={resumen.free}
-          detail={`de ${plural(salida.capacity, "puesto", "puestos")}`}
-          icon={<IconSeat />}
-        />
-      </div>
 
       <SectionCard title="Pasos del viaje" description="Sigue los pasos en orden. Solo se muestra el botón del paso que toca ahora.">
         <ol className="flex flex-col">
@@ -224,8 +212,10 @@ export default async function SalidaDetallePage({
               <ConfirmDialog
                 tone={resumen.pending > 0 ? "peligro" : "normal"}
                 triggerLabel="Registrar salida"
+                // Con pasajeros por subir, el escáner es la acción principal y
+                // registrar la salida queda en contorno; el diálogo avisa en rojo.
                 triggerClassName={panelButtonClass(
-                  resumen.pending > 0 ? "peligro" : "primario",
+                  resumen.pending > 0 ? "secundario" : "primario",
                   "lg",
                   "w-full sm:w-fit",
                 )}
@@ -284,6 +274,35 @@ export default async function SalidaDetallePage({
         ) : null}
       </SectionCard>
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          label="A bordo"
+          value={resumen.boarded}
+          detail={`de ${plural(resumen.expected, "pasajero esperado", "pasajeros esperados")}`}
+          tone="exito"
+          icon={<IconCheckCircle />}
+        />
+        <StatCard
+          label="Por abordar"
+          value={resumen.pending}
+          detail={
+            resumen.pending === 0
+              ? "No falta nadie por subir"
+              : embarqueIniciado
+                ? "Todavía no han subido"
+                : "El embarque no ha empezado"
+          }
+          tone={resumen.pending > 0 && embarqueIniciado ? "alerta" : "neutro"}
+          icon={<IconClock />}
+        />
+        <StatCard
+          label="Puestos libres"
+          value={resumen.free}
+          detail={`de ${plural(salida.capacity, "puesto", "puestos")}`}
+          icon={<IconSeat />}
+        />
+      </div>
+
       <SectionCard
         title="Pasajeros"
         description={
@@ -308,27 +327,33 @@ export default async function SalidaDetallePage({
         ) : (
           <TableShell
             mobile={
-              <ul className="flex flex-col gap-3">
+              // Filas separadas por líneas, sin tarjeta dentro de la tarjeta de
+              // sección: el código ocupa todo el ancho y nunca se corta.
+              <ul className="flex flex-col divide-y divide-borde">
                 {pasajeros.map((p) => (
-                  <MobileCard
-                    key={p.id}
-                    title={p.fullName}
-                    subtitle={p.isHolder ? "Titular de la reserva" : undefined}
-                    status={<AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} />}
-                    details={[
-                      { label: "Cédula", value: p.idNumber },
-                      { label: "Código del ticket", value: <span className="break-all">{p.code}</span> },
-                      {
-                        label: "Pago",
-                        value: (
-                          <StatusBadge
-                            label={reservationStatusLabel(p.reservationStatus)}
-                            tone={reservationStatusTone(p.reservationStatus)}
-                          />
-                        ),
-                      },
-                    ]}
-                  />
+                  <li key={p.id} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold text-tinta">{p.fullName}</p>
+                      {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
+                      <StatusBadge
+                        label={reservationStatusLabel(p.reservationStatus)}
+                        tone={reservationStatusTone(p.reservationStatus)}
+                      />
+                    </div>
+                    <dl className="flex flex-col gap-1">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <dt className="text-sm text-tinta-suave">Cédula</dt>
+                        <dd className="tabular text-[15px] font-medium text-tinta">{p.idNumber}</dd>
+                      </div>
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <dt className="text-sm text-tinta-suave">Código de reserva</dt>
+                        <dd className="tabular text-[15px] font-medium text-tinta">{p.code}</dd>
+                      </div>
+                    </dl>
+                  </li>
                 ))}
               </ul>
             }
@@ -338,7 +363,7 @@ export default async function SalidaDetallePage({
                 <tr>
                   <th scope="col" className={PANEL_TH_CLASS}>Pasajero</th>
                   <th scope="col" className={PANEL_TH_CLASS}>Cédula</th>
-                  <th scope="col" className={PANEL_TH_CLASS}>Código del ticket</th>
+                  <th scope="col" className={PANEL_TH_CLASS}>Código de reserva</th>
                   <th scope="col" className={PANEL_TH_CLASS}>Pago</th>
                   <th scope="col" className={PANEL_TH_CLASS}>Abordaje</th>
                 </tr>
@@ -351,7 +376,7 @@ export default async function SalidaDetallePage({
                       {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
                     </td>
                     <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.idNumber}</td>
-                    <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.code}</td>
+                    <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{p.code}</td>
                     <td className={PANEL_TD_CLASS}>
                       <StatusBadge
                         label={reservationStatusLabel(p.reservationStatus)}
@@ -359,7 +384,7 @@ export default async function SalidaDetallePage({
                       />
                     </td>
                     <td className={PANEL_TD_CLASS}>
-                      <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} />
+                      <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
                     </td>
                   </tr>
                 ))}
@@ -377,12 +402,14 @@ function AbordajeBadge({
   estado,
   boardedAt,
   ahora,
+  embarqueIniciado,
 }: {
   estado: PassengerBoardingState;
   boardedAt: Date | null;
   ahora: Date;
+  embarqueIniciado: boolean;
 }) {
-  const { label, tone } = BOARDING_BADGE[estado];
+  const { label, tone } = boardingBadge(estado, embarqueIniciado);
   return <StatusBadge label={boardedAt ? `${label} · ${horaDelPaso(boardedAt, ahora)}` : label} tone={tone} />;
 }
 

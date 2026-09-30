@@ -9,6 +9,7 @@ import { buttonClass, EmptyState } from "@/components/ui";
 import { cx } from "@/components/ui-classes";
 import { TicketCard, type TicketCardData } from "@/components/ticket-card";
 import { Isotipo } from "@/components/logo";
+import { reservationUrgency } from "@/components/passenger-copy";
 import { SkeletonScreen } from "@/components/skeleton";
 import { SkeletonTicketCompact } from "../_components/skeletons";
 
@@ -104,13 +105,19 @@ async function ListaViajes({ vista }: { vista: Vista }) {
   });
 
   const { proximas, pasadas } = splitByDeparture(reservas, now);
-  // Próximos: el que sale antes va primero. Pasados: el más reciente primero.
+  // Próximos: el que sale antes va primero y, en una misma salida, lo más urgente
+  // (lo que se pierde si no se paga). Pasados: el más reciente primero.
   const lista =
     vista === "pasados"
       ? [...pasadas]
           .sort((a, b) => b.departure.departsAt.getTime() - a.departure.departsAt.getTime())
           .slice(0, LIMITE_PASADOS)
-      : [...proximas].sort((a, b) => a.departure.departsAt.getTime() - b.departure.departsAt.getTime());
+      : [...proximas].sort(
+          (a, b) =>
+            a.departure.departsAt.getTime() - b.departure.departsAt.getTime() ||
+            reservationUrgency(a.status) - reservationUrgency(b.status) ||
+            a.code.localeCompare(b.code),
+        );
 
   const datos: TicketCardData[] = lista.map((reserva) => ({
     code: reserva.code,

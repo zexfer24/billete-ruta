@@ -3,6 +3,7 @@ import type { RecentTicketRow } from "@/modules/reports";
 import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { EmptyState, SectionCard, StatusBadge, panelButtonClass } from "@/components/panel-ui";
 import { IconTicket } from "@/components/icons";
+import { ticketsSection } from "./section-texts";
 
 /** Cuántos tickets muestra el tablero antes de remitir a "Pasajeros y pagos". */
 const MAX_FILAS = 5;
@@ -30,14 +31,15 @@ export async function TicketsBlock({
 }) {
   const { rows } = await tickets;
   const visibles = rows.slice(0, MAX_FILAS);
+  const textos = ticketsSection(periodPhrase);
 
   return (
     <SectionCard
-      title="Tickets nuevos"
-      description={`Los últimos tickets emitidos ${periodPhrase}.`}
+      title={textos.title}
+      description={textos.description}
       action={
         <Link href="/panel/pasajeros?vista=pagadas" className={panelButtonClass("secundario")}>
-          Ver todos
+          {textos.actionLabel}
         </Link>
       }
     >
@@ -50,11 +52,11 @@ export async function TicketsBlock({
       ) : (
         <ul className="flex flex-col divide-y divide-borde">
           {visibles.map((ticket) => (
-            <li key={ticket.reservationId} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
+            <li key={ticket.reservationId} className="flex flex-col gap-0.5 py-2 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Link
                   href={`/panel/pasajeros?vista=pagadas&reserva=${ticket.reservationId}`}
-                  className="foco tabular rounded-sm font-semibold text-marca-700 hover:underline"
+                  className="foco tabular -mx-1 inline-flex min-h-11 items-center rounded-sm px-1 font-semibold text-marca-700 hover:underline"
                 >
                   {ticket.code}
                 </Link>

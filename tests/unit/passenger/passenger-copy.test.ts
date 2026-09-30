@@ -4,6 +4,7 @@ import {
   capitalize,
   currencyName,
   dayGroupLabel,
+  dayTimePhrase,
   detailLabel,
   isCopyableDetail,
   isInactiveReservation,
@@ -12,6 +13,7 @@ import {
   passengerStatusTone,
   paymentPhrase,
   reservationActionLabel,
+  reservationUrgency,
   whenPhrase,
 } from "@/components/passenger-copy";
 
@@ -44,6 +46,13 @@ describe("estados de reserva para el pasajero", () => {
     expect(paymentPhrase("ABONADA", "$ 10,00")).toBe("Te faltan $ 10,00 para recibir tu ticket.");
   });
 
+  it("la urgencia pone primero lo que se pierde si no se paga", () => {
+    const orden = ["PAGADA", "EN_VALIDACION", "PENDIENTE_PAGO", "PAGO_EN_SITIO", "ABONADA"].sort(
+      (a, b) => reservationUrgency(a) - reservationUrgency(b),
+    );
+    expect(orden).toEqual(["PENDIENTE_PAGO", "ABONADA", "PAGO_EN_SITIO", "EN_VALIDACION", "PAGADA"]);
+  });
+
   it("solo las reservas que ya no sirven se muestran apagadas", () => {
     expect(isInactiveReservation("LIBERADA")).toBe(true);
     expect(isInactiveReservation("CANCELADA")).toBe(true);
@@ -57,7 +66,13 @@ describe("horas con contexto", () => {
   it("dice hoy, mañana o la fecha, en 24 horas y hora de Caracas", () => {
     expect(whenPhrase(new Date("2026-10-12T18:30:00.000Z"), AHORA)).toBe("hoy a las 14:30");
     expect(whenPhrase(new Date("2026-10-13T12:00:00.000Z"), AHORA)).toBe("mañana a las 08:00");
-    expect(whenPhrase(new Date("2026-10-20T23:15:00.000Z"), AHORA)).toBe("el 20/10 a las 19:15");
+    expect(whenPhrase(new Date("2026-10-20T23:15:00.000Z"), AHORA)).toBe("el mar 20 oct a las 19:15");
+    expect(whenPhrase(new Date("2026-10-11T23:15:00.000Z"), AHORA)).toBe("ayer a las 19:15");
+  });
+
+  it("dayTimePhrase no lleva artículo y usa el mismo formato de fecha", () => {
+    expect(dayTimePhrase(new Date("2026-10-12T18:30:00.000Z"), AHORA)).toBe("hoy a las 14:30");
+    expect(dayTimePhrase(new Date("2026-10-02T11:26:00.000Z"), AHORA)).toBe("vie 2 oct a las 07:26");
   });
 
   it("agrupa por día con Hoy y Ayer", () => {
@@ -89,6 +104,7 @@ describe("avisos", () => {
   it("cada tipo de aviso tiene una acción", () => {
     expect(noticeActionLabel("DOCUMENTO_FALTANTE")).toBe("Subir la foto");
     expect(noticeActionLabel("TICKET_LISTO")).toBe("Ver mi ticket");
+    expect(noticeActionLabel("COMPROBANTE_EN_VALIDACION")).toBe("Ver mi viaje");
   });
 });
 

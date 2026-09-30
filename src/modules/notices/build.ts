@@ -1,4 +1,13 @@
-import { durationMinutes, formatCaracasDateTime24, formatDuration } from "@/lib/time";
+import { formatInTimeZone } from "date-fns-tz";
+import { es } from "date-fns/locale/es";
+import {
+  BUSINESS_TZ,
+  durationMinutes,
+  formatCaracasDate,
+  formatCaracasTime24,
+  formatDuration,
+} from "@/lib/time";
+import { dueForRelease12h } from "@/modules/scheduler";
 
 /** Nivel visual del aviso: define color e icono en la pantalla del pasajero. */
 export type NoticeLevel = "alerta" | "info" | "exito";
@@ -54,6 +63,31 @@ function etiquetaMinutos(minutos: number): string {
   return redondeados > 60 ? formatDuration(redondeados) : `${redondeados} min`;
 }
 
+const UN_DIA_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Hora con su día en palabras, en hora de Caracas y formato de 24 horas:
+ * "hoy a las 14:30", "mañana a las 08:00" o "el lun 12 oct a las 08:00". Es
+ * la misma frase que usa el detalle de la reserva (`whenPhrase`).
+ */
+function cuando(fecha: Date, now: Date): string {
+  const dia = formatCaracasDate(fecha);
+  const hora = formatCaracasTime24(fecha);
+  if (dia === formatCaracasDate(now)) return `hoy a las ${hora}`;
+  if (dia === formatCaracasDate(new Date(now.getTime() + UN_DIA_MS))) return `mañana a las ${hora}`;
+  return `el ${formatInTimeZone(fecha, BUSINESS_TZ, "EEE d MMM", { locale: es })} a las ${hora}`;
+}
+
+/**
+ * Hora límite para pagar en la taquilla: la salida menos el mismo plazo con el
+ * que el barrido libera el puesto (`dueForRelease12h`), para que el aviso y la
+ * liberación nunca se desalineen.
+ */
+function limitePagoEnTaquilla(salida: Date, now: Date): Date {
+  const plazoMs = dueForRelease12h(now).getTime() - now.getTime();
+  return new Date(salida.getTime() - plazoMs);
+}
+
 function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
   if (reserva.departsAt <= now || ESTADOS_FINALES.has(reserva.status)) return [];
 
@@ -105,17 +139,23 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
     !reserva.reconfirmedAt &&
     durationMinutes(now, reserva.departsAt) <= VEINTICUATRO_HORAS_MIN
   ) {
-    avisos.push({
-      kind: "RECONFIRMAR_PAGO_EN_SITIO",
-      level: "alerta",
-      title: "Confirma que vas a pagar en la taquilla",
-      body: `Tu viaje ${reserva.origin} → ${reserva.destination} sale el ${formatCaracasDateTime24(
-        reserva.departsAt,
-      )}. Confirma que viajas o tu puesto quedará libre.`,
-      at: reserva.departsAt,
-      href,
-      reservationCode: reserva.code,
-    });
+    const limite = limitePagoEnTaquilla(reserva.departsAt, now);
+    // Si el plazo ya venció, el barrido libera el puesto en breve: el aviso no
+    // ofrece un plazo que ya pasó.
+    if (limite > now) {
+      avisos.push({
+        kind: "RECONFIRMAR_PAGO_EN_SITIO",
+        level: "alerta",
+        title: "Paga en la taquilla para no perder tu puesto",
+        body: `Tu viaje ${reserva.origin} → ${reserva.destination} sale ${cuando(
+          reserva.departsAt,
+          now,
+        )}. Tienes hasta ${cuando(limite, now)} para pagar en la taquilla; si no, tu puesto quedará libre.`,
+        at: limite,
+        href,
+        reservationCode: reserva.code,
+      });
+    }
   }
 
   if (reserva.hasTicket && reserva.status === "PAGADA") {
@@ -123,8 +163,9 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
       kind: "TICKET_LISTO",
       level: "exito",
       title: "Tu ticket está listo",
-      body: `${reserva.origin} → ${reserva.destination}, sale el ${formatCaracasDateTime24(
+      body: `Tu viaje ${reserva.origin} → ${reserva.destination} sale ${cuando(
         reserva.departsAt,
+        now,
       )}. Muestra el código QR al abordar.`,
       at: reserva.departsAt,
       href,

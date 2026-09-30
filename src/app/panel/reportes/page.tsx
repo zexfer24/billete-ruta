@@ -86,10 +86,12 @@ export default async function ReportesPage({
         ]}
       />
 
-      <PeriodBar key={dataKey} vista={vista} range={range} />
+      {/* Claves distintas para dos hermanos: las dos cambian con el rango para
+          reiniciar el formulario del periodo y volver a mostrar el esqueleto. */}
+      <PeriodBar key={`periodo|${dataKey}`} vista={vista} range={range} />
 
       <Suspense
-        key={dataKey}
+        key={`datos|${dataKey}`}
         fallback={
           <SkeletonScreen label="Cargando el reporte…">
             <ReportDataSkeleton vista={vista} />

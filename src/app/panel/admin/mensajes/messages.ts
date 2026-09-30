@@ -1,4 +1,5 @@
 import type { MessageStatus } from "@prisma/client";
+import { MESSAGE_STATUS_LABELS } from "@/lib/labels";
 
 /**
  * Reglas puras de la bandeja de mensajes del administrador: estados que se
@@ -10,6 +11,15 @@ export const MESSAGES_PATH = "/panel/admin/mensajes";
 
 /** Estados de MessageStatus en el orden en que avanza un mensaje; el fallido va al final. */
 export const MESSAGE_STATUSES: readonly MessageStatus[] = ["ENCOLADO", "ENVIADO", "ENTREGADO", "LEIDO", "FALLIDO"];
+
+/**
+ * Textos de las pestañas, en su orden: "Todos" y luego cada estado con las
+ * etiquetas de `labels.ts`. Los usan las pestañas reales y su silueta.
+ */
+export const MESSAGE_TAB_LABELS: readonly string[] = [
+  "Todos",
+  ...MESSAGE_STATUSES.map((status) => MESSAGE_STATUS_LABELS[status] ?? status),
+];
 
 /** Estado pedido en `?status=`; cualquier otro valor (o ninguno) muestra todos. */
 export function messageStatusFromParam(value: unknown): MessageStatus | undefined {

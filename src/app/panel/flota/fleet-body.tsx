@@ -19,6 +19,7 @@ import {
   panelButtonClass,
 } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
+import { okMessage } from "../_dashboard/search-params";
 import { DriverForm } from "../_forms/driver-form";
 import { VehicleForm } from "../_forms/vehicle-form";
 import { describeUnitTrip } from "../_shared/unit-trip";
@@ -26,7 +27,7 @@ import { describeUnitTrip } from "../_shared/unit-trip";
 export type FleetView = "vehiculos" | "choferes";
 
 /** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
-const OK_LABELS: Record<string, string> = {
+const OK_LABELS: Readonly<Record<string, string>> = {
   "vehiculo-creado": "Vehículo registrado. Ya puedes asignarlo a una salida.",
   "vehiculo-actualizado": "Cambios del vehículo guardados.",
   "chofer-creado": "Chofer registrado. Ya puedes asignarlo a una salida.",
@@ -38,10 +39,18 @@ const ORDEN_RESUMEN: readonly UnitState[] = ["EN_RUTA", "EMBARCANDO", "ASIGNADO"
 
 /**
  * Viaje en curso o próxima salida de una unidad, compartido por las tablas y
- * las tarjetas de vehículos y choferes.
+ * las tarjetas de vehículos y choferes. Recibe la fila completa: si trae el
+ * total de próximas salidas (`upcomingCount`), la cifra "N salidas más" es
+ * exacta aunque `upcoming` venga recortada.
  */
-function TripSummary({ current, upcoming, now }: { current: UnitDeparture | null; upcoming: UnitDeparture[]; now: Date }) {
-  const viaje = describeUnitTrip({ current, upcoming }, now);
+function TripSummary({
+  unit,
+  now,
+}: {
+  unit: { current: UnitDeparture | null; upcoming: UnitDeparture[]; upcomingCount?: number };
+  now: Date;
+}) {
+  const viaje = describeUnitTrip(unit, now);
   if (!viaje) return <span className="text-tinta-suave">Sin salidas en los próximos 7 días</span>;
   return (
     <span className="flex flex-col">
@@ -51,10 +60,14 @@ function TripSummary({ current, upcoming, now }: { current: UnitDeparture | null
   );
 }
 
-/** Pastillas con cuántas unidades hay en cada estado (solo los que tienen alguna). */
+/**
+ * Pastillas con cuántas unidades hay en cada estado (solo los que tienen
+ * alguna). Si todas están en el mismo estado no se muestra: repetiría el
+ * contador de la pestaña y la pastilla de cada fila.
+ */
 function StateSummary({ counts, label }: { counts: Record<UnitState, number>; label: string }) {
   const estados = ORDEN_RESUMEN.filter((estado) => counts[estado] > 0);
-  if (estados.length === 0) return null;
+  if (estados.length < 2) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <p className="text-sm font-semibold text-tinta-suave">{label}</p>
@@ -103,7 +116,7 @@ function VehiclesList({ vehicles, selectedId, now }: { vehicles: VehicleStatusRo
               status={<StatusBadge label={UNIT_STATE_LABELS[v.state]} tone={unitStateTone(v.state)} />}
               details={[
                 { label: "Puestos", value: v.seatCount },
-                { label: "Viaje", value: <TripSummary current={v.current} upcoming={v.upcoming} now={now} /> },
+                { label: "Viaje", value: <TripSummary unit={v} now={now} /> },
               ]}
               action={
                 <Link
@@ -152,7 +165,7 @@ function VehiclesList({ vehicles, selectedId, now }: { vehicles: VehicleStatusRo
                   <StatusBadge label={UNIT_STATE_LABELS[v.state]} tone={unitStateTone(v.state)} />
                 </td>
                 <td className={PANEL_TD_CLASS}>
-                  <TripSummary current={v.current} upcoming={v.upcoming} now={now} />
+                  <TripSummary unit={v} now={now} />
                 </td>
                 <td className={cx(PANEL_TD_CLASS, "text-right")}>
                   <Link href={href} scroll={false} className={panelButtonClass("secundario", "sm")}>
@@ -196,7 +209,7 @@ function DriversList({ drivers, selectedId, now }: { drivers: DriverStatusRow[];
               status={<StatusBadge label={UNIT_STATE_LABELS[c.state]} tone={unitStateTone(c.state)} />}
               details={[
                 { label: "Viajes completados", value: c.arrivalCount },
-                { label: "Viaje", value: <TripSummary current={c.current} upcoming={c.upcoming} now={now} /> },
+                { label: "Viaje", value: <TripSummary unit={c} now={now} /> },
               ]}
               action={
                 <Link
@@ -243,7 +256,7 @@ function DriversList({ drivers, selectedId, now }: { drivers: DriverStatusRow[];
                   <StatusBadge label={UNIT_STATE_LABELS[c.state]} tone={unitStateTone(c.state)} />
                 </td>
                 <td className={PANEL_TD_CLASS}>
-                  <TripSummary current={c.current} upcoming={c.upcoming} now={now} />
+                  <TripSummary unit={c} now={now} />
                 </td>
                 <td className={cx(PANEL_TD_CLASS, "tabular")}>{c.arrivalCount}</td>
                 <td className={cx(PANEL_TD_CLASS, "text-right")}>
@@ -302,7 +315,7 @@ export async function FleetBody({
 
   return (
     <div className="flex flex-col gap-6">
-      <PanelFeedback error={panelAbierto ? undefined : error} ok={ok ? OK_LABELS[ok] : undefined} />
+      <PanelFeedback error={panelAbierto ? undefined : error} ok={okMessage(OK_LABELS, ok)} />
 
       {edicionPerdida ? (
         <Alert tone="alerta" title={vista === "choferes" ? "No encontramos ese chofer" : "No encontramos ese vehículo"}>

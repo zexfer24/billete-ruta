@@ -32,7 +32,20 @@ import { TicketsBlock } from "@/app/panel/_dashboard/tickets-block";
 import { TripsTodayBlock } from "@/app/panel/_dashboard/trips-today-block";
 import { ActivityBlock } from "@/app/panel/_dashboard/activity-block";
 import { Collapsible } from "@/app/panel/_dashboard/collapsible";
-import { AttentionSkeleton, FiguresSkeleton, ListRowsSkeleton, SectionSkeleton } from "@/app/panel/_dashboard/skeletons";
+import {
+  AttentionSkeleton,
+  FiguresSkeleton,
+  ListRowsSkeleton,
+  SectionSkeleton,
+  TripsTodaySkeleton,
+} from "@/app/panel/_dashboard/skeletons";
+import {
+  ACTIVITY_TITLE,
+  activityDescription,
+  FLEET_SECTION,
+  QUICK_REGISTER_SECTION,
+  ticketsSection,
+} from "@/app/panel/_dashboard/section-texts";
 import { errorMessage, firstParam, okMessage, type RawSearchParam } from "@/app/panel/_dashboard/search-params";
 
 export const metadata = { title: "Tablero" };
@@ -72,7 +85,15 @@ function inBackground<T>(promise: Promise<T>): Promise<T> {
 }
 
 /** Formulario de "Crear salida" del registro rápido: carga rutas, buses y choferes solo al abrirse. */
-async function DeparturePanelContent({ agencyId, error }: { agencyId: string; error?: string }) {
+async function DeparturePanelContent({
+  agencyId,
+  error,
+  errorField,
+}: {
+  agencyId: string;
+  error?: string;
+  errorField?: string;
+}) {
   const [rutas, vehiculos, choferes] = await Promise.all([
     listRoutes(agencyId),
     listVehicles(agencyId),
@@ -85,6 +106,7 @@ async function DeparturePanelContent({ agencyId, error }: { agencyId: string; er
       drivers={choferes.filter((d) => d.active)}
       returnTo="tablero"
       error={error}
+      errorField={errorField}
     />
   );
 }
@@ -112,6 +134,8 @@ export default async function PanelPage({
   const hoy = caracasDayRange(now);
   const registrar = registrarFromSlug(firstParam(params.registrar));
   const error = errorMessage(params.error);
+  // Qué dato marcar en rojo cuando el registro rápido vuelve con un error (lo manda la acción).
+  const campo = error ? firstParam(params.campo) : undefined;
   const ok = okMessage(OK_LABELS, params.ok);
 
   // Las consultas arrancan juntas; cada bloque espera solo la suya.
@@ -193,33 +217,30 @@ export default async function PanelPage({
         </Suspense>
       </section>
 
-      <Suspense fallback={<SectionSkeleton rows={4} />}>
+      <Suspense fallback={<TripsTodaySkeleton />}>
         <TripsTodayBlock departures={salidasHoy} createDepartureHref={registrarHref("salida")} />
       </Suspense>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Suspense fallback={<SectionSkeleton rows={4} />}>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <Suspense fallback={<SectionSkeleton rows={4} {...FLEET_SECTION} />}>
           <FleetBlock fleet={flota} now={now} registerDriverHref={registrarHref("chofer")} />
         </Suspense>
-        <Suspense key={periodo} fallback={<SectionSkeleton rows={4} />}>
+        <Suspense
+          key={periodo}
+          fallback={<SectionSkeleton rows={4} {...ticketsSection(periodPhrase)} />}
+        >
           <TicketsBlock tickets={tickets} periodPhrase={periodPhrase} now={now} />
         </Suspense>
       </div>
 
       <div className="flex flex-col gap-4">
-        <Collapsible
-          title="Actividad reciente"
-          description={`Ventas, cobros y embarques de tu agencia de ${periodPhrase}.`}
-        >
+        <Collapsible title={ACTIVITY_TITLE} description={activityDescription(periodPhrase)}>
           <Suspense key={periodo} fallback={<ListRowsSkeleton rows={5} />}>
             <ActivityBlock activity={actividad} now={now} />
           </Suspense>
         </Collapsible>
 
-        <Collapsible
-          title="Registro rápido"
-          description="Crea una salida o registra un vehículo o un chofer sin salir del tablero."
-        >
+        <Collapsible title={QUICK_REGISTER_SECTION.title} description={QUICK_REGISTER_SECTION.description}>
           <nav aria-label="Registro rápido" className="flex flex-wrap gap-3">
             <Link href={registrarHref("salida")} scroll={false} className={panelButtonClass("secundario")}>
               <IconCalendar className="size-5" />
@@ -250,20 +271,20 @@ export default async function PanelPage({
       {registrar === "salida" ? (
         <SidePanel title="Crear una salida" closeHref={closeHref}>
           <Suspense fallback={<SkeletonText lines={6} />}>
-            <DeparturePanelContent agencyId={agencyId} error={error} />
+            <DeparturePanelContent agencyId={agencyId} error={error} errorField={campo} />
           </Suspense>
         </SidePanel>
       ) : null}
 
       {registrar === "vehiculo" ? (
         <SidePanel title="Registrar un vehículo" closeHref={closeHref}>
-          <VehicleForm mode="create" returnTo="tablero" error={error} />
+          <VehicleForm mode="create" returnTo="tablero" error={error} errorField={campo} />
         </SidePanel>
       ) : null}
 
       {registrar === "chofer" ? (
         <SidePanel title="Registrar un chofer" closeHref={closeHref}>
-          <DriverForm mode="create" returnTo="tablero" error={error} />
+          <DriverForm mode="create" returnTo="tablero" error={error} errorField={campo} />
         </SidePanel>
       ) : null}
     </div>

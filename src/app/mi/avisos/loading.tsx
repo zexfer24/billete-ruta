@@ -9,11 +9,11 @@ import {
 export default function AvisosLoading() {
   return (
     <SkeletonScreen label="Cargando tus avisos…" className="flex flex-col gap-8">
-      <SkeletonPageTitle subtitle="Lo que tienes que hacer y los mensajes que te enviamos.">
+      <SkeletonPageTitle subtitle="Lo que pasa con tus viajes y tu cuenta, y los mensajes que te enviamos.">
         Avisos
       </SkeletonPageTitle>
       <div className="flex flex-col gap-3">
-        <SkeletonSectionTitle>Por hacer</SkeletonSectionTitle>
+        <SkeletonSectionTitle>Lo importante ahora</SkeletonSectionTitle>
         <SkeletonNotice />
         <SkeletonNotice />
       </div>

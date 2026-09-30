@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanSearch, countLabel, formatCount, pageFromParam } from "@/app/panel/admin/_shared/format";
+import { accountSearchTerm, cleanSearch, countLabel, formatCount, formatPhone, pageFromParam } from "@/app/panel/admin/_shared/format";
 import { INVALID_AMOUNT_MESSAGE, formatAmount, parseAmount } from "@/app/panel/admin/tasas/amount";
 import { messageStatusFromParam, payloadToParams, templateName } from "@/app/panel/admin/mensajes/messages";
 
@@ -73,5 +73,33 @@ describe("mensajes", () => {
     expect(payloadToParams({ nombre: "Ana", pasajeros: 2, vacio: null })).toEqual({ nombre: "Ana", pasajeros: "2" });
     expect(payloadToParams(null)).toEqual({});
     expect(payloadToParams(["a"])).toEqual({});
+  });
+});
+
+describe("formatPhone", () => {
+  it("agrupa los teléfonos de Venezuela y Colombia en 3, 3 y 4 dígitos", () => {
+    expect(formatPhone("+584143488126")).toBe("+58 414 348 8126");
+    expect(formatPhone("+582127778899")).toBe("+58 212 777 8899");
+    expect(formatPhone("+573001234567")).toBe("+57 300 123 4567");
+  });
+
+  it("deja tal cual un número con otra forma", () => {
+    expect(formatPhone("+1415555")).toBe("+1415555");
+    expect(formatPhone("04141234567")).toBe("04141234567");
+  });
+});
+
+describe("accountSearchTerm", () => {
+  it("quita los separadores y el 0 inicial de un teléfono", () => {
+    expect(accountSearchTerm("+58 414 348 8126")).toBe("+584143488126");
+    expect(accountSearchTerm("0414-348-8126")).toBe("4143488126");
+    expect(accountSearchTerm("4121234567")).toBe("4121234567");
+  });
+
+  it("deja igual una cédula, un nombre o un número corto", () => {
+    expect(accountSearchTerm("V12345678")).toBe("V12345678");
+    expect(accountSearchTerm("María Pérez")).toBe("María Pérez");
+    expect(accountSearchTerm("123")).toBe("123");
+    expect(accountSearchTerm(undefined)).toBeUndefined();
   });
 });

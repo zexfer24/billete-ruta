@@ -7,11 +7,19 @@ import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { Alert } from "@/components/alert";
 import { ClearFeedbackParams } from "@/components/clear-feedback-params";
 import { FileField } from "@/components/file-field";
-import { IconChevronDown, IconDocument, IconShield } from "@/components/icons";
+import { IconCheckCircle, IconChevronDown, IconDocument, IconShield } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonClass, Card, Pill, type PillTone } from "@/components/ui";
 import { subirDocumentoAction } from "./actions";
-import { DOCUMENT_OK_MESSAGES, volverSchema, type DocumentosVolver } from "./shared";
+import {
+  DOCUMENT_ERROR_MESSAGES,
+  DOCUMENT_OK_CODES,
+  DOCUMENT_OK_MESSAGES,
+  documentCodeSchema,
+  documentErrorSchema,
+  volverSchema,
+  type DocumentosVolver,
+} from "./shared";
 
 export const metadata: Metadata = {
   title: "Mis documentos",
@@ -22,9 +30,11 @@ const ETIQUETAS: Record<string, string> = {
   PERMISO_VIAJE: "Permiso de viaje",
 };
 
+/** Solo códigos conocidos: un valor inventado se ignora en vez de mostrarse o tumbar la pantalla. */
 const paramsSchema = z.object({
-  ok: z.string().max(40).optional().catch(undefined),
-  error: z.string().max(300).optional().catch(undefined),
+  ok: documentCodeSchema,
+  error: documentErrorSchema,
+  doc: documentCodeSchema,
   volver: volverSchema,
 });
 
@@ -35,10 +45,12 @@ function guardadoEl(date: Date): string {
 }
 
 /**
- * Documentos del pasajero: una tarjeta por documento con su estado, la foto
- * vigente y su propio formulario para subirla o cambiarla (sin elegir el
- * tipo en una lista). Si la persona llegó desde el asistente de reserva, al
- * guardar se le ofrece volver a él, donde la reserva en curso sigue guardada.
+ * Documentos del pasajero: una tarjeta por documento con su estado y la foto
+ * vigente. Solo lo que falta muestra su formulario abierto; lo ya guardado
+ * (y el permiso, que es opcional) lo guarda detrás de un botón para no
+ * llenar la pantalla de zonas de subida. Con la cédula guardada, la tarjeta
+ * dice que ya se puede reservar y lleva al asistente (o de vuelta a la
+ * reserva en curso si la persona llegó desde ahí).
  */
 export default async function DocumentosPage({
   searchParams,
@@ -47,7 +59,9 @@ export default async function DocumentosPage({
 }) {
   const pasajero = await requirePassenger();
   const parsed = paramsSchema.safeParse(await searchParams);
-  const params = parsed.success ? parsed.data : { ok: undefined, error: undefined, volver: undefined };
+  const params = parsed.success
+    ? parsed.data
+    : { ok: undefined, error: undefined, doc: undefined, volver: undefined };
   const documentos = await listDocuments(pasajero.id);
 
   // listDocuments viene del más reciente al más antiguo: el primero de cada tipo es el vigente.
@@ -55,6 +69,9 @@ export default async function DocumentosPage({
   const permiso = documentos.find((doc) => doc.type === "PERMISO_VIAJE") ?? null;
   const anteriores = documentos.filter((doc) => doc.id !== cedula?.id && doc.id !== permiso?.id);
   const okMessage = params.ok ? DOCUMENT_OK_MESSAGES[params.ok] : undefined;
+  const errorMessage = params.error ? DOCUMENT_ERROR_MESSAGES[params.error] : undefined;
+  // Tras guardar viniendo de la reserva, el aviso ya trae "Volver a mi reserva": la tarjeta no lo repite.
+  const avisoLlevaAReserva = Boolean(okMessage) && params.volver === "reservar";
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,12 +100,12 @@ export default async function DocumentosPage({
             : "Ya puedes usarla para reservar."}
         </Alert>
       ) : null}
-      {params.error ? (
+      {errorMessage ? (
         <Alert tone="peligro" title="No se pudo guardar la foto">
-          {params.error}
+          {errorMessage}
         </Alert>
       ) : null}
-      {okMessage || params.error ? <ClearFeedbackParams /> : null}
+      {okMessage || errorMessage ? <ClearFeedbackParams /> : null}
 
       <DocumentoCard
         tipo="CEDULA"
@@ -98,6 +115,8 @@ export default async function DocumentosPage({
         documento={cedula}
         volver={params.volver}
         principal={!cedula}
+        abierto={Boolean(errorMessage) && params.doc === DOCUMENT_OK_CODES.CEDULA}
+        listo={cedula && !avisoLlevaAReserva ? { volver: params.volver } : null}
       />
       <DocumentoCard
         tipo="PERMISO_VIAJE"
@@ -107,6 +126,8 @@ export default async function DocumentosPage({
         documento={permiso}
         volver={params.volver}
         principal={false}
+        abierto={Boolean(errorMessage) && params.doc === DOCUMENT_OK_CODES.PERMISO_VIAJE}
+        listo={null}
       />
 
       <p className="flex items-start gap-2 text-sm leading-relaxed text-tinta-suave">
@@ -159,9 +180,18 @@ interface DocumentoCardProps {
   volver: DocumentosVolver;
   /** Solo un botón morado relleno por pantalla: el de la cédula mientras falte. */
   principal: boolean;
+  /** Deja abierto el formulario plegado, por ejemplo tras un error al subir este documento. */
+  abierto: boolean;
+  /** Con la cédula guardada: frase de "ya puedes reservar" y el enlace al asistente. */
+  listo: { volver: DocumentosVolver } | null;
 }
 
-/** Tarjeta de un documento: estado, foto vigente y formulario para subirla o cambiarla. */
+/**
+ * Tarjeta de un documento: estado, foto vigente y formulario para subirla o
+ * cambiarla. El formulario va abierto solo si el documento es obligatorio y
+ * falta; si no, se despliega con "Cambiar la foto" o "Subir el permiso de
+ * viaje" (un `<details>` nativo: sin JavaScript y con teclado).
+ */
 function DocumentoCard({
   tipo,
   titulo,
@@ -170,6 +200,8 @@ function DocumentoCard({
   documento,
   volver,
   principal,
+  abierto,
+  listo,
 }: DocumentoCardProps) {
   const cargado = documento !== null;
   const tono: PillTone = cargado ? "exito" : obligatorio ? "alerta" : "neutro";
@@ -177,6 +209,30 @@ function DocumentoCard({
   const headingId = `doc-${tipo.toLowerCase()}`;
   const fileId = `archivo-${tipo.toLowerCase()}`;
   const nombreCorto = tipo === "CEDULA" ? "de la cédula" : "del permiso";
+  const plegado = cargado || !obligatorio;
+
+  const formulario = (
+    <form action={subirDocumentoAction} className="flex flex-col gap-4">
+      <input type="hidden" name="type" value={tipo} />
+      {volver ? <input type="hidden" name="volver" value={volver} /> : null}
+      <FileField
+        id={fileId}
+        name="file"
+        label={cargado ? `Nueva foto ${nombreCorto}` : `Foto ${nombreCorto}`}
+        buttonLabel={cargado ? "Tomar o elegir otra foto" : "Tomar o elegir la foto"}
+        maxSizeMb={5}
+        accept="image/jpeg,image/png,image/webp"
+        hint="Que se lean bien los datos. JPG, PNG o WebP de hasta 5 MB."
+        required
+      />
+      <SubmitButton
+        pendingLabel="Subiendo la foto…"
+        className={buttonClass(principal ? "primario" : "secundario", "w-full")}
+      >
+        {cargado ? "Guardar la foto nueva" : "Guardar la foto"}
+      </SubmitButton>
+    </form>
+  );
 
   return (
     <section aria-labelledby={headingId}>
@@ -206,26 +262,39 @@ function DocumentoCard({
           </div>
         ) : null}
 
-        <form action={subirDocumentoAction} className="flex flex-col gap-4">
-          <input type="hidden" name="type" value={tipo} />
-          {volver ? <input type="hidden" name="volver" value={volver} /> : null}
-          <FileField
-            id={fileId}
-            name="file"
-            label={cargado ? `Nueva foto ${nombreCorto}` : `Foto ${nombreCorto}`}
-            buttonLabel={cargado ? "Tomar o elegir otra foto" : "Tomar o elegir la foto"}
-            maxSizeMb={5}
-            accept="image/jpeg,image/png,image/webp"
-            hint="Que se lean bien los datos. JPG, PNG o WebP de hasta 5 MB."
-            required
-          />
-          <SubmitButton
-            pendingLabel="Subiendo la foto…"
-            className={buttonClass(principal ? "primario" : "secundario", "w-full")}
-          >
-            {cargado ? "Guardar la foto nueva" : "Guardar la foto"}
-          </SubmitButton>
-        </form>
+        {listo ? (
+          <div className="flex flex-col gap-3">
+            <p className="flex items-start gap-2 font-semibold text-exito">
+              <IconCheckCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+              Tu cédula está lista. Ya puedes reservar.
+            </p>
+            <Link href="/mi/reservar" className={buttonClass("primario", "w-full")}>
+              {listo.volver === "reservar" ? "Volver a mi reserva" : "Reservar un viaje"}
+            </Link>
+          </div>
+        ) : null}
+
+        {plegado ? (
+          <details open={abierto} className="group">
+            <summary
+              className={buttonClass(
+                cargado ? "fantasma" : "secundario",
+                cargado
+                  ? "-ml-3 w-fit list-none [&::-webkit-details-marker]:hidden"
+                  : "w-full list-none [&::-webkit-details-marker]:hidden",
+              )}
+            >
+              {cargado ? "Cambiar la foto" : `Subir el ${titulo.toLowerCase()}`}
+              <IconChevronDown
+                aria-hidden="true"
+                className="size-5 shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none"
+              />
+            </summary>
+            <div className="pt-4">{formulario}</div>
+          </details>
+        ) : (
+          formulario
+        )}
       </Card>
     </section>
   );

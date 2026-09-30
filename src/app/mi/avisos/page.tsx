@@ -39,8 +39,9 @@ function agruparPorDia(mensajes: MensajeVM[], now: Date): { dia: string; mensaje
 }
 
 /**
- * Avisos del pasajero: primero lo que tiene que hacer (con la acción de cada
- * aviso) y después los mensajes que le enviamos, agrupados por día. El estado
+ * Avisos del pasajero: primero lo importante ahora de sus viajes y su cuenta
+ * (alertas arriba, luego lo informativo, cada aviso con su acción) y después
+ * los mensajes que le enviamos, agrupados por día. El estado
  * técnico de entrega de cada mensaje no se muestra: no le sirve al pasajero.
  */
 export default async function AvisosPage() {
@@ -67,12 +68,12 @@ export default async function AvisosPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">Avisos</h1>
         <p className="leading-relaxed text-tinta-suave">
-          Lo que tienes que hacer y los mensajes que te enviamos.
+          Lo que pasa con tus viajes y tu cuenta, y los mensajes que te enviamos.
         </p>
       </div>
 
-      <section aria-labelledby="por-hacer" className="flex flex-col gap-3">
-        <SectionTitle id="por-hacer">Por hacer</SectionTitle>
+      <section aria-labelledby="lo-importante" className="flex flex-col gap-3">
+        <SectionTitle id="lo-importante">Lo importante ahora</SectionTitle>
         {avisos.length > 0 ? (
           <ul className="flex flex-col gap-3">
             {avisos.map((aviso) => (

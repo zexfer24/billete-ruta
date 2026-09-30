@@ -13,12 +13,12 @@ import {
 import type { Currency } from "@prisma/client";
 import type { CounterHolderLookup } from "@/modules/counter";
 import { isMinor, isValidBirthYear, isValidPhone, normalizePhone } from "@/lib/identity";
-import { formatCaracasDateTime24 } from "@/lib/time";
+import { formatCaracas, formatCaracasDateTime24 } from "@/lib/time";
 import { Stepper } from "@/components/stepper";
 import { Alert } from "@/components/alert";
 import { FieldError } from "@/components/ui";
 import { panelButtonClass } from "@/components/panel-ui";
-import { IconChevronLeft, IconChevronRight, IconCash } from "@/components/icons";
+import { IconChevronLeft, IconChevronRight, IconCash, IconSearch, IconSpinner } from "@/components/icons";
 import { lookupHolderAction, quoteSaleAction, sellAtCounterAction, type CounterSaleState } from "./actions";
 import { StepDeparture } from "./step-departure";
 import { StepHolder, type NewHolderErrors } from "./step-holder";
@@ -33,6 +33,8 @@ import { StepPayment, formatAmount, type QuoteResult } from "./step-payment";
 import { ChargeDialog } from "./charge-dialog";
 import { SaleResult } from "./sale-result";
 import { changeFromReceived } from "./change";
+import { countLabel } from "../_dashboard/text";
+import { dayChipLabel } from "./departure-days";
 import { COUNTER_STEP_HINTS, COUNTER_STEP_LABELS, COUNTER_STEP_TITLES, type CounterStep } from "./texts";
 
 export interface DepartureOption {
@@ -53,7 +55,6 @@ export interface PaymentMethodOption {
 }
 
 type Step = CounterStep;
-
 
 /** Tope de cada foto, el mismo que aplica el servidor. */
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -221,8 +222,8 @@ function Wizard({
   // Faltantes de cada paso, en frases cortas: se muestran junto a "Continuar".
   const faltantes: Record<Step, string[]> = {
     1: departureId === null ? ["Elige una salida."] : [],
+    // Sin búsqueda no se llega a "Continuar": en su lugar está "Buscar titular".
     2: [
-      ...(lookupResult === null ? ["Busca la cédula del titular."] : []),
       ...(lookupResult && !lookupResult.found && !nuevaCuentaValida ? ["Completa los datos del titular."] : []),
       ...(lookupResult && needsCedulaFile && !hasCedulaFile ? ["Toma la foto de la cédula."] : []),
     ],
@@ -264,7 +265,12 @@ function Wizard({
 
   function buscarTitular() {
     const valor = holderIdNumber.trim();
-    if (!valor || lookupPending) return;
+    if (lookupPending) return;
+    if (!valor) {
+      setLookupError("Escribe la cédula del titular.");
+      document.getElementById("taquilla-cedula")?.focus();
+      return;
+    }
     setLookupError(null);
     startLookupTransition(async () => {
       const resultado = await lookupHolderAction(valor);
@@ -381,6 +387,37 @@ function Wizard({
           </h2>
           <p className="mt-1 text-[15px] text-tinta-suave">{COUNTER_STEP_HINTS[step]}</p>
         </div>
+        {step > 1 && salidaElegida ? (
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-control border border-marca-200 bg-marca-50 px-4 py-2.5">
+            <div className="min-w-0 text-[15px] leading-snug">
+              <p className="font-semibold text-tinta">
+                {salidaElegida.origin} → {salidaElegida.destination}
+                <span className="tabular font-normal text-tinta-suave">
+                  {" · "}
+                  {dayChipLabel(new Date(salidaElegida.departsAtIso), new Date(nowIso))} a las{" "}
+                  {formatCaracas(new Date(salidaElegida.departsAtIso), "HH:mm")}
+                </span>
+              </p>
+              {step > 2 ? (
+                <p className="text-tinta-suave">
+                  {nombreTitular ? `Titular: ${nombreTitular} · ` : ""}
+                  {countLabel(passengerCount, "persona", "personas")}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmOpen(false);
+                setStep(1);
+              }}
+              disabled={pending}
+              className={panelButtonClass("fantasma", "md", "-mr-2")}
+            >
+              Cambiar salida
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div hidden={step !== 1}>
@@ -389,6 +426,7 @@ function Wizard({
           selectedId={departureId}
           onSelect={setDepartureId}
           nowIso={nowIso}
+          active={step === 1}
         />
       </div>
 
@@ -421,7 +459,6 @@ function Wizard({
                   birthYear: holderBirthYear.length >= 4 ? erroresTitular.birthYear : undefined,
                 }
           }
-          missingSearch={attempted.includes(2) && lookupResult === null && !lookupError}
         />
       </div>
 
@@ -486,7 +523,27 @@ function Wizard({
               Atrás
             </button>
           ) : null}
-          {step < 4 ? (
+          {step === 2 && lookupResult === null ? (
+            <button
+              type="button"
+              onClick={buscarTitular}
+              disabled={lookupPending}
+              aria-disabled={lookupPending ? true : undefined}
+              className={panelButtonClass("primario", "lg", "min-h-14 flex-[2] sm:ml-auto sm:flex-none sm:px-8")}
+            >
+              {lookupPending ? (
+                <>
+                  <IconSpinner className="size-5 animate-spin motion-reduce:animate-none" />
+                  Buscando…
+                </>
+              ) : (
+                <>
+                  <IconSearch className="size-5" />
+                  Buscar titular
+                </>
+              )}
+            </button>
+          ) : step < 4 ? (
             <button
               type="button"
               onClick={goNext}

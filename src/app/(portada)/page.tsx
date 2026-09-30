@@ -123,14 +123,10 @@ export default async function PortadaPage() {
                     solo lugar.
                   </p>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Link href="/registro" className={buttonClass("secundario", "w-full sm:w-auto")}>
-                    Crear mi cuenta
-                  </Link>
-                  <Link href="/ingresar" className={buttonClass("fantasma", "w-full sm:w-auto")}>
-                    Ya tengo cuenta
-                  </Link>
-                </div>
+                {/* Quien ya tiene cuenta ingresa desde la cabecera: aquí solo va crearla. */}
+                <Link href="/registro" className={buttonClass("secundario", "w-full sm:w-auto sm:self-start")}>
+                  Crear mi cuenta
+                </Link>
               </Card>
             </section>
           )}

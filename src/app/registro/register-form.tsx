@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef, type ReactNode } from "react";
+import { useActionState, useId, useRef, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonClass, Field } from "@/components/ui";
@@ -9,12 +9,13 @@ import { loginHref } from "../_publico/links";
 import { PasswordField } from "../_publico/password-field";
 import { useFocusFirstError } from "../_publico/use-focus-first-error";
 import { registrarAction, type RegistroFormState } from "./actions";
+import { REGISTER_GROUPS, REGISTER_HINTS } from "./texts";
 
 const initialState: RegistroFormState = { error: null };
 
 /**
  * Formulario de registro (o de activación de una cuenta creada en taquilla),
- * en tres grupos con título: tus datos, tu teléfono y tu contraseña. Cada
+ * en tres grupos con título: tus datos, cómo te avisamos y tu acceso. Cada
  * error aparece junto a su campo y el foco va al primero; lo escrito se
  * conserva tras un error, salvo las contraseñas.
  */
@@ -47,15 +48,14 @@ export function RegisterForm({ next }: { next?: string }) {
         </Alert>
       ) : null}
 
-      <FieldGroup title="Tus datos">
+      <FieldGroup title={REGISTER_GROUPS.datos}>
         <Field
           label="Cédula"
           name="idNumber"
           inputMode="text"
           autoComplete="username"
           autoCapitalize="characters"
-          placeholder="V12345678"
-          hint="La letra y el número, por ejemplo V12345678. Con o sin puntos."
+          hint={REGISTER_HINTS.idNumber}
           defaultValue={valores.idNumber ?? ""}
           error={errores.idNumber}
           errorAfterSubmit
@@ -66,7 +66,7 @@ export function RegisterForm({ next }: { next?: string }) {
           name="givenNames"
           autoComplete="given-name"
           autoCapitalize="words"
-          hint="Como aparecen en tu cédula."
+          hint={REGISTER_HINTS.givenNames}
           defaultValue={valores.givenNames ?? ""}
           error={errores.givenNames}
           errorAfterSubmit
@@ -89,8 +89,7 @@ export function RegisterForm({ next }: { next?: string }) {
           autoComplete="bday-year"
           pattern="[0-9]{4}"
           maxLength={4}
-          placeholder="1990"
-          hint="Solo el año, con cuatro números. Sirve para confirmar que eres tú."
+          hint={REGISTER_HINTS.birthYear}
           defaultValue={valores.birthYear ?? ""}
           error={errores.birthYear}
           errorAfterSubmit
@@ -98,15 +97,14 @@ export function RegisterForm({ next }: { next?: string }) {
         />
       </FieldGroup>
 
-      <FieldGroup title="Tu teléfono">
+      <FieldGroup title={REGISTER_GROUPS.avisos} separated>
         <Field
           label="Teléfono"
           name="phone"
           type="tel"
           inputMode="tel"
           autoComplete="tel"
-          placeholder="0412-1234567"
-          hint="Con el código de área, por ejemplo 0412-1234567. Te enviaremos aquí los avisos de tu viaje."
+          hint={REGISTER_HINTS.phone}
           defaultValue={valores.phone ?? ""}
           error={errores.phone}
           errorAfterSubmit
@@ -114,12 +112,12 @@ export function RegisterForm({ next }: { next?: string }) {
         />
       </FieldGroup>
 
-      <FieldGroup title="Tu contraseña">
+      <FieldGroup title={REGISTER_GROUPS.acceso} separated>
         <PasswordField
           label="Contraseña"
           name="password"
           autoComplete="new-password"
-          hint="Mínimo 8 caracteres. Elige una que puedas recordar."
+          hint={REGISTER_HINTS.password}
           error={errores.password}
           errorAfterSubmit
           required
@@ -129,7 +127,7 @@ export function RegisterForm({ next }: { next?: string }) {
           label="Repite la contraseña"
           name="confirmPassword"
           autoComplete="new-password"
-          hint="Escríbela otra vez, para evitar errores."
+          hint={REGISTER_HINTS.confirmPassword}
           error={errores.confirmPassword}
           errorAfterSubmit
           required
@@ -144,12 +142,34 @@ export function RegisterForm({ next }: { next?: string }) {
   );
 }
 
-/** Grupo de campos con título visible, para que el formulario no sea una sola pared. */
-function FieldGroup({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * Grupo de campos con título visible, para que el formulario no sea una sola
+ * pared. El título es un `h2` (se distingue de las etiquetas de los campos y
+ * se puede recorrer por encabezados) que además nombra el grupo; a partir del
+ * segundo grupo, una línea lo separa del anterior. Es un `role="group"` y no
+ * un `fieldset` para que la leyenda no se monte sobre esa línea.
+ */
+function FieldGroup({
+  title,
+  separated = false,
+  children,
+}: {
+  title: string;
+  separated?: boolean;
+  children: ReactNode;
+}) {
+  const titleId = useId();
+
   return (
-    <fieldset className="flex min-w-0 flex-col gap-4 border-0 p-0">
-      <legend className="mb-3 text-base font-semibold text-tinta">{title}</legend>
+    <div
+      role="group"
+      aria-labelledby={titleId}
+      className={`flex min-w-0 flex-col gap-4${separated ? " border-t border-borde pt-5" : ""}`}
+    >
+      <h2 id={titleId} className="text-lg font-semibold text-tinta">
+        {title}
+      </h2>
       {children}
-    </fieldset>
+    </div>
   );
 }

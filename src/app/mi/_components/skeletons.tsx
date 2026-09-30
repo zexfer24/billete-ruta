@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
+import { Isotipo, LogoLockup } from "@/components/logo";
 import { Skeleton, SkeletonCircle, SkeletonText } from "@/components/skeleton";
 
 /**
  * Siluetas de carga de las piezas de la app del pasajero (spec 6.5). Cada
  * una reproduce la forma real de su componente: mismas alturas, radios y
- * colores de fondo (la cabecera del ticket es morada de verdad). Van dentro
+ * colores de fondo (la cabecera del ticket es morada de verdad, con el logo
+ * y los textos fijos reales, spec 2.2.5 y 6.5). Van dentro
  * del `SkeletonScreen` de cada `loading.tsx`, que es el que anuncia la carga.
  */
 
@@ -42,9 +44,9 @@ export function SkeletonTicketCompact({ withAction = false }: { withAction?: boo
   return (
     <div aria-hidden="true" className="overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1">
       <div className="flex items-center gap-3 bg-marca-600 p-4">
-        <Skeleton className="h-10 w-8 bg-white/20" />
-        <div className="flex flex-1 flex-col gap-2">
-          <Skeleton className="h-3.5 w-14 rounded-pastilla bg-white/20" />
+        <Isotipo tone="blanco" decorative className="h-10 w-auto shrink-0" />
+        <div className="flex flex-1 flex-col gap-1">
+          <p className="text-sm text-white/85">Salida</p>
           <Skeleton className="h-5 w-40 rounded-pastilla bg-white/20" />
         </div>
       </div>
@@ -75,10 +77,7 @@ export function SkeletonTicketLarge() {
     <div aria-hidden="true" className="overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1">
       <div className="flex flex-col gap-4 bg-marca-600 p-5">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Skeleton className="h-9 w-7 bg-white/20" />
-            <Skeleton className="h-5 w-24 rounded-pastilla bg-white/20" />
-          </div>
+          <LogoLockup tone="blanco" />
           <Skeleton className="h-4 w-20 rounded-pastilla bg-white/20" />
         </div>
         <Skeleton className="h-7 w-4/5 rounded-pastilla bg-white/20" />

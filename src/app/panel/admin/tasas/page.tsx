@@ -96,7 +96,6 @@ export default async function TasasAdminPage({
     prefix: string;
     current: Prisma.Decimal | null;
     history: RateHistoryEntry[];
-    placeholder: string;
     /** Nombre de la moneda en plural, para la etiqueta del campo. */
     plural: string;
   }> = [
@@ -110,7 +109,6 @@ export default async function TasasAdminPage({
         amount: formatMoney(h.rateFromUsd, "VES"),
         effectiveFrom: h.effectiveFrom,
       })),
-      placeholder: "36,50",
       plural: "bolívares",
     },
     {
@@ -123,7 +121,6 @@ export default async function TasasAdminPage({
         amount: formatMoney(h.rateFromUsd, "COP"),
         effectiveFrom: h.effectiveFrom,
       })),
-      placeholder: "4000",
       plural: "pesos",
     },
   ];
@@ -159,7 +156,6 @@ export default async function TasasAdminPage({
             subject="la tasa de salida"
             unit=" por pasajero"
             current={currentTaxLabel}
-            placeholder="2,50"
             primary
           />
         </div>
@@ -200,7 +196,6 @@ export default async function TasasAdminPage({
                   subject={`la tasa del ${block.title.toLowerCase()}`}
                   unit=" por cada dólar"
                   current={currentLabel}
-                  placeholder={block.placeholder}
                 />
                 <div className="border-t border-borde pt-4">
                   <RateHistory title="Historial" entries={block.history} />

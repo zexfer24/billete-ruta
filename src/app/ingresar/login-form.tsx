@@ -58,7 +58,6 @@ export function LoginForm({ next }: { next?: string }) {
         inputMode="text"
         autoComplete="username"
         autoCapitalize="characters"
-        placeholder="V12345678"
         hint="La letra y el número, por ejemplo V12345678. Con o sin puntos."
         defaultValue={state.idNumber ?? ""}
         error={errores.idNumber}

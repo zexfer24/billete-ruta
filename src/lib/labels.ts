@@ -43,13 +43,13 @@ export const PROOF_STATUS_LABELS: Record<string, string> = {
   RECHAZADO: "Rechazado",
 };
 
-/** Los cinco estados de MessageStatus (prisma/schema.prisma), en español. */
+/** Los cinco estados de MessageStatus (prisma/schema.prisma), en lenguaje llano, sin "Encolado" ni "Fallido". */
 export const MESSAGE_STATUS_LABELS: Record<string, string> = {
-  ENCOLADO: "Encolado",
+  ENCOLADO: "En espera",
   ENVIADO: "Enviado",
   ENTREGADO: "Entregado",
   LEIDO: "Leído",
-  FALLIDO: "Fallido",
+  FALLIDO: "No se pudo enviar",
 };
 
 const MESSAGE_STATUS_TONES: Record<string, StatusTone> = {

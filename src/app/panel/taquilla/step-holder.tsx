@@ -4,8 +4,7 @@ import type { KeyboardEvent } from "react";
 import type { CounterHolderLookup } from "@/modules/counter";
 import { FieldError, FileField, Pill } from "@/components/ui";
 import { Alert } from "@/components/alert";
-import { panelButtonClass } from "@/components/panel-ui";
-import { IconAlertCircle, IconCheckCircle, IconSearch, IconSpinner, IconUser } from "@/components/icons";
+import { IconAlertCircle, IconCheckCircle, IconUser } from "@/components/icons";
 import { CounterField } from "./counter-field";
 
 /** Errores de los datos de un titular nuevo, campo por campo (vacío si está bien). */
@@ -33,9 +32,11 @@ function DocumentStatus({ label, loaded }: { label: string; loaded: boolean }) {
 }
 
 /**
- * Paso 2 del asistente: busca al titular por su cédula (con el botón o con
- * Enter). Si ya tiene cuenta muestra sus datos y documentos; si no, pide los
- * datos para crearle una. La foto de la cédula solo se pide cuando hace falta.
+ * Paso 2 del asistente: busca al titular por su cédula (con Enter o con
+ * «Buscar titular», que es el botón principal de la barra de abajo mientras
+ * no hay resultado). Si ya tiene cuenta muestra sus datos y documentos; si
+ * no, pide los datos para crearle una. La foto de la cédula solo se pide
+ * cuando hace falta.
  */
 export function StepHolder({
   idNumber,
@@ -56,7 +57,6 @@ export function StepHolder({
   birthYear,
   onChangeBirthYear,
   errors,
-  missingSearch,
 }: {
   idNumber: string;
   onChangeIdNumber: (value: string) => void;
@@ -77,8 +77,6 @@ export function StepHolder({
   birthYear: string;
   onChangeBirthYear: (value: string) => void;
   errors: NewHolderErrors;
-  /** Se intentó continuar sin buscar la cédula. */
-  missingSearch: boolean;
 }) {
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
@@ -87,47 +85,22 @@ export function StepHolder({
     }
   }
 
-  const errorBusqueda =
-    searchError ?? (missingSearch ? "Escribe la cédula y pulsa «Buscar» para continuar." : undefined);
-
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <CounterField
-          id="taquilla-cedula"
-          label="Cédula del titular"
-          hint="Con su letra y sin puntos, por ejemplo V12345678. Pulsa Enter o «Buscar»."
-          error={errorBusqueda}
-          errorAfterSubmit
-          autoComplete="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-          value={idNumber}
-          onChange={(e) => onChangeIdNumber(e.target.value.toUpperCase())}
-          onKeyDown={onKeyDown}
-          className="flex-1"
-          inputClassName="tabular uppercase"
-        />
-        <button
-          type="button"
-          onClick={onSearch}
-          disabled={searching || idNumber.trim().length === 0}
-          aria-disabled={searching || idNumber.trim().length === 0 ? true : undefined}
-          className={panelButtonClass("secundario", "lg", "min-h-12 sm:mt-[26px]")}
-        >
-          {searching ? (
-            <>
-              <IconSpinner className="size-5 animate-spin motion-reduce:animate-none" />
-              Buscando…
-            </>
-          ) : (
-            <>
-              <IconSearch className="size-5" />
-              Buscar
-            </>
-          )}
-        </button>
-      </div>
+      <CounterField
+        id="taquilla-cedula"
+        label="Cédula del titular"
+        hint="Con su letra y sin puntos, por ejemplo V12345678. Pulsa Enter o «Buscar titular»."
+        error={searchError ?? undefined}
+        errorAfterSubmit
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        value={idNumber}
+        onChange={(e) => onChangeIdNumber(e.target.value.toUpperCase())}
+        onKeyDown={onKeyDown}
+        inputClassName="tabular uppercase max-w-md"
+      />
       <span className="sr-only" role="status">
         {searching ? "Buscando al titular…" : ""}
       </span>

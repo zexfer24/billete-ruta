@@ -24,6 +24,12 @@ function horaRelativa(date: Date | null, referencia: Date | null): string {
   return formatCaracasTime24(date);
 }
 
+/** Fecha de la fila: "29/09", con el año solo si no es el de hoy. */
+function fechaCorta(date: Date | null, ahora: Date): string {
+  if (!date) return "—";
+  return formatCaracas(date, formatCaracas(date, "yyyy") === formatCaracas(ahora, "yyyy") ? "dd/MM" : "dd/MM/yyyy");
+}
+
 /** Promedio de minutos de los viajes con duración conocida, o `null` si no hay ninguno. */
 function promedioMinutos(movimientos: readonly DriverMovementRow[]): number | null {
   const conDuracion = movimientos.filter((m) => m.durationMinutes !== null);
@@ -66,6 +72,7 @@ export function MovementsView({
     );
   }
 
+  const ahora = new Date();
   const pasajeros = movimientos.reduce((acc, m) => acc + m.passengerCount, 0);
   const promedio = promedioMinutos(movimientos);
 
@@ -93,7 +100,7 @@ export function MovementsView({
                 <MobileCard
                   key={m.tripLogId}
                   title={m.driverName}
-                  subtitle={`${referencia ? formatCaracasDate(referencia) : "Sin fecha"} · ${m.routeName} · ${m.vehiclePlate}`}
+                  subtitle={`${referencia ? fechaCorta(referencia, ahora) : "Sin fecha"} · ${m.routeName} · ${m.vehiclePlate}`}
                   details={[
                     { label: "Salió", value: horaRelativa(m.departedAt, referencia) },
                     { label: "Llegó", value: horaRelativa(m.arrivedAt, referencia) },
@@ -123,13 +130,14 @@ export function MovementsView({
               const referencia = m.departedAt ?? m.boardingStartedAt;
               return (
                 <tr key={m.tripLogId} className="border-b border-borde last:border-0">
-                  <td className={cx(PANEL_TD_CLASS, "tabular")}>{referencia ? formatCaracasDate(referencia) : "—"}</td>
+                  <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{fechaCorta(referencia, ahora)}</td>
                   <td className={PANEL_TD_CLASS}>
                     <p className="font-semibold">{m.driverName}</p>
                     <p className="tabular text-sm text-tinta-suave">{m.vehiclePlate}</p>
                   </td>
                   <td className={PANEL_TD_CLASS}>{m.routeName}</td>
-                  <td className={cx(PANEL_TD_CLASS, "tabular")}>
+                  {/* Fechas, horas y duraciones no se parten: el ajuste lo absorben chofer y ruta. */}
+                  <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>
                     <p>{horaRelativa(m.departedAt, referencia)}</p>
                     {m.boardingStartedAt ? (
                       <p className="text-sm text-tinta-suave">
@@ -137,8 +145,8 @@ export function MovementsView({
                       </p>
                     ) : null}
                   </td>
-                  <td className={cx(PANEL_TD_CLASS, "tabular")}>{horaRelativa(m.arrivedAt, referencia)}</td>
-                  <td className={cx(PANEL_TD_CLASS, "tabular")}>
+                  <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{horaRelativa(m.arrivedAt, referencia)}</td>
+                  <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>
                     {m.durationMinutes !== null ? formatDuration(m.durationMinutes) : "—"}
                   </td>
                   <td className={cx(PANEL_TD_CLASS, "tabular text-right")}>{m.passengerCount}</td>

@@ -8,7 +8,6 @@ import { balanceUsd, getCurrentExchangeRate, listActivePaymentMethods } from "@/
 import { requirePassenger } from "@/modules/auth";
 import { renderQrDataUrl } from "@/modules/tickets";
 import { formatMoney, round2, ZERO } from "@/lib/decimal";
-import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { prisma } from "@/lib/prisma";
 import { PROOF_STATUS_LABELS } from "@/lib/labels";
 import { Alert } from "@/components/alert";
@@ -16,7 +15,13 @@ import { ClearFeedbackParams } from "@/components/clear-feedback-params";
 import { buttonClass, Card, Pill, SectionTitle, type PillTone } from "@/components/ui";
 import { TicketCard, type TicketCardData } from "@/components/ticket-card";
 import { IconArrowLeft, IconDownload, IconMapPin, IconUser } from "@/components/icons";
-import { capitalize, currencyName, whenPhrase } from "@/components/passenger-copy";
+import {
+  capitalize,
+  currencyName,
+  dayTimePhrase,
+  isInactiveReservation,
+  whenPhrase,
+} from "@/components/passenger-copy";
 import { ClearBookingDraft } from "../../_components/clear-booking-draft";
 import { AutoRefresh } from "./auto-refresh";
 import PayForm, { type MetodoVM } from "./pay-form";
@@ -25,7 +30,13 @@ export const metadata: Metadata = {
   title: "Detalle del viaje",
 };
 
-/** Estados en los que el módulo de pagos acepta un comprobante (`CAN_SUBMIT_PROOF`). */
+/**
+ * Estados en los que el módulo de pagos acepta un comprobante (`CAN_SUBMIT_PROOF`).
+ * La pantalla además deja de ofrecer el formulario cuando la salida ya pasó:
+ * pagar un viaje que ya salió no le sirve al pasajero. Esa regla es solo de
+ * la interfaz; `submitProof` no la aplica (pendiente de decidir con el
+ * operador si el servidor también debe rechazarlo).
+ */
 const ESTADOS_CON_COMPROBANTE = new Set(["PENDIENTE_PAGO", "ABONADA", "EN_VALIDACION", "PAGO_EN_SITIO"]);
 
 /** Una reserva de pago en taquilla se libera si no se paga 12 horas antes de salir. */
@@ -42,19 +53,19 @@ function esDolar(currency: Currency): boolean {
   return currency === "USD" || currency === "USDT";
 }
 
-function fechaHora(date: Date): string {
-  return `${formatCaracasDate(date)} a las ${formatCaracasTime24(date)}`;
+/** Un monto que no se parte entre dos líneas ("$" en una y "26,00" en la otra). */
+function sinCorte(texto: string): string {
+  return texto.replace(/ /g, "\u00a0");
 }
 
-function pasajerosTexto(cantidad: number): string {
-  return cantidad === 1 ? "1 pasajero" : `${cantidad} pasajeros`;
-}
+/** Las referencias cortas no se parten en el guion ("REF-" en una línea y "415654" en otra). */
+const REFERENCIA_SIN_CORTE_MAX = 24;
 
 interface MovimientoVM {
   id: string;
   at: Date;
   amount: string;
-  description: string;
+  description: ReactNode;
   status: { label: string; tone: PillTone };
   note: string | null;
 }
@@ -138,7 +149,14 @@ export default async function DetalleReservaPage({
       id: proof.id,
       at: proof.createdAt,
       amount: formatMoney(proof.amount, proof.currency),
-      description: `Comprobante con ${proof.paymentMethod.name}, referencia ${proof.reference}`,
+      description: (
+        <>
+          Comprobante con {proof.paymentMethod.name}, referencia{" "}
+          <span className={proof.reference.length <= REFERENCIA_SIN_CORTE_MAX ? "tabular whitespace-nowrap" : "tabular"}>
+            {proof.reference}
+          </span>
+        </>
+      ),
       status: {
         label: PROOF_STATUS_LABELS[proof.status] ?? proof.status,
         tone: PROOF_TONES[proof.status] ?? "neutro",
@@ -155,6 +173,13 @@ export default async function DetalleReservaPage({
     })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 
+  // Con el ticket listo, lo que importa en el andén es el QR: el título visible repetiría
+  // la ruta y la hora que ya dice el ticket, y lo empujaría fuera de la primera pantalla.
+  const tituloSoloLector = Boolean(reserva.ticket) || reserva.status === "PAGADA";
+  const inactiva = isInactiveReservation(reserva.status);
+  // La frase de pago del ticket se calla cuando debajo hay una tarjeta que ya lo explica.
+  const ocultarFraseDePago = puedeEnviarComprobante || inactiva;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -162,20 +187,27 @@ export default async function DetalleReservaPage({
           <IconArrowLeft aria-hidden="true" className="size-5" />
           Mis viajes
         </Link>
-        <h1 className="break-words text-2xl font-bold tracking-tight text-tinta sm:text-3xl">
+        <h1
+          className={
+            tituloSoloLector
+              ? "sr-only"
+              : "break-words text-2xl font-bold tracking-tight text-tinta sm:text-3xl"
+          }
+        >
           Viaje a {ruta.destination}
         </h1>
-        <p className="leading-relaxed text-tinta-suave">
-          {yaSalio ? `Salió el ${fechaHora(salida)}` : capitalize(`sale ${whenPhrase(salida, now)}`)} desde{" "}
-          {ruta.origin}
-        </p>
+        {tituloSoloLector ? null : (
+          <p className="leading-relaxed text-tinta-suave">
+            {capitalize(`${yaSalio ? "salió" : "sale"} ${whenPhrase(salida, now)}`)} desde {ruta.origin}
+          </p>
+        )}
       </div>
 
       {recienCreada ? (
         <>
           <Alert tone="exito" title="¡Listo! Reservaste tu puesto">
             {reserva.status === "PAGO_EN_SITIO"
-              ? `Paga ${saldoTexto} en la taquilla de ${agencia.name} antes del ${fechaHora(limiteTaquilla)}. Si no, el puesto se libera.`
+              ? `Paga ${sinCorte(saldoTexto)} en la taquilla de ${agencia.name}. Tienes hasta ${whenPhrase(limiteTaquilla, now)}; si no, el puesto se libera.`
               : reserva.status === "PENDIENTE_PAGO" && reserva.expiresAt
                 ? `Ahora paga tu pasaje siguiendo los pasos de abajo. Tienes hasta ${whenPhrase(reserva.expiresAt, now)}.`
                 : "Aquí verás tu ticket y lo que falta por pagar."}
@@ -185,7 +217,16 @@ export default async function DetalleReservaPage({
         </>
       ) : null}
 
-      <TicketCard data={ticketData} size="grande" qrDataUrl={qrDataUrl}>
+      <TicketCard data={ticketData} size="grande" qrDataUrl={qrDataUrl} hidePaymentPhrase={ocultarFraseDePago}>
+        {!inactiva && !yaSalio ? (
+          <div className="flex items-start gap-3 rounded-control border border-marca-200 bg-marca-50 px-4 py-3">
+            <IconMapPin aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-marca-600" />
+            <div className="min-w-0">
+              <p className="text-sm text-tinta-suave">Dónde abordar</p>
+              <p className="break-words font-semibold text-tinta">{ruta.meetingPoint}</p>
+            </div>
+          </div>
+        ) : null}
         {reserva.ticket ? (
           <a
             href={`/api/archivos/${reserva.ticket.pdfPath}`}
@@ -222,24 +263,19 @@ export default async function DetalleReservaPage({
             defaultMethodId={reserva.paymentMethodId}
             collapsedLabel={
               reserva.status === "EN_VALIDACION"
-                ? "Enviar otro comprobante"
+                ? faltaria.greaterThan(0)
+                  ? `Enviar un comprobante por ${formatMoney(faltaria, "USD")}`
+                  : "¿Te equivocaste de comprobante? Envía otro"
                 : reserva.status === "PAGO_EN_SITIO"
                   ? "Prefiero pagar en línea"
                   : undefined
             }
+            collapsedVariant={
+              reserva.status === "EN_VALIDACION" && !faltaria.greaterThan(0) ? "fantasma" : "secundario"
+            }
           />
         }
       />
-
-      <Card className="flex flex-col gap-4">
-        <SectionTitle>Datos del viaje</SectionTitle>
-        <dl className="grid gap-4 sm:grid-cols-2">
-          <Dato etiqueta="Salida" valor={fechaHora(salida)} />
-          <Dato etiqueta="Punto de encuentro" valor={ruta.meetingPoint} />
-          <Dato etiqueta="Agencia" valor={agencia.name} />
-          <Dato etiqueta="Pasajeros" valor={pasajerosTexto(reserva.passengerCount)} />
-        </dl>
-      </Card>
 
       <section aria-labelledby="quienes-viajan" className="flex flex-col gap-3">
         <SectionTitle id="quienes-viajan">Quiénes viajan</SectionTitle>
@@ -280,7 +316,7 @@ export default async function DetalleReservaPage({
                   <Pill tone={mov.status.tone}>{mov.status.label}</Pill>
                 </div>
                 <p className="break-words text-tinta">{mov.description}</p>
-                <p className="tabular text-sm text-tinta-suave">{fechaHora(mov.at)}</p>
+                <p className="tabular text-sm text-tinta-suave">{capitalize(dayTimePhrase(mov.at, now))}</p>
                 {mov.note ? <p className="font-medium text-peligro">{mov.note}</p> : null}
               </li>
             ))}
@@ -332,15 +368,6 @@ async function metodosConSaldo(
     });
   }
   return resultado;
-}
-
-function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-sm text-tinta-suave">{etiqueta}</dt>
-      <dd className="tabular break-words font-semibold text-tinta">{valor}</dd>
-    </div>
-  );
 }
 
 interface AccionDePagoProps {
@@ -417,7 +444,7 @@ function AccionDePago({
               </span>
             </li>
           </ul>
-          <Alert tone="alerta" role="none" title={`Paga antes del ${fechaHora(limiteTaquilla)}`}>
+          <Alert tone="alerta" role="none" title={`Tienes hasta ${whenPhrase(limiteTaquilla, now)} para pagar`}>
             Si no pagas antes de esa hora, el puesto se libera para otra persona.
           </Alert>
           {payForm}
@@ -438,12 +465,9 @@ function AccionDePago({
         </div>
         {enRevision ? (
           <p className="leading-relaxed text-tinta">
-            {enRevisionTexto
-              ? `Estamos revisando tu comprobante de ${enRevisionTexto}. `
-              : "Estamos revisando el comprobante que enviaste. "}
             {faltariaTexto
-              ? `Aunque lo aprobemos, te faltarían ${faltariaTexto}: puedes enviar otro comprobante por esa parte.`
-              : "Si lo aprobamos, tu pasaje queda pagado y no hace falta que envíes otro. Te avisaremos."}
+              ? `Aunque aprobemos ${enRevisionTexto ? `el comprobante de ${sinCorte(enRevisionTexto)}` : "tu comprobante"}, te faltarían ${sinCorte(faltariaTexto)}. Puedes enviar otro por esa parte.`
+              : "Si lo aprobamos, tu pasaje queda pagado. Te avisaremos."}
           </p>
         ) : (
           <>

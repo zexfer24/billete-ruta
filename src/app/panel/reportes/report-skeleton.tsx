@@ -7,8 +7,8 @@ export function ReportDataSkeleton({ vista }: { vista: ReportView }) {
   return (
     <div aria-hidden="true" className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Skeleton className="h-5 w-full max-w-md rounded-pastilla" />
-        <Skeleton className="h-11 w-full sm:w-56" />
+        <Skeleton className="h-4 w-full max-w-md rounded-pastilla" />
+        <Skeleton className="h-11 w-56" />
       </div>
       <SkeletonStatCards count={3} />
       <SkeletonTable

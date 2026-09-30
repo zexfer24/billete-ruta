@@ -29,8 +29,14 @@ export default async function MiLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-lienzo">
+      {/*
+        El saludo y la cédula enmascarada son propios del inicio (spec 7.1):
+        solo se muestran en /mi. En las demás pantallas la banda queda en la
+        fila del logo y las acciones, y cada página pone su propio h1.
+      */}
       <AppHeader
         titleAs="p"
+        titleOnlyAt="/mi"
         title={`Hola, ${firstNamePart(pasajero.fullName)}`}
         subtitle={`Cédula ${maskIdNumber(pasajero.idNumber)}`}
         right={

@@ -18,7 +18,7 @@ function departureMessage(departure: AgencyDepartureRow, kind: AttentionKind, no
   const puestos = `${departure.occupied} de ${countLabel(departure.capacity, "puesto vendido", "puestos vendidos")}`;
   switch (kind) {
     case "atrasada":
-      return `Debía salir a las ${hora} y todavía no se registra la salida. ${puestos}.`;
+      return `Debía salir a las ${hora} y todavía no se ha registrado la salida. ${puestos}.`;
     case "embarcando": {
       const cuando =
         departure.departsAt.getTime() < now.getTime()

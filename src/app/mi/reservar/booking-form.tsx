@@ -8,6 +8,7 @@ import type { DepartureRowData } from "@/components/departure-row";
 import type { JsonValue } from "@/components/details-view";
 import { Stepper } from "@/components/stepper";
 import { buttonClass } from "@/components/ui-classes";
+import { caracasDayKey } from "./departure-days";
 import { clearBookingDraft, readBookingDraft, writeBookingDraft } from "./draft";
 import { bookingCost, formatCents } from "./money";
 import { StepDepartures } from "./step-departures";
@@ -123,6 +124,7 @@ export default function BookingForm({
   initialDestination,
   initialDepartureId,
   initialPassengerCount,
+  initialDay,
   nowIso,
 }: {
   departures: DepartureVM[];
@@ -132,12 +134,15 @@ export default function BookingForm({
   taxPerPassengerUsd: string;
   /** Bolívares y pesos por dólar vigentes, con seis decimales ("36.500000"). */
   exchangeRates: Partial<Record<"VES" | "COP", string>>;
-  passenger: { fullName: string; birthYear: number };
+  /** `accountId` ata el borrador de la pestaña a esta cuenta (`draft.ts`). */
+  passenger: { accountId: string; fullName: string; birthYear: number };
   documents: { hasIdDocument: boolean; hasTravelPermit: boolean };
   initialOrigin?: string;
   initialDestination?: string;
   initialDepartureId?: string;
   initialPassengerCount?: number;
+  /** Día de `?dia=` ("2026-10-01"), ya validado en la página. */
+  initialDay?: string;
   nowIso: string;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
@@ -160,6 +165,10 @@ export default function BookingForm({
   const [policiesAccepted, setPoliciesAccepted] = useState(false);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
+  // El día del paso 1 vive aquí y no en el paso: al volver del paso 2 se conserva.
+  const [day, setDay] = useState<string | null>(
+    initialDay ?? (initialDeparture ? caracasDayKey(new Date(initialDeparture.departsAtIso)) : null),
+  );
 
   // El borrador se lee una sola vez al montar; hasta el render siguiente no se escribe encima.
   const [draftReady, setDraftReady] = useState(false);
@@ -169,7 +178,7 @@ export default function BookingForm({
   const restoredStep = useRef<Step | null>(null);
 
   useEffect(() => {
-    const draft = readBookingDraft();
+    const draft = readBookingDraft(passenger.accountId);
     setDraftReady(true);
     if (!draft) return;
     const salida = departures.find((d) => d.id === draft.departureId);
@@ -178,6 +187,7 @@ export default function BookingForm({
     if (initialDepartureId && initialDepartureId !== draft.departureId) return;
     const tope = Math.min(MAX_PASSENGERS, Math.max(1, salida.available));
     setSelectedDepartureId(salida.id);
+    setDay(caracasDayKey(new Date(salida.departsAtIso)));
     setCompanions(draft.companions.slice(0, tope - 1));
     setPoliciesAccepted(draft.policiesAccepted);
     setSelectedPaymentMethodId(draft.paymentMethodId);
@@ -193,13 +203,22 @@ export default function BookingForm({
   useEffect(() => {
     if (!draftReady || !selectedDepartureId) return;
     writeBookingDraft({
+      accountId: passenger.accountId,
       step,
       departureId: selectedDepartureId,
       companions,
       policiesAccepted,
       paymentMethodId: selectedPaymentMethodId,
     });
-  }, [draftReady, step, selectedDepartureId, companions, policiesAccepted, selectedPaymentMethodId]);
+  }, [
+    draftReady,
+    passenger.accountId,
+    step,
+    selectedDepartureId,
+    companions,
+    policiesAccepted,
+    selectedPaymentMethodId,
+  ]);
 
   // Al cambiar de paso, la vista vuelve arriba y el foco va al título del paso nuevo.
   useEffect(() => {
@@ -242,6 +261,18 @@ export default function BookingForm({
     setStep(next);
   }
 
+  /** Cambia el día del paso 1 y lo deja en la URL (`?dia=`), para que recargar lo conserve. */
+  function elegirDia(next: string) {
+    setDay(next);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("dia", next);
+      window.history.replaceState(null, "", url);
+    } catch {
+      // Sin acceso a la URL el día sigue elegido en pantalla.
+    }
+  }
+
   function elegirSalida(id: string) {
     const salida = departures.find((d) => d.id === id);
     const tope = salida ? Math.min(MAX_PASSENGERS, Math.max(1, salida.available)) : 1;
@@ -273,7 +304,8 @@ export default function BookingForm({
   ) : null;
 
   return (
-    <div ref={topRef} className="flex scroll-mt-4 flex-col gap-6 pb-40">
+    // El relleno de abajo deja sitio a la barra fija de los pasos 2 a 4; el paso 1 no la tiene.
+    <div ref={topRef} className={`flex scroll-mt-4 flex-col gap-6 ${step > 1 ? "pb-40" : ""}`}>
       <Stepper steps={STEP_LABELS} current={step} label="Pasos para reservar" />
 
       {restored ? (
@@ -308,7 +340,7 @@ export default function BookingForm({
       <h2
         ref={headingRef}
         tabIndex={-1}
-        className="text-xl font-bold tracking-tight text-tinta outline-none"
+        className="text-lg font-semibold text-tinta outline-none"
       >
         <span className="sr-only">
           Paso {step} de {STEP_LABELS.length}:{" "}
@@ -327,6 +359,8 @@ export default function BookingForm({
             setOrigin(next.origin);
             setDestination(next.destination);
           }}
+          day={day}
+          onChangeDay={elegirDia}
           now={now}
           selectedDepartureId={selectedDepartureId}
           taxPerPassengerUsd={taxPerPassengerUsd}

@@ -61,10 +61,13 @@ interface SkeletonScreenProps {
  * Contenedor de la silueta de una pantalla. Anuncia la carga a los lectores
  * de pantalla con `label` (oculto a la vista); los bloques de dentro son
  * decorativos. Los textos fijos conocidos (títulos, logo) pueden ir reales.
+ * No lleva `aria-busy`: en una región viva, los lectores de pantalla retienen
+ * los anuncios mientras está ocupada, y como el nodo se desmonta sin volver a
+ * `false`, nunca dirían "Cargando…".
  */
 export function SkeletonScreen({ label = "Cargando…", children, className }: SkeletonScreenProps) {
   return (
-    <div role="status" aria-live="polite" aria-busy="true" className={className}>
+    <div role="status" aria-live="polite" className={className}>
       <span className="sr-only">{label}</span>
       {children}
     </div>

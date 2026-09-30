@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Alert } from "@/components/alert";
-import { PanelPageHeader, PanelTabs, type PanelTab } from "@/components/panel-ui";
+import { PanelPageHeader, type PanelTab } from "@/components/panel-ui";
 import { MESSAGE_STATUS_LABELS } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
 import { requirePanelUser } from "@/modules/auth";
+import { AdminTabs } from "../_shared/admin-tabs";
 import { pageFromParam } from "../_shared/format";
 import { withQuery } from "../_shared/period";
 import { MESSAGES_PATH, MESSAGE_STATUSES, messageStatusFromParam } from "./messages";
@@ -53,7 +54,7 @@ export default async function MensajesAdminPage({
         Por ahora los mensajes no salen por WhatsApp. Aquí ves el texto exacto que recibiría cada pasajero.
       </Alert>
 
-      <PanelTabs label="Estado de los mensajes" tabs={tabs} />
+      <AdminTabs label="Estado de los mensajes" tabs={tabs} />
 
       <Suspense key={`${status ?? "todos"}|${page}`} fallback={<MessagesListSkeleton />}>
         <MessagesList status={status} page={page} total={total} />
