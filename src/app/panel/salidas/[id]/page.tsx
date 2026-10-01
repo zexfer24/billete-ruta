@@ -9,7 +9,7 @@ import type { StatusTone } from "@/lib/labels";
 import { PanelFeedback } from "@/components/panel-feedback";
 import { Alert } from "@/components/alert";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { IconCheck, IconCheckCircle, IconClock, IconQr, IconSeat, IconUsers } from "@/components/icons";
+import { IconCheck, IconCheckCircle, IconChevronDown, IconClock, IconQr, IconSeat, IconUsers } from "@/components/icons";
 import {
   EmptyState,
   PANEL_TD_CLASS,
@@ -27,7 +27,13 @@ import { departureWhenText, plural } from "../../_shared/day-label";
 import { departureNotice } from "../../_shared/departure-notice";
 import { DepartureNoticeText } from "../../_shared/departure-notice-text";
 import { loadManifestOrNotFound } from "../../_shared/load-manifest";
-import { manifestSummary, passengerBoardingState, type ManifestSummary, type PassengerBoardingState } from "../../_shared/manifest-summary";
+import {
+  manifestSummary,
+  passengerBoardingState,
+  reservationOwesMoney,
+  type ManifestSummary,
+  type PassengerBoardingState,
+} from "../../_shared/manifest-summary";
 import { registerArrivalAction, registerDepartureAction, startBoardingAction } from "../actions";
 
 export const metadata: Metadata = { title: "Detalle de la salida" };
@@ -94,8 +100,74 @@ function pasajerosDescripcion(pasajeros: ReadonlyArray<{ estado: PassengerBoardi
   return `${plural(viajan.length, "pasajero", "pasajeros")} en ${plural(reservas, "reserva", "reservas")}. Primero los que faltan por subir.${extra}`;
 }
 
+/**
+ * Texto del paso 2 ("Registrar la salida"): cuántos faltan y, si algunos
+ * todavía deben dinero, cuántos pueden subir ya con su ticket y cuántos no
+ * podrán hasta pagar (el escáner solo deja pasar reservas pagadas o de pago
+ * en taquilla).
+ */
+function faltanTexto(resumen: ManifestSummary): string {
+  if (resumen.pending === 0) {
+    return "Todos los pasajeros con reserva ya subieron. Registra la salida cuando el bus arranque.";
+  }
+  const faltan = `Faltan ${plural(resumen.pending, "pasajero", "pasajeros")} por abordar`;
+  const deben = resumen.unpaidPassengers;
+  if (deben === 0) return `${faltan}. Escanea sus tickets antes de registrar la salida.`;
+  const listos = resumen.pending - deben;
+  if (listos === 0) {
+    return `${faltan} y ninguno ha pagado completo: no podrán subir hasta pagar. Cóbrales antes de registrar la salida.`;
+  }
+  return `${faltan}: ${listos} ${listos === 1 ? "puede" : "pueden"} subir ya con su ticket y ${deben} todavía ${
+    deben === 1 ? "debe" : "deben"
+  } pagar. Escanea los tickets antes de registrar la salida.`;
+}
+
 /** Orden de la lista de pasajeros: primero quienes faltan por subir, al final quienes no viajan. */
 const BOARDING_ORDER: Record<PassengerBoardingState, number> = { "por-abordar": 0, "a-bordo": 1, "no-viaja": 2 };
+
+interface PasajeroFila {
+  id: string;
+  fullName: string;
+  idNumber: string;
+  isHolder: boolean;
+  code: string;
+  reservationStatus: string;
+  boardedAt: Date | null;
+  estado: PassengerBoardingState;
+}
+
+/** Pasajeros seguidos de una misma reserva y situación, para la lista del teléfono. */
+interface GrupoReserva {
+  key: string;
+  code: string;
+  reservationStatus: string;
+  estado: PassengerBoardingState;
+  pasajeros: PasajeroFila[];
+}
+
+/**
+ * Agrupa la lista ya ordenada por reserva: en el teléfono el código y el
+ * pago se dicen una vez por reserva, no en cada pasajero. Una reserva con
+ * unos a bordo y otros por subir sale en dos grupos, uno en cada sección.
+ */
+function agruparPorReserva(pasajeros: readonly PasajeroFila[]): GrupoReserva[] {
+  const grupos: GrupoReserva[] = [];
+  for (const p of pasajeros) {
+    const ultimo = grupos.at(-1);
+    if (ultimo && ultimo.code === p.code && ultimo.estado === p.estado) {
+      ultimo.pasajeros.push(p);
+    } else {
+      grupos.push({
+        key: `${p.code}-${p.estado}`,
+        code: p.code,
+        reservationStatus: p.reservationStatus,
+        estado: p.estado,
+        pasajeros: [p],
+      });
+    }
+  }
+  return grupos;
+}
 
 /**
  * Hora de un paso del recorrido: solo "HH:mm" si ocurrió hoy (en Caracas);
@@ -163,7 +235,7 @@ export default async function SalidaDetallePage({
     return "pendiente";
   });
 
-  const pasajeros = salida.reservations
+  const pasajeros: PasajeroFila[] = salida.reservations
     .flatMap((r) =>
       r.passengers.map((p) => ({
         id: p.id,
@@ -176,12 +248,29 @@ export default async function SalidaDetallePage({
         estado: passengerBoardingState(r.status, p.boardedAt),
       })),
     )
-    .sort((a, b) => BOARDING_ORDER[a.estado] - BOARDING_ORDER[b.estado]);
+    // Entre los que faltan, primero los que todavía deben dinero (lo que hay
+    // que atender antes de la puerta); los de una misma reserva quedan juntos.
+    .sort(
+      (a, b) =>
+        BOARDING_ORDER[a.estado] - BOARDING_ORDER[b.estado] ||
+        (a.estado === "por-abordar"
+          ? Number(reservationOwesMoney(b.reservationStatus)) - Number(reservationOwesMoney(a.reservationStatus))
+          : 0) ||
+        a.code.localeCompare(b.code),
+    );
+  const grupos = agruparPorReserva(pasajeros);
+  const gruposViajan = grupos.filter((g) => g.estado !== "no-viaja");
+  const gruposNoViajan = grupos.filter((g) => g.estado === "no-viaja");
+  const cuantosNoViajan = gruposNoViajan.reduce((n, g) => n + g.pasajeros.length, 0);
 
   const cuando = capitalizar(departureWhenText(salida.departsAt, ahora));
   const aviso = departureNotice(salida, ahora);
   const abordajeHref = `/panel/abordaje/${salida.id}`;
   const campos = { departureId: salida.id };
+  // Quienes deben dinero solo importan mientras la salida no ha partido: al
+  // registrar la salida esas reservas se cancelan.
+  const debenPagar = salida.status === "PROGRAMADA" || salida.status === "MANIFIESTO_CERRADO" ? resumen.unpaidPassengers : 0;
+  const porCobrarHref = `/panel/pasajeros?vista=por-cobrar&salida=${salida.id}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -227,6 +316,9 @@ export default async function SalidaDetallePage({
                   {resumen.expected > 0
                     ? `Hay ${plural(resumen.expected, "pasajero", "pasajeros")} con reserva.`
                     : "Todavía no hay pasajeros con reserva."}
+                  {resumen.unpaidPassengers > 0
+                    ? ` ${resumen.unpaidPassengers === 1 ? "1 de ellos todavía debe dinero" : `${resumen.unpaidPassengers} de ellos todavía deben dinero`}; podrás cobrarles después.`
+                    : null}
                 </p>
               }
               confirmLabel="Sí, iniciar embarque"
@@ -243,11 +335,7 @@ export default async function SalidaDetallePage({
             hechoTexto={departedAt ? `Salió a las ${horaDelPaso(departedAt, ahora)}` : null}
             esperaTexto="Se habilita después de iniciar el embarque."
           >
-            <p className="text-base leading-relaxed text-tinta-suave">
-              {resumen.pending > 0
-                ? `Faltan ${plural(resumen.pending, "pasajero", "pasajeros")} por abordar. Escanea sus tickets antes de registrar la salida.`
-                : "Todos los pasajeros con reserva ya subieron. Registra la salida cuando el bus arranque."}
-            </p>
+            <p className="text-base leading-relaxed text-tinta-suave">{faltanTexto(resumen)}</p>
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 href={abordajeHref}
@@ -377,49 +465,46 @@ export default async function SalidaDetallePage({
           />
         ) : (
           <>
-            {/* Teléfono: filas separadas por líneas, sin tarjeta dentro de la
-                tarjeta de sección; el código ocupa todo el ancho y nunca se corta. */}
-            <div className="md:hidden">
-              <ul className="flex flex-col divide-y divide-borde">
-                {pasajeros.map((p) => (
-                  <li key={p.id} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                      <p className="text-base font-semibold text-tinta">{p.fullName}</p>
-                      {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
-                    </div>
-                    {/* Mismo orden que la tabla: primero el pago, luego el abordaje.
-                        Quien no viaja lleva una sola pastilla con el motivo. */}
-                    <div className="flex flex-wrap gap-2">
-                      {p.estado === "no-viaja" ? (
-                        <StatusBadge label={noViajaLabel(p.reservationStatus)} tone="neutro" />
-                      ) : (
-                        <>
-                          <StatusBadge
-                            label={reservationStatusLabel(p.reservationStatus)}
-                            tone={reservationStatusTone(p.reservationStatus)}
-                          />
-                          <AbordajeBadge
-                            estado={p.estado}
-                            boardedAt={p.boardedAt}
-                            ahora={ahora}
-                            embarqueIniciado={embarqueIniciado}
-                          />
-                        </>
-                      )}
-                    </div>
-                    <dl className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-baseline gap-x-2">
-                        <dt className="text-sm text-tinta-suave">Cédula</dt>
-                        <dd className="tabular text-[15px] font-medium text-tinta">{p.idNumber}</dd>
-                      </div>
-                      <div className="flex flex-wrap items-baseline gap-x-2">
-                        <dt className="text-sm text-tinta-suave">Código de reserva</dt>
-                        <dd className="tabular text-[15px] font-medium text-tinta">{p.code}</dd>
-                      </div>
-                    </dl>
-                  </li>
-                ))}
-              </ul>
+            {debenPagar > 0 ? (
+              <Alert
+                tone="alerta"
+                role="none"
+                className="mb-5"
+                action={
+                  <Link href={porCobrarHref} className={panelButtonClass("secundario")}>
+                    Ver quién debe
+                  </Link>
+                }
+              >
+                {debenPagar === 1
+                  ? "1 pasajero todavía no ha pagado completo y no podrá subir hasta pagar."
+                  : `${debenPagar} pasajeros todavía no han pagado completo y no podrán subir hasta pagar.`}
+              </Alert>
+            ) : null}
+            {/* Teléfono: una fila por reserva, separadas por líneas y sin tarjeta
+                dentro de la tarjeta de sección. El código y el pago se dicen una
+                vez por reserva; quienes no viajan quedan plegados al final. */}
+            <div className="flex flex-col gap-4 md:hidden">
+              {gruposViajan.length > 0 ? (
+                <ul className="flex flex-col divide-y divide-borde">
+                  {gruposViajan.map((g) => (
+                    <GrupoMovil key={g.key} grupo={g} ahora={ahora} embarqueIniciado={embarqueIniciado} />
+                  ))}
+                </ul>
+              ) : null}
+              {gruposNoViajan.length > 0 ? (
+                <details className="group rounded-control border border-borde">
+                  <summary className="foco flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control px-4 py-2 text-base font-semibold text-marca-700 [&::-webkit-details-marker]:hidden">
+                    {cuantosNoViajan === 1 ? "Ver el pasajero que no viaja" : `Ver los ${cuantosNoViajan} pasajeros que no viajan`}
+                    <IconChevronDown className="size-5 shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
+                  </summary>
+                  <ul className="flex flex-col divide-y divide-borde border-t border-borde px-4">
+                    {gruposNoViajan.map((g) => (
+                      <GrupoMovil key={g.key} grupo={g} ahora={ahora} embarqueIniciado={embarqueIniciado} plegado />
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
             </div>
             {/* Escritorio y tableta: la tabla va de borde a borde de la tarjeta
                 (sin el marco propio de TableShell, que dejaba un doble borde y
@@ -444,16 +529,26 @@ export default async function SalidaDetallePage({
                       </td>
                       <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.idNumber}</td>
                       <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{p.code}</td>
-                      {/* La pastilla no se parte en dos renglones dentro de la tabla. */}
-                      <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
-                        <StatusBadge
-                          label={reservationStatusLabel(p.reservationStatus)}
-                          tone={reservationStatusTone(p.reservationStatus)}
-                        />
-                      </td>
-                      <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
-                        <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
-                      </td>
+                      {/* La pastilla no se parte en dos renglones dentro de la tabla.
+                          Quien no viaja lleva una sola pastilla con el motivo, igual
+                          que en el teléfono, que ocupa Pago y Abordaje. */}
+                      {p.estado === "no-viaja" ? (
+                        <td colSpan={2} className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                          <StatusBadge label={noViajaLabel(p.reservationStatus)} tone="neutro" />
+                        </td>
+                      ) : (
+                        <>
+                          <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                            <StatusBadge
+                              label={reservationStatusLabel(p.reservationStatus)}
+                              tone={reservationStatusTone(p.reservationStatus)}
+                            />
+                          </td>
+                          <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                            <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -463,6 +558,62 @@ export default async function SalidaDetallePage({
         )}
       </SectionCard>
     </div>
+  );
+}
+
+/**
+ * Una reserva en la lista del teléfono: código y pago una sola vez arriba
+ * (o el motivo si no viaja) y debajo cada pasajero con su cédula y, si
+ * viaja, su pastilla de abordaje. `plegado` ajusta el relleno dentro del
+ * desplegable de quienes no viajan.
+ */
+function GrupoMovil({
+  grupo,
+  ahora,
+  embarqueIniciado,
+  plegado = false,
+}: {
+  grupo: GrupoReserva;
+  ahora: Date;
+  embarqueIniciado: boolean;
+  plegado?: boolean;
+}) {
+  const noViaja = grupo.estado === "no-viaja";
+  return (
+    <li className={cx("flex flex-col gap-3 py-4", !plegado && "first:pt-0 last:pb-0")}>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <p className="min-w-0">
+          <span className="block text-sm text-tinta-suave">Código de reserva</span>
+          <span className="tabular block text-[15px] font-semibold text-tinta">{grupo.code}</span>
+        </p>
+        {noViaja ? (
+          <StatusBadge label={noViajaLabel(grupo.reservationStatus)} tone="neutro" />
+        ) : (
+          <StatusBadge
+            label={reservationStatusLabel(grupo.reservationStatus)}
+            tone={reservationStatusTone(grupo.reservationStatus)}
+          />
+        )}
+      </div>
+      <ul className="flex flex-col gap-3 border-l-2 border-borde pl-3">
+        {grupo.pasajeros.map((p) => (
+          <li key={p.id} className="flex flex-col gap-1.5">
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-tinta">{p.fullName}</p>
+              <p className="text-sm text-tinta-suave">
+                <span className="tabular whitespace-nowrap">Cédula {p.idNumber}</span>
+                {p.isHolder ? " · Titular de la reserva" : null}
+              </p>
+            </div>
+            {noViaja ? null : (
+              <div className="flex flex-wrap gap-2">
+                <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </li>
   );
 }
 

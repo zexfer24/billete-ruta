@@ -12,6 +12,12 @@ const SIN_EFECTO = new Set(["LIBERADA", "CANCELADA", "NO_SHOW"]);
 /** Reservas pagadas que, sin abordar, quedan como "No se presentó" al registrar la salida. */
 const PASAN_A_AUSENTE = new Set(["PAGADA"]);
 
+/**
+ * Reservas con pago incompleto que no pueden abordar hasta pagar: el escáner
+ * (src/modules/trips/boarding.ts) solo deja subir PAGADA y PAGO_EN_SITIO.
+ */
+const DEBEN_PAGAR = new Set(["PENDIENTE_PAGO", "EN_VALIDACION", "ABONADA"]);
+
 /** Reservas sin pago completo que se cancelan al registrar la salida si nadie abordó. */
 const SE_CANCELAN = new Set(["PAGO_EN_SITIO", "PENDIENTE_PAGO", "EN_VALIDACION", "ABONADA"]);
 
@@ -38,6 +44,11 @@ export interface ManifestSummary {
   /** Reservas sin pago completo que se cancelarán y sus pasajeros. */
   cancelReservations: number;
   cancelPassengers: number;
+  /**
+   * Pasajeros por abordar cuya reserva todavía debe dinero (pendiente de pago,
+   * en validación o abonada): no podrán subir hasta pagar. Parte de `pending`.
+   */
+  unpaidPassengers: number;
 }
 
 /** Cuenta los pasajeros y las consecuencias de registrar la salida. */
@@ -49,6 +60,7 @@ export function manifestSummary(input: ManifestSummaryInput): ManifestSummary {
   let noShowPassengers = 0;
   let cancelReservations = 0;
   let cancelPassengers = 0;
+  let unpaidPassengers = 0;
 
   for (const reservation of input.reservations) {
     const total = reservation.passengers.length;
@@ -60,6 +72,7 @@ export function manifestSummary(input: ManifestSummaryInput): ManifestSummary {
 
     if (reservation.status === "ABORDADA") continue;
     pending += total - subieron;
+    if (DEBEN_PAGAR.has(reservation.status)) unpaidPassengers += total - subieron;
 
     if (PASAN_A_AUSENTE.has(reservation.status)) {
       noShowReservations += 1;
@@ -79,7 +92,13 @@ export function manifestSummary(input: ManifestSummaryInput): ManifestSummary {
     noShowPassengers,
     cancelReservations,
     cancelPassengers,
+    unpaidPassengers,
   };
+}
+
+/** `true` si la reserva todavía debe dinero y por eso no puede abordar hasta pagar. */
+export function reservationOwesMoney(reservationStatus: string): boolean {
+  return DEBEN_PAGAR.has(reservationStatus);
 }
 
 export type PassengerBoardingState = "a-bordo" | "por-abordar" | "no-viaja";

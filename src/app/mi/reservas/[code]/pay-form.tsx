@@ -19,6 +19,8 @@ export interface MetodoVM {
   balanceLabel: string;
   /** El mismo monto para escribirlo en el campo: "1234,50". */
   balanceInput: string;
+  /** Lo que falta en dólares ("$ 31,00") si el método no es en dólares ni USDT; si no, `null`. */
+  equivalentUsd: string | null;
 }
 
 const initialState: SubirComprobanteState = { error: null, success: false };
@@ -153,6 +155,9 @@ function UploadForm({
         <div>
           <p className="text-sm text-tinta-suave">Monto a pagar con {metodo.name}</p>
           <p className="tabular text-2xl font-bold text-tinta">{metodo.balanceLabel}</p>
+          {metodo.equivalentUsd ? (
+            <p className="tabular text-sm text-tinta-suave">Equivale a {metodo.equivalentUsd}</p>
+          ) : null}
         </div>
         <div className="border-t border-marca-200 pt-3">
           <p className="mb-2 font-semibold text-tinta">Datos para pagar</p>
@@ -167,10 +172,9 @@ function UploadForm({
           type="text"
           inputMode="decimal"
           autoComplete="off"
-          placeholder={metodo.balanceInput}
           value={amount}
           onChange={(event) => setAmount(event.target.value)}
-          hint={`Si pagaste todo, son ${metodo.balanceLabel}. También puedes pagar una parte.`}
+          hint="También puedes pagar una parte."
           required
         />
         <button
@@ -190,7 +194,7 @@ function UploadForm({
         minLength={4}
         value={reference}
         onChange={(event) => setReference(event.target.value)}
-        hint="Es el número de la operación que te da tu banco o tu app al pagar. Mínimo 4 caracteres."
+        hint="Es el número de la operación que te da tu banco o tu app al pagar."
         required
       />
 

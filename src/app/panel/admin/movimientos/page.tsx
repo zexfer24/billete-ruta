@@ -50,7 +50,7 @@ export default async function MovimientosAdminPage({
         range={range}
         keep={{ agency: agencyId }}
         extraFields={
-          <label className={`${PANEL_LABEL_CLASS} min-w-56 flex-1 sm:flex-none`}>
+          <label className={`${PANEL_LABEL_CLASS} min-w-0 flex-1 basis-40 sm:flex-none`}>
             Agencia
             <span className="relative block">
               <select

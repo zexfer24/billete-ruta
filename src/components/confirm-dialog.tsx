@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
 import { useFormStatus } from "react-dom";
 import { IconInfo, IconWarning } from "./icons";
 import { SubmitButton } from "./submit-button";
@@ -31,17 +31,59 @@ export interface ConfirmDialogProps {
   disabled?: boolean;
 }
 
-/** Cierra el diálogo cuando la acción del formulario termina (el envío pasó de pendiente a listo). */
-function CloseWhenDone({ onDone }: { onDone: () => void }) {
+/**
+ * Sigue el envío del formulario: guarda en `pendingRef` si la acción está en
+ * curso (el `<dialog>` la consulta para no cerrarse con Escape ni con un clic
+ * en el fondo) y cierra el diálogo cuando termina (pasó de pendiente a listo).
+ */
+function FormPendingWatcher({
+  pendingRef,
+  onDone,
+}: {
+  pendingRef: RefObject<boolean>;
+  onDone: () => void;
+}) {
   const { pending } = useFormStatus();
   const wasPending = useRef(false);
 
   useEffect(() => {
+    pendingRef.current = pending;
     if (wasPending.current && !pending) onDone();
     wasPending.current = pending;
-  }, [pending, onDone]);
+  }, [pending, onDone, pendingRef]);
 
   return null;
+}
+
+/**
+ * "Cancelar" del diálogo. Mientras la acción se envía queda con
+ * `aria-disabled` y no hace nada: la acción ya está en camino y cancelar
+ * haría creer que no se ejecutó. No usa el `disabled` nativo para no perder
+ * el foco (como `SubmitButton`).
+ */
+function CancelButton({
+  label,
+  buttonRef,
+  onCancel,
+}: {
+  label: string;
+  buttonRef: RefObject<HTMLButtonElement | null>;
+  onCancel: () => void;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-disabled={pending || undefined}
+      onClick={() => {
+        if (!pending) onCancel();
+      }}
+      className={panelButtonClass("secundario", "lg", "w-full sm:w-auto")}
+    >
+      {label}
+    </button>
+  );
 }
 
 /**
@@ -50,7 +92,9 @@ function CloseWhenDone({ onDone }: { onDone: () => void }) {
  * con Escape o con "Cancelar" y devuelve el foco al botón que lo abrió. El
  * foco entra en "Cancelar", para que un Enter apresurado no confirme. El
  * botón de confirmar es un `SubmitButton`: queda deshabilitado mientras la
- * acción corre, y el diálogo se cierra solo al terminar.
+ * acción corre, y el diálogo se cierra solo al terminar. Mientras corre,
+ * ni Escape, ni un clic en el fondo, ni "Cancelar" lo cierran: la acción ya
+ * está en camino y se ejecutará igual.
  */
 export function ConfirmDialog({
   triggerLabel,
@@ -70,6 +114,8 @@ export function ConfirmDialog({
   const cancelRef = useRef<HTMLButtonElement>(null);
   // Desplazamiento del fondo antes de abrir, para devolverlo tal cual (puede venir bloqueado por un panel lateral).
   const previousOverflow = useRef<string | null>(null);
+  // La acción del formulario está en curso (lo escribe `FormPendingWatcher`).
+  const pendingRef = useRef(false);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -114,9 +160,18 @@ export function ConfirmDialog({
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         onClose={restoreScroll}
+        onCancel={(event) => {
+          // Mientras la acción se envía, Escape no cierra: ya está en camino.
+          if (pendingRef.current) event.preventDefault();
+        }}
+        onKeyDown={(event) => {
+          // Algunos navegadores no dejan cancelar un segundo Escape seguido; frenarlo en
+          // la tecla cubre también ese caso.
+          if (event.key === "Escape" && pendingRef.current) event.preventDefault();
+        }}
         onClick={(event) => {
-          // Un clic en el fondo oscuro (fuera de la caja) equivale a cancelar.
-          if (event.target === event.currentTarget) close();
+          // Un clic en el fondo oscuro (fuera de la caja) equivale a cancelar, salvo durante el envío.
+          if (event.target === event.currentTarget && !pendingRef.current) close();
         }}
         className="m-auto w-[calc(100%-2rem)] max-w-md rounded-tarjeta border border-borde bg-superficie p-0 text-tinta shadow-2 backdrop:bg-tinta/50"
       >
@@ -147,14 +202,7 @@ export function ConfirmDialog({
                   <input key={name} type="hidden" name={name} value={value} />
                 ))
               : null}
-            <button
-              ref={cancelRef}
-              type="button"
-              onClick={close}
-              className={panelButtonClass("secundario", "lg", "w-full sm:w-auto")}
-            >
-              {cancelLabel}
-            </button>
+            <CancelButton label={cancelLabel} buttonRef={cancelRef} onCancel={close} />
             <SubmitButton
               pendingLabel={pendingLabel}
               className={
@@ -164,7 +212,7 @@ export function ConfirmDialog({
             >
               {confirmLabel}
             </SubmitButton>
-            <CloseWhenDone onDone={close} />
+            <FormPendingWatcher pendingRef={pendingRef} onDone={close} />
           </form>
         </div>
       </dialog>

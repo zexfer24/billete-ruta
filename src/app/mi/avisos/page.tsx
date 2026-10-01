@@ -6,15 +6,20 @@ import { listMessagesForPhone } from "@/modules/messaging";
 import { formatCaracasTime24 } from "@/lib/time";
 import { EmptyState, SectionTitle } from "@/components/ui";
 import { NoticeCard } from "@/components/notice-card";
-import { IconCheckCircle, IconChevronRight, IconMessage } from "@/components/icons";
+import { IconCheckCircle, IconChevronDown, IconChevronRight, IconMessage } from "@/components/icons";
 import { dayGroupLabel } from "@/components/passenger-copy";
 
 export const metadata: Metadata = {
   title: "Avisos",
 };
 
-/** Mensajes más recientes que se muestran; los anteriores no aportan al pasajero. */
+/** Mensajes más recientes que se leen; los anteriores no aportan al pasajero. */
 const LIMITE_MENSAJES = 20;
+
+/** Mensajes que se ven abiertos: los de los últimos 7 días, como mucho 5. El resto va plegado. */
+const DIAS_RECIENTES = 7;
+const MAX_ABIERTOS = 5;
+const DIA_MS = 24 * 60 * 60 * 1000;
 
 interface MensajeVM {
   id: string;
@@ -41,8 +46,10 @@ function agruparPorDia(mensajes: MensajeVM[], now: Date): { dia: string; mensaje
 /**
  * Avisos del pasajero: primero lo importante ahora de sus viajes y su cuenta
  * (alertas arriba, luego lo informativo, cada aviso con su acción) y después
- * los mensajes que le enviamos, agrupados por día. El estado
- * técnico de entrega de cada mensaje no se muestra: no le sirve al pasajero.
+ * los mensajes que le enviamos, agrupados por día. Abiertos van solo los de
+ * los últimos 7 días (como mucho 5); los anteriores, plegados detrás de "Ver
+ * mensajes anteriores" (spec, principio 3). El estado técnico de entrega de
+ * cada mensaje no se muestra: no le sirve al pasajero.
  */
 export default async function AvisosPage() {
   const pasajero = await requirePassenger();
@@ -53,15 +60,20 @@ export default async function AvisosPage() {
     listMessagesForPhone(pasajero.phone, LIMITE_MENSAJES),
   ]);
 
-  const grupos = agruparPorDia(
-    mensajes.map((mensaje) => ({
-      id: mensaje.id,
-      text: mensaje.text,
-      at: mensaje.sentAt ?? mensaje.createdAt,
-      reservationCode: mensaje.reservationCode,
-    })),
-    now,
-  );
+  const todos: MensajeVM[] = mensajes.map((mensaje) => ({
+    id: mensaje.id,
+    text: mensaje.text,
+    at: mensaje.sentAt ?? mensaje.createdAt,
+    reservationCode: mensaje.reservationCode,
+  }));
+  // La consulta ya viene del más nuevo al más viejo: los abiertos son un prefijo de la lista.
+  const desde = now.getTime() - DIAS_RECIENTES * DIA_MS;
+  let abiertos = 0;
+  while (abiertos < Math.min(todos.length, MAX_ABIERTOS) && todos[abiertos]!.at.getTime() >= desde) {
+    abiertos += 1;
+  }
+  const recientes = todos.slice(0, abiertos);
+  const anteriores = todos.slice(abiertos);
 
   return (
     <div className="flex flex-col gap-8">
@@ -93,45 +105,30 @@ export default async function AvisosPage() {
 
       <section aria-labelledby="mensajes" className="flex flex-col gap-3">
         <SectionTitle id="mensajes">Mensajes que te enviamos</SectionTitle>
-        {grupos.length > 0 ? (
+        {todos.length > 0 ? (
           <div className="flex flex-col gap-5">
-            {grupos.map((grupo) => (
-              <div key={grupo.dia} className="flex flex-col gap-2">
-                <h3 className="text-base font-semibold text-tinta-suave">{grupo.dia}</h3>
-                <ul className="flex flex-col gap-3">
-                  {grupo.mensajes.map((mensaje) => (
-                    <li
-                      key={mensaje.id}
-                      className="flex gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600"
-                      >
-                        <IconMessage className="size-5" />
-                      </span>
-                      <div className="flex min-w-0 flex-1 flex-col gap-2">
-                        <p className="tabular text-sm font-medium text-tinta-suave">
-                          {formatCaracasTime24(mensaje.at)}
-                        </p>
-                        <p className="break-words leading-relaxed text-tinta">{mensaje.text}</p>
-                        {mensaje.reservationCode ? (
-                          // Enlace de texto con flecha, como el pie de NoticeCard: ocho mensajes no
-                          // son ocho botones compitiendo con las acciones de "Lo importante ahora".
-                          <Link
-                            href={`/mi/reservas/${mensaje.reservationCode}`}
-                            className="foco -ml-1 inline-flex min-h-11 items-center gap-1 self-start rounded-control px-1 font-semibold text-marca-700 hover:underline"
-                          >
-                            Ver mi viaje
-                            <IconChevronRight aria-hidden="true" className="size-5 shrink-0" />
-                          </Link>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {recientes.length > 0 ? (
+              <MensajesPorDia mensajes={recientes} now={now} />
+            ) : (
+              <p className="leading-relaxed text-tinta-suave">No te escribimos en los últimos {DIAS_RECIENTES} días.</p>
+            )}
+            {anteriores.length > 0 ? (
+              <details className="group">
+                <summary className="foco inline-flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-control px-1 font-semibold text-marca-700 hover:underline [&::-webkit-details-marker]:hidden">
+                  <span className="group-open:hidden">
+                    {anteriores.length === 1 ? "Ver 1 mensaje anterior" : `Ver ${anteriores.length} mensajes anteriores`}
+                  </span>
+                  <span className="hidden group-open:inline">Ocultar los mensajes anteriores</span>
+                  <IconChevronDown
+                    aria-hidden="true"
+                    className="size-5 shrink-0 transition-transform duration-150 ease-out group-open:rotate-180 motion-reduce:transition-none"
+                  />
+                </summary>
+                <div className="mt-3">
+                  <MensajesPorDia mensajes={anteriores} now={now} />
+                </div>
+              </details>
+            ) : null}
           </div>
         ) : (
           <EmptyState
@@ -141,6 +138,49 @@ export default async function AvisosPage() {
           />
         )}
       </section>
+    </div>
+  );
+}
+
+/** Mensajes agrupados por día ("Hoy", "Ayer", fecha), del más nuevo al más viejo. */
+function MensajesPorDia({ mensajes, now }: { mensajes: MensajeVM[]; now: Date }) {
+  return (
+    <div className="flex flex-col gap-5">
+      {agruparPorDia(mensajes, now).map((grupo) => (
+        <div key={grupo.dia} className="flex flex-col gap-2">
+          <h3 className="text-base font-semibold text-tinta-suave">{grupo.dia}</h3>
+          <ul className="flex flex-col gap-3">
+            {grupo.mensajes.map((mensaje) => (
+              <li
+                key={mensaje.id}
+                className="flex gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600"
+                >
+                  <IconMessage className="size-5" />
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <p className="tabular text-sm font-medium text-tinta-suave">{formatCaracasTime24(mensaje.at)}</p>
+                  <p className="break-words leading-relaxed text-tinta">{mensaje.text}</p>
+                  {mensaje.reservationCode ? (
+                    // Enlace de texto con flecha, como el pie de NoticeCard: ocho mensajes no
+                    // son ocho botones compitiendo con las acciones de "Lo importante ahora".
+                    <Link
+                      href={`/mi/reservas/${mensaje.reservationCode}`}
+                      className="foco -ml-1 inline-flex min-h-11 items-center gap-1 self-start rounded-control px-1 font-semibold text-marca-700 hover:underline"
+                    >
+                      Ver mi viaje
+                      <IconChevronRight aria-hidden="true" className="size-5 shrink-0" />
+                    </Link>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

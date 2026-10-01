@@ -12,11 +12,12 @@
 
 export type MoneyCurrency = "USD" | "VES" | "COP" | "USDT";
 
+// Espacio de no separación (U+00A0), igual que `formatMoney`: el monto no se parte entre líneas.
 const PREFIXES: Record<MoneyCurrency, string> = {
-  USD: "$ ",
-  VES: "Bs. ",
-  COP: "COP ",
-  USDT: "USDT ",
+  USD: "$ ",
+  VES: "Bs. ",
+  COP: "COP ",
+  USDT: "USDT ",
 };
 
 /** Escala de las tasas de cambio: la base de datos guarda seis decimales. */

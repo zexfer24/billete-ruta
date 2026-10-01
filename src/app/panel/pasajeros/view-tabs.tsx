@@ -5,30 +5,38 @@ import { cx } from "@/components/ui-classes";
 import { IconSpinner } from "@/components/icons";
 import type { PanelTab } from "@/components/panel-ui";
 
+/** Contador con punto de miles, igual que la línea «Mostrando 1 a 25 de 1.199 reservas». */
+const COUNT_FORMAT = new Intl.NumberFormat("es-VE", { maximumFractionDigits: 0 });
+
 /**
  * Contador de la pestaña, o un indicador de espera mientras se abre. Tiene
- * que vivir dentro del `Link` para leer su estado con `useLinkStatus`.
+ * que vivir dentro del `Link` para leer su estado con `useLinkStatus`. La
+ * región `role="status"` queda siempre montada (vacía) y solo cambia su
+ * texto: los lectores de pantalla no anuncian una región viva que aparece ya
+ * con contenido.
  */
 function TabCount({ count, active }: { count?: number; active: boolean }) {
   const { pending } = useLinkStatus();
-  if (pending) {
-    return (
-      <span className="inline-flex min-w-6 items-center justify-center" role="status">
-        <IconSpinner className="size-4 animate-spin motion-reduce:animate-none" />
-        <span className="sr-only">Abriendo…</span>
-      </span>
-    );
-  }
-  if (typeof count !== "number") return null;
   return (
-    <span
-      className={cx(
-        "tabular min-w-6 rounded-pastilla px-2 py-0.5 text-center text-xs font-bold",
-        active ? "bg-marca-600 text-white" : "bg-lienzo text-tinta-suave",
-      )}
-    >
-      {count}
-    </span>
+    <>
+      {pending ? (
+        <span aria-hidden="true" className="inline-flex min-w-6 items-center justify-center">
+          <IconSpinner className="size-4 animate-spin motion-reduce:animate-none" />
+        </span>
+      ) : typeof count === "number" ? (
+        <span
+          className={cx(
+            "tabular min-w-6 rounded-pastilla px-2 py-0.5 text-center text-xs font-bold",
+            active ? "bg-marca-600 text-white" : "bg-lienzo text-tinta-suave",
+          )}
+        >
+          {COUNT_FORMAT.format(count)}
+        </span>
+      ) : null}
+      <span role="status" className="sr-only">
+        {pending ? "Abriendo…" : ""}
+      </span>
+    </>
   );
 }
 

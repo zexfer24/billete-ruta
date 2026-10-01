@@ -1,10 +1,12 @@
-import Form from "next/form";
 import Link from "next/link";
 import { DASHBOARD_PERIODS, DASHBOARD_PERIOD_LABELS, caracasDayInputValue, caracasHourValue } from "@/lib/time";
-import { SubmitButton } from "@/components/submit-button";
 import { IconCalendar, IconChevronDown } from "@/components/icons";
 import { PANEL_LABEL_CLASS, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
+// `GetForm` lleva a mano la espera de un filtro GET con `next/form`: con una
+// acción de texto, `useFormStatus` (y por eso `SubmitButton`) nunca ve el
+// envío como pendiente. Vive en la carpeta del admin, que lo usa en sus filtros.
+import { GetForm, GetSubmitButton } from "../admin/_shared/get-form";
 import type { ReportRange, ReportView } from "./range";
 
 /** Horas "00" a "23" para los <select> de filtro, en formato de 24 horas. */
@@ -84,7 +86,7 @@ export function PeriodBar({ vista, range }: { vista: ReportView; range: ReportRa
             <IconChevronDown className="size-5 shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
           </summary>
 
-          <Form action="/panel/reportes" className="mt-3 flex flex-col gap-4 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
+          <GetForm action="/panel/reportes" className="mt-3 flex flex-col gap-4 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
             <input type="hidden" name="vista" value={vista} />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className={PANEL_LABEL_CLASS}>
@@ -137,10 +139,10 @@ export function PeriodBar({ vista, range }: { vista: ReportView; range: ReportRa
                 ? "Las horas van en formato de 24 horas. El día de fin cuenta hasta el final de la hora elegida."
                 : "Se cuentan los días completos, desde el inicio del primero hasta el final del último."}
             </p>
-            <SubmitButton pendingLabel="Buscando…" className={panelButtonClass("secundario", "md", "w-full sm:w-fit")}>
+            <GetSubmitButton pendingLabel="Buscando…" className={panelButtonClass("secundario", "md", "w-full sm:w-fit")}>
               Ver este periodo
-            </SubmitButton>
-          </Form>
+            </GetSubmitButton>
+          </GetForm>
         </details>
       </div>
     </div>

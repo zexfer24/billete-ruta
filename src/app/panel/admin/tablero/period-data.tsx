@@ -309,8 +309,8 @@ export function PeriodDataSkeleton({ severalDays = false }: { severalDays?: bool
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <StatCardSkeleton label="Recorridos completados" />
-        <StatCardSkeleton label="Usuarios nuevos" />
+        <StatCardSkeleton label="Recorridos completados" icon={<IconBus />} />
+        <StatCardSkeleton label="Usuarios nuevos" icon={<IconUsers />} />
       </div>
       <div className="flex flex-col gap-3">
         <SectionHeadingSkeleton
@@ -354,8 +354,21 @@ export function PeriodDataSkeleton({ severalDays = false }: { severalDays?: bool
                     />
                   ))}
                 </div>
-                {/* Hueco de la fila de horas (00 a 23). */}
-                <div className="mt-1.5 h-5" />
+                {/* La fila de horas es fija (00 a 23): se pinta real, con las
+                    mismas clases y el mismo rotulado cada tres horas en el teléfono. */}
+                <div className="mt-1.5 flex gap-px sm:gap-1">
+                  {Array.from({ length: 24 }, (_, index) => (
+                    <span
+                      key={index}
+                      className={cx(
+                        "tabular min-w-0 flex-1 text-center text-sm text-tinta-tenue",
+                        index % 3 !== 0 && "max-md:invisible",
+                      )}
+                    >
+                      {String(index).padStart(2, "0")}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
             <p className="text-sm text-tinta-suave">{CHART_CAPTION}</p>

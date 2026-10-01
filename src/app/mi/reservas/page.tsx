@@ -9,7 +9,7 @@ import { buttonClass, EmptyState } from "@/components/ui";
 import { cx } from "@/components/ui-classes";
 import { TicketCard, type TicketCardData } from "@/components/ticket-card";
 import { Isotipo } from "@/components/logo";
-import { reservationUrgency } from "@/components/passenger-copy";
+import { reservationUrgency, ticketDeadline } from "@/components/passenger-copy";
 import { SkeletonScreen } from "@/components/skeleton";
 import { SkeletonTicketCompact } from "../_components/skeletons";
 
@@ -131,6 +131,19 @@ async function ListaViajes({ vista }: { vista: Vista }) {
     paidUsd: reserva.paidUsd.toString(),
     balanceUsd: balanceUsd(reserva.totalUsd, reserva.paidUsd).toString(),
     passengerCount: reserva.passengerCount,
+    // La reserva que se libera pronto dice su hora límite en la propia tarjeta.
+    deadline:
+      vista === "pasados"
+        ? null
+        : ticketDeadline(
+            {
+              status: reserva.status,
+              departsAt: reserva.departure.departsAt,
+              expiresAt: reserva.expiresAt,
+              reconfirmedAt: reserva.reconfirmedAt,
+            },
+            now,
+          ),
   }));
 
   if (datos.length === 0) {

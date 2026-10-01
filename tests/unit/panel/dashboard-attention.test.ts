@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  departsInText,
   departuresNeedingAttention,
   sortTodayDepartures,
 } from "@/app/panel/_dashboard/attention";
@@ -96,5 +97,20 @@ describe("joinPhrases", () => {
     expect(joinPhrases(["2 programadas"])).toBe("2 programadas");
     expect(joinPhrases(["2 programadas", null, "1 en ruta"])).toBe("2 programadas y 1 en ruta");
     expect(joinPhrases(["a", "b", false, "c"])).toBe("a, b y c");
+  });
+});
+
+describe("departsInText", () => {
+  const en = (minutos: number) => new Date(NOW.getTime() + minutos * 60_000);
+
+  it("por debajo de una hora usa el texto relativo de siempre", () => {
+    expect(departsInText(en(0), NOW)).toBe("Sale ahora");
+    expect(departsInText(en(44), NOW)).toBe("Sale en 44 min");
+  });
+
+  it("desde una hora dice el plazo, sin repetir la hora del título", () => {
+    expect(departsInText(en(60), NOW)).toBe("Sale en 1 h");
+    expect(departsInText(en(105), NOW)).toBe("Sale en 1 h 45 min");
+    expect(departsInText(en(120), NOW)).toBe("Sale en 2 h");
   });
 });

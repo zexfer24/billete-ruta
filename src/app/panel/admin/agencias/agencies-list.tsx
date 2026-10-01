@@ -33,9 +33,28 @@ function AgencyStatus({ active }: { active: boolean }) {
 }
 
 /**
+ * Correo con un punto de corte después de la arroba: si no cabe en la línea,
+ * baja el dominio entero en vez de partirlo a mitad de palabra
+ * ("contacto@losandes.te" / "st"). `className` decide qué pasa si una de las
+ * dos partes aún no cabe: `break-words` en las tarjetas, `wrap-anywhere` en
+ * la tabla (para no ensancharla).
+ */
+function EmailText({ email, className }: { email: string; className: string }) {
+  const at = email.indexOf("@");
+  if (at < 0) return <span className={className}>{email}</span>;
+  return (
+    <span className={className}>
+      {email.slice(0, at + 1)}
+      <wbr />
+      {email.slice(at + 1)}
+    </span>
+  );
+}
+
+/**
  * Personal con acceso al panel de la agencia: nombre y correo con que entra.
  * El correo parte donde haga falta (`wrap-anywhere`) para no ensanchar la
- * tabla.
+ * tabla, primero por la arroba.
  */
 function StaffList({ users }: { users: AgencyRow["panelUsers"] }) {
   if (users.length === 0) return <span className="text-tinta-suave">Nadie todavía</span>;
@@ -47,7 +66,7 @@ function StaffList({ users }: { users: AgencyRow["panelUsers"] }) {
             {u.name}
             {u.active ? null : <StatusBadge label="Sin acceso" tone="neutro" />}
           </span>
-          <span className="text-sm text-tinta-suave wrap-anywhere">{u.email}</span>
+          <EmailText email={u.email} className="text-sm text-tinta-suave wrap-anywhere" />
         </li>
       ))}
     </ul>
@@ -108,12 +127,17 @@ export async function AgenciesList({ registerHref }: { registerHref: string }) {
                   </>
                 }
                 status={<AgencyStatus active={a.active} />}
-                details={[
-                  { label: "Teléfono", value: <span className="whitespace-nowrap">{formatPhone(a.contactPhone)}</span> },
-                  { label: "Correo", value: <span className="wrap-anywhere">{a.contactEmail}</span> },
-                ]}
                 action={
                   <div className="flex w-full flex-col gap-3">
+                    {/* El contacto ocupa todo el ancho de la tarjeta: en media
+                        columna el correo no cabía y se partía a mitad del dominio. */}
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm text-tinta-suave">Contacto</p>
+                      <div className="flex flex-col text-[15px] font-medium text-tinta">
+                        <span className="tabular whitespace-nowrap">{formatPhone(a.contactPhone)}</span>
+                        <EmailText email={a.contactEmail} className="break-words" />
+                      </div>
+                    </div>
                     <div className="flex flex-col gap-1 border-t border-borde pt-3">
                       <p className="text-sm text-tinta-suave">Personal con acceso</p>
                       <div className="text-[15px] font-medium text-tinta">
@@ -163,7 +187,7 @@ export async function AgenciesList({ registerHref }: { registerHref: string }) {
                 </td>
                 <td className={ADMIN_TD_CLASS}>
                   <span className="tabular block whitespace-nowrap">{formatPhone(a.contactPhone)}</span>
-                  <span className="block text-sm text-tinta-suave wrap-anywhere">{a.contactEmail}</span>
+                  <EmailText email={a.contactEmail} className="block text-sm text-tinta-suave wrap-anywhere" />
                 </td>
                 <td className={cx(ADMIN_TD_CLASS, "tabular")}>
                   {fleetParts(a).map((part, index) => (
@@ -195,7 +219,7 @@ export function AgenciesListSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-60" />
-      <TableSkeleton columns={AGENCY_COLUMNS} rows={4} mobileCards={3} mobileDetails={2} mobileStatus mobileAction />
+      <TableSkeleton columns={AGENCY_COLUMNS} rows={4} mobileCards={3} mobileDetails={0} mobileSubtitleLines={2} mobileTextLines={3} mobileStatus mobileAction />
     </div>
   );
 }

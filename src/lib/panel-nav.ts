@@ -74,7 +74,7 @@ export const ADMIN_NAV: readonly PanelNavGroup[] = [
     label: "Terminal",
     links: [
       { href: "/panel/admin/agencias", label: "Agencias", icon: "agencias" },
-      { href: "/panel/admin/tasas", label: "Tasas y precios", icon: "tasas" },
+      { href: "/panel/admin/tasas", label: "Tasas del terminal", icon: "tasas" },
       { href: "/panel/admin/mensajes", label: "Mensajes", icon: "mensajes" },
     ],
   },

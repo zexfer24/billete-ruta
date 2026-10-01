@@ -11,14 +11,25 @@ export function round2(value: Prisma.Decimal): Prisma.Decimal {
   return value.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
+/**
+ * Espacio de no separación (U+00A0) entre el prefijo de la moneda y la cifra:
+ * así un monto nunca se parte entre dos líneas ("$" al final de una y
+ * "1.234,50" al principio de la siguiente) en tablas o tarjetas angostas.
+ */
+export const MONEY_SPACE = "\u00A0";
+
 const PREFIJOS: Record<Currency, string> = {
-  USD: "$ ",
-  VES: "Bs. ",
-  COP: "COP ",
-  USDT: "USDT ",
+  USD: `$${MONEY_SPACE}`,
+  VES: `Bs.${MONEY_SPACE}`,
+  COP: `COP${MONEY_SPACE}`,
+  USDT: `USDT${MONEY_SPACE}`,
 };
 
-/** Formatea un monto con separador de miles y coma decimal, como se usa en Venezuela. */
+/**
+ * Formatea un monto con separador de miles y coma decimal, como se usa en
+ * Venezuela, con el prefijo pegado a la cifra (`MONEY_SPACE`). Es para mostrar
+ * en pantalla, mensajes y PDF; un CSV debe escribir la cifra sin formato.
+ */
 export function formatMoney(value: Prisma.Decimal, currency: Currency): string {
   const [entera = "0", decimal = "00"] = round2(value).toFixed(2).split(".");
   const conMiles = entera.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -36,7 +47,7 @@ export function formatUsdString(value: string): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(value));
-  return `$ ${formateado}`;
+  return `$${MONEY_SPACE}${formateado}`;
 }
 
 export const ZERO = new Prisma.Decimal(0);

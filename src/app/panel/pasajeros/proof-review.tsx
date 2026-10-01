@@ -5,7 +5,7 @@ import { Alert } from "@/components/alert";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SubmitButton } from "@/components/submit-button";
 import { EmptyState, PANEL_TD_CLASS, PANEL_TH_CLASS, StatusBadge, panelButtonClass, panelInputClass } from "@/components/panel-ui";
-import { IconCheckCircle, IconExternal, IconSearch, IconXCircle } from "@/components/icons";
+import { IconCheckCircle, IconSearch, IconXCircle } from "@/components/icons";
 import { formatMoney } from "@/lib/decimal";
 import { maskIdNumber } from "@/lib/identity";
 import { formatCaracasDateTime24 } from "@/lib/time";
@@ -15,6 +15,7 @@ import { countLabel } from "../_dashboard/text";
 import { approveProofAction, rejectProofAction } from "./actions";
 import { Disclosure, DetailList } from "./disclosure";
 import { ProofDecisionBar } from "./proof-decision";
+import { ProofImage } from "./proof-image";
 import { showsUsdEquivalent } from "./money";
 import { pasajerosUrlFromHidden } from "./urls";
 
@@ -28,7 +29,7 @@ import { pasajerosUrlFromHidden } from "./urls";
 export function coverageBadge(coverage: ProofCoverage): { label: string; tone: StatusTone } {
   switch (coverage.kind) {
     case "ABONO_PARCIAL":
-      return { label: "Paga una parte", tone: "marca" };
+      return { label: "Paga una parte", tone: "info" };
     case "PAGO_COMPLETO":
       return { label: "Completa el pago", tone: "exito" };
     case "EXCEDE_SALDO":
@@ -283,27 +284,7 @@ export function ProofReviewPanel({
         />
       </div>
 
-      <figure className="flex flex-col gap-2">
-        {/* Imagen subida por el pasajero y servida por /api/archivos: no pasa por next/image. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imagen}
-          alt={`Comprobante de pago con referencia ${proof.reference}`}
-          className="max-h-64 w-full rounded-control border border-borde bg-lienzo object-contain"
-        />
-        <figcaption>
-          <a
-            href={imagen}
-            target="_blank"
-            rel="noreferrer"
-            className="foco inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-[15px] font-semibold text-marca-700 hover:bg-marca-50"
-          >
-            <IconExternal className="size-5" />
-            Ver la imagen en tamaño completo
-            <span className="sr-only">(se abre en otra pestaña)</span>
-          </a>
-        </figcaption>
-      </figure>
+      <ProofImage src={imagen} reference={proof.reference} />
 
       {proof.status === "PENDIENTE" ? null : (
         <Alert tone={proof.status === "APROBADO" ? "exito" : "info"} role="none" title="Este comprobante ya se revisó">

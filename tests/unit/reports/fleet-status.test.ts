@@ -174,4 +174,68 @@ describe("unitStateOf", () => {
     expect(resultado.state).toBe("EMBARCANDO");
     expect(resultado.current?.overdue).toBe(true);
   });
+
+  describe("una salida vieja que nadie cerró no decide el estado", () => {
+    const hace3Dias = new Date(now.getTime() - 3 * DIA);
+
+    it("PROGRAMADA de hace 3 días: la unidad inactiva queda fuera de servicio", () => {
+      const vieja = salida({ id: "vieja", status: "PROGRAMADA", departsAt: hace3Dias });
+
+      const resultado = unitStateOf({ active: false, departures: [vieja] }, now);
+
+      expect(resultado.state).toBe("FUERA_DE_SERVICIO");
+      expect(resultado.current).toBeNull();
+    });
+
+    it("PROGRAMADA de hace 3 días: la unidad activa con próximas queda asignada", () => {
+      const vieja = salida({ id: "vieja", status: "PROGRAMADA", departsAt: hace3Dias });
+      const proxima = salida({ id: "p1", status: "PROGRAMADA", departsAt: new Date(now.getTime() + DIA) });
+
+      const resultado = unitStateOf({ active: true, departures: [vieja, proxima] }, now);
+
+      expect(resultado.state).toBe("ASIGNADO");
+      expect(resultado.current).toBeNull();
+      expect(resultado.upcoming.map((u) => u.id)).toEqual(["p1"]);
+    });
+
+    it("PROGRAMADA de hace 3 días: la unidad activa sin próximas queda disponible", () => {
+      const vieja = salida({ id: "vieja", status: "PROGRAMADA", departsAt: hace3Dias });
+
+      const resultado = unitStateOf({ active: true, departures: [vieja] }, now);
+
+      expect(resultado.state).toBe("DISPONIBLE");
+      expect(resultado.current).toBeNull();
+    });
+
+    it("MANIFIESTO_CERRADO de hace 3 días tampoco", () => {
+      const vieja = salida({ id: "vieja", status: "MANIFIESTO_CERRADO", departsAt: hace3Dias });
+
+      const inactiva = unitStateOf({ active: false, departures: [vieja] }, now);
+      const activa = unitStateOf({ active: true, departures: [vieja] }, now);
+
+      expect(inactiva.state).toBe("FUERA_DE_SERVICIO");
+      expect(activa.state).toBe("DISPONIBLE");
+      expect(activa.current).toBeNull();
+    });
+
+    it("una vieja no tapa a una atrasada reciente, que sigue siendo el viaje en curso", () => {
+      const vieja = salida({ id: "vieja", status: "PROGRAMADA", departsAt: hace3Dias });
+      const reciente = salida({ id: "reciente", status: "PROGRAMADA", departsAt: new Date(now.getTime() - HORA) });
+
+      const resultado = unitStateOf({ active: true, departures: [vieja, reciente] }, now);
+
+      expect(resultado.state).toBe("EMBARCANDO");
+      expect(resultado.current?.id).toBe("reciente");
+      expect(resultado.current?.overdue).toBe(true);
+    });
+
+    it("EN_RUTA no tiene límite hacia atrás: el viaje salió de verdad", () => {
+      const enRuta = salida({ id: "s1", status: "EN_RUTA", departsAt: hace3Dias });
+
+      const resultado = unitStateOf({ active: false, departures: [enRuta] }, now);
+
+      expect(resultado.state).toBe("EN_RUTA");
+      expect(resultado.current?.id).toBe("s1");
+    });
+  });
 });

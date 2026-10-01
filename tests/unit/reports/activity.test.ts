@@ -34,7 +34,8 @@ describe("describeActivity", () => {
   it("COMPROBANTE_CARGADO", () => {
     const { text, tone } = describeActivity(entrada({ action: "COMPROBANTE_CARGADO" }));
     expect(text).toBe("El pasajero cargó un comprobante en TR-0913-1PAX-AB12");
-    expect(tone).toBe("marca");
+    // En revisión: información, igual que la pastilla "En validación".
+    expect(tone).toBe("info");
   });
 
   it("PAGO_APROBADO", () => {
@@ -59,7 +60,7 @@ describe("describeActivity", () => {
     const { text, tone } = describeActivity(
       entrada({ action: "COBRO_EN_SITIO", after: { amount: "10.00", currency: "USD" } }),
     );
-    expect(text).toBe("Ana Operadora cobró en efectivo $ 10,00 en TR-0913-1PAX-AB12");
+    expect(text).toBe("Ana Operadora cobró en efectivo $\u00A010,00 en TR-0913-1PAX-AB12");
     expect(tone).toBe("exito");
   });
 

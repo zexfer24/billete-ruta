@@ -50,7 +50,7 @@ const SEATS_TONE_CLASSES = {
 /**
  * Paso 1 del asistente: buscador de origen y destino, una fila de pastillas
  * con los días que tienen salidas (se ve un día a la vez) y la lista de ese
- * día, con "Salen pronto" arriba si es hoy y las salidas llenas al final con
+ * día, con "Salen pronto" arriba si es hoy (y hay otras más tarde) y las salidas llenas al final con
  * su lista de espera. Cada salida es una tarjeta entera que se toca para
  * elegirla. El precio es por persona; la tasa del terminal se avisa en una
  * línea bajo el título del día. En el teléfono las pastillas de días van en
@@ -122,13 +122,18 @@ export function StepDepartures({
     }
   }, [diaActivo]);
 
-  const grupos = [
+  // Los títulos "Salen pronto" y "Más tarde" solo separan dos grupos: con uno
+  // solo no aportan (el reloj y la hora en naranja ya marcan las urgentes) y
+  // empujarían la primera salida fuera de la primera pantalla.
+  const gruposVisibles = [
     { id: "pronto", titulo: "Salen pronto", lista: pronto.filter((d) => visibles.has(d.id)) },
-    { id: "resto", titulo: pronto.length > 0 ? "Más tarde" : null, lista: resto.filter((d) => visibles.has(d.id)) },
+    { id: "resto", titulo: "Más tarde", lista: resto.filter((d) => visibles.has(d.id)) },
   ].filter((grupo) => grupo.lista.length > 0);
+  const conTitulos = gruposVisibles.length > 1;
+  const grupos = gruposVisibles.map((grupo) => ({ ...grupo, titulo: conTitulos ? grupo.titulo : null }));
 
   return (
-    <section className="flex flex-col gap-5">
+    <section className="flex flex-col gap-4">
       <SearchCard
         variant="marca"
         origins={origins}
@@ -198,7 +203,7 @@ export function StepDepartures({
           </div>
 
           {infoDia ? (
-            <section aria-labelledby="dia-elegido" className="flex flex-col gap-4">
+            <section aria-labelledby="dia-elegido" className="flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
                 <h3 id="dia-elegido" className="text-lg font-semibold text-tinta">
                   {infoDia.heading}

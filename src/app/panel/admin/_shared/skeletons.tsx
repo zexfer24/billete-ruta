@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { IconChevronDown, IconChevronRight } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { cx, panelButtonClass, panelInputClass } from "@/components/ui-classes";
-import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TABS_ROW_CLASS } from "./tab-classes";
+import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TABS_GRID_CLASS, ADMIN_TABS_ROW_CLASS } from "./tab-classes";
 
 /**
  * Siluetas de carga de las pantallas del administrador (spec 6.5). Reproducen
@@ -64,21 +64,26 @@ export function InputSkeleton({ className, select = false }: { className?: strin
 }
 
 /**
- * Pestañas de `AdminTabs` con sus etiquetas reales: mismas medidas, el mismo
- * reparto en varias filas en pantallas angostas y la primera como elegida.
- * `counts` pinta el hueco del contador de cada pestaña.
+ * Pestañas de `AdminTabs` con sus etiquetas reales: mismas medidas y el
+ * mismo reparto en varias filas en pantallas angostas. Por defecto ninguna va
+ * marcada, porque un `loading.tsx` no conoce `?periodo=` ni `?status=` (igual
+ * que `SkeletonTabs` del panel de agencia); `active` solo se pasa desde un
+ * `Suspense` que ya sabe cuál es. `counts` pinta el hueco del contador.
  */
 export function TabsSkeleton({
   labels,
-  active = 0,
+  active = -1,
   counts = false,
+  grid = false,
 }: {
   labels: readonly string[];
   active?: number;
   counts?: boolean;
+  /** Rejilla de dos columnas en el teléfono, como `AdminTabs` con `grid` (las pestañas de periodo). */
+  grid?: boolean;
 }) {
   return (
-    <div aria-hidden="true" className={ADMIN_TABS_ROW_CLASS}>
+    <div aria-hidden="true" className={grid ? ADMIN_TABS_GRID_CLASS : ADMIN_TABS_ROW_CLASS}>
       {labels.map((label, index) => (
         <span key={label} className={cx(ADMIN_TAB_CLASS, index === active ? ADMIN_TAB_ACTIVE_CLASS : "text-tinta-suave")}>
           {label}
@@ -95,18 +100,29 @@ export function LineSkeleton({ className = "w-72" }: { className?: string }) {
 }
 
 /**
- * Tarjeta de cifra (`StatCard`): la etiqueta real, el círculo del icono, la
- * cifra y el detalle en barras y, si la tarjeta real es un enlace, su
- * "Ver detalle".
+ * Tarjeta de cifra (`StatCard`): la etiqueta y el icono reales (son fijos,
+ * como en el kit del panel de agencia), la cifra y el detalle en barras y, si
+ * la tarjeta real es un enlace, su "Ver detalle".
  */
-export function StatCardSkeleton({ label, link = false }: { label: string; link?: boolean }) {
+export function StatCardSkeleton({
+  label,
+  icon,
+  link = false,
+}: {
+  label: string;
+  /** El mismo icono que lleva la `StatCard` real. */
+  icon: ReactNode;
+  link?: boolean;
+}) {
   return (
     <div aria-hidden="true" className={`${CARD} relative flex flex-col overflow-hidden p-5`}>
       {/* La barra de color de las tarjetas del terminal, que siempre van en tono de marca. */}
       <span className="absolute inset-x-0 top-0 h-1 bg-marca-600" />
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-semibold text-tinta-suave">{label}</p>
-        <Skeleton className="size-10 shrink-0 rounded-full" />
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600 [&>svg]:size-5">
+          {icon}
+        </span>
       </div>
       <Skeleton className="mt-1 h-9 w-24" />
       <Skeleton className="mt-2 h-4 w-48 max-w-full rounded-pastilla" />
@@ -122,18 +138,19 @@ export function StatCardSkeleton({ label, link = false }: { label: string; link?
 
 /**
  * Formulario de filtros en una tarjeta: listas desplegables vacías de 44 px
- * con su etiqueta real, y el botón.
+ * con su etiqueta real, y el botón corto en la misma fila, como el filtro
+ * de agencia de `PeriodFilter`.
  */
 export function FilterCardSkeleton({ labels, button }: { labels: readonly string[]; button: string }) {
   return (
     <div aria-hidden="true" className={`${CARD} flex flex-wrap items-end gap-3 p-4`}>
       {labels.map((label) => (
-        <div key={label} className="flex min-w-56 flex-1 flex-col gap-1.5 sm:flex-none">
+        <div key={label} className="flex min-w-0 flex-1 basis-40 flex-col gap-1.5 sm:flex-none">
           <p className="text-sm font-semibold text-tinta">{label}</p>
           <InputSkeleton select className="sm:w-64" />
         </div>
       ))}
-      <span className={panelButtonClass("secundario", "md", "w-full sm:w-auto")}>{button}</span>
+      <span className={panelButtonClass("secundario", "md")}>{button}</span>
     </div>
   );
 }
@@ -150,6 +167,8 @@ export function TableSkeleton({
   mobileDetails = 4,
   mobileStatus = false,
   mobileAction = false,
+  mobileSubtitleLines = 1,
+  mobileTextLines = 0,
 }: {
   columns: readonly string[];
   rows?: number;
@@ -157,6 +176,10 @@ export function TableSkeleton({
   mobileDetails?: number;
   mobileStatus?: boolean;
   mobileAction?: boolean;
+  /** Líneas secundarias bajo el título de la tarjeta (destinatario y hora, por ejemplo). */
+  mobileSubtitleLines?: number;
+  /** Líneas de un párrafo de texto corrido bajo la cabecera de la tarjeta (el texto de un mensaje). */
+  mobileTextLines?: number;
 }) {
   return (
     <>
@@ -185,10 +208,22 @@ export function TableSkeleton({
             <div className="flex items-start justify-between gap-2">
               <div className="flex flex-1 flex-col gap-1.5">
                 <Skeleton className="h-5 w-3/5 rounded-pastilla" />
-                <Skeleton className="h-4 w-2/5 rounded-pastilla" />
+                {Array.from({ length: mobileSubtitleLines }, (_, line) => (
+                  <Skeleton key={line} className={`h-4 rounded-pastilla ${line === 0 ? "w-2/5" : "w-3/5"}`} />
+                ))}
               </div>
               {mobileStatus ? <Skeleton className="h-6 w-20 rounded-pastilla" /> : null}
             </div>
+            {mobileTextLines > 0 ? (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: mobileTextLines }, (_, line) => (
+                  <Skeleton
+                    key={line}
+                    className={`h-3.5 rounded-pastilla ${line === mobileTextLines - 1 ? "w-3/5" : "w-full"}`}
+                  />
+                ))}
+              </div>
+            ) : null}
             {mobileDetails > 0 ? (
               <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                 {Array.from({ length: mobileDetails }, (_, detail) => (

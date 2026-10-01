@@ -6,7 +6,6 @@ import type { Currency, Prisma } from "@prisma/client";
 import { RESERVATION_CODE_PATTERN } from "@/modules/booking";
 import { balanceUsd, getCurrentExchangeRate, listActivePaymentMethods } from "@/modules/catalog";
 import { requirePassenger } from "@/modules/auth";
-import { dueForRelease12h } from "@/modules/scheduler";
 import { renderQrDataUrl } from "@/modules/tickets";
 import { formatMoney, round2, ZERO } from "@/lib/decimal";
 import { prisma } from "@/lib/prisma";
@@ -17,11 +16,16 @@ import { TicketCard, type TicketCardData } from "@/components/ticket-card";
 import { IconArrowLeft, IconDownload, IconMapPin, IconUser } from "@/components/icons";
 import {
   capitalize,
+  cashCounterDeadline,
   currencyName,
   dayTimePhrase,
+  deadlinePhrase,
   isInactiveReservation,
   PASSENGER_PROOF_STATUS_LABELS,
+  paymentDeadline,
+  ticketDeadline,
   whenPhrase,
+  type PaymentDeadline,
 } from "@/components/passenger-copy";
 import { ClearBookingDraft } from "../../_components/clear-booking-draft";
 import { AutoRefresh } from "./auto-refresh";
@@ -122,8 +126,17 @@ export default async function DetalleReservaPage({
     saldo.greaterThan(0) && ESTADOS_CON_COMPROBANTE.has(reserva.status) && !yaSalio;
   const recienCreada = ok === "reserva-creada";
   // Misma ventana con la que el barrido libera el puesto y con la que avisa `notices` (`dueForRelease12h`).
-  const plazoTaquillaMs = dueForRelease12h(now).getTime() - now.getTime();
-  const limiteTaquilla = new Date(salida.getTime() - plazoTaquillaMs);
+  const limiteTaquilla = cashCounterDeadline(salida, now);
+  // Hasta cuándo puede pagar: nunca después de que salga el bus.
+  const datosPlazo = {
+    status: reserva.status,
+    departsAt: salida,
+    expiresAt: reserva.expiresAt,
+    reconfirmedAt: reserva.reconfirmedAt,
+  };
+  const plazo = paymentDeadline(datosPlazo, now);
+  // El ticket dice el plazo cuando apura; entonces el aviso de abajo no lo repite.
+  const plazoEnTicket = ticketDeadline(datosPlazo, now);
 
   const [metodosDigitales, qrDataUrl] = await Promise.all([
     puedeEnviarComprobante ? metodosConSaldo(agencia.id, saldo, reserva) : Promise.resolve([] as MetodoVM[]),
@@ -142,6 +155,7 @@ export default async function DetalleReservaPage({
     paidUsd: reserva.paidUsd.toString(),
     balanceUsd: saldo.toString(),
     passengerCount: reserva.passengerCount,
+    deadline: plazoEnTicket,
   };
 
   const movimientos: MovimientoVM[] = [
@@ -200,8 +214,8 @@ export default async function DetalleReservaPage({
           <Alert tone="exito" title="¡Listo! Reservaste tu puesto">
             {reserva.status === "PAGO_EN_SITIO"
               ? `Paga ${sinCorte(saldoTexto)} en la taquilla de ${agencia.name}. Tienes hasta ${whenPhrase(limiteTaquilla, now)}; si no, el puesto se libera.`
-              : reserva.status === "PENDIENTE_PAGO" && reserva.expiresAt
-                ? `Ahora paga tu pasaje siguiendo los pasos de abajo. Tienes hasta ${whenPhrase(reserva.expiresAt, now)}.`
+              : reserva.status === "PENDIENTE_PAGO" && plazo
+                ? `Ahora paga tu pasaje siguiendo los pasos de abajo. Tienes hasta ${deadlinePhrase(plazo, now)}.`
                 : "Aquí verás tu ticket y lo que falta por pagar."}
           </Alert>
           <ClearFeedbackParams />
@@ -249,7 +263,9 @@ export default async function DetalleReservaPage({
         saldoTexto={saldoTexto}
         enRevisionTexto={enRevisionUsd.greaterThan(0) ? formatMoney(enRevisionUsd, "USD") : null}
         faltariaTexto={faltaria.greaterThan(0) ? formatMoney(faltaria, "USD") : null}
-        expiresAt={reserva.expiresAt}
+        plazo={plazo}
+        plazoEnTicket={plazoEnTicket !== null}
+        hayPagoEnLinea={metodosDigitales.length > 0}
         limiteTaquilla={limiteTaquilla}
         agenciaNombre={agencia.name}
         now={now}
@@ -363,6 +379,7 @@ async function metodosConSaldo(
       details: m.details as unknown as MetodoVM["details"],
       balanceLabel: formatMoney(monto, m.currency),
       balanceInput: round2(monto).toFixed(2).replace(".", ","),
+      equivalentUsd: tasa === null ? null : formatMoney(saldo, "USD"),
     });
   }
   return resultado;
@@ -375,7 +392,12 @@ interface AccionDePagoProps {
   enRevisionTexto: string | null;
   /** Lo que faltaría aun aprobando lo que está en revisión; `null` si nada. */
   faltariaTexto: string | null;
-  expiresAt: Date | null;
+  /** Hasta cuándo puede pagar sin perder el puesto; `null` si no corre ningún plazo. */
+  plazo: PaymentDeadline | null;
+  /** El ticket de arriba ya dice el plazo en su línea de alerta. */
+  plazoEnTicket: boolean;
+  /** La agencia tiene pagos en línea: la cifra a pagar va en el recuadro del método. */
+  hayPagoEnLinea: boolean;
   limiteTaquilla: Date;
   agenciaNombre: string;
   now: Date;
@@ -395,7 +417,9 @@ function AccionDePago({
   saldoTexto,
   enRevisionTexto,
   faltariaTexto,
-  expiresAt,
+  plazo,
+  plazoEnTicket,
+  hayPagoEnLinea,
   limiteTaquilla,
   agenciaNombre,
   now,
@@ -442,9 +466,15 @@ function AccionDePago({
               </span>
             </li>
           </ul>
-          <Alert tone="alerta" role="none" title={`Tienes hasta ${whenPhrase(limiteTaquilla, now)} para pagar`}>
-            Si no pagas antes de esa hora, el puesto se libera para otra persona.
-          </Alert>
+          {plazoEnTicket ? (
+            <Alert tone="alerta" role="none">
+              Si no pagas antes de la hora que dice tu ticket, el puesto se libera para otra persona.
+            </Alert>
+          ) : (
+            <Alert tone="alerta" role="none" title={`Tienes hasta ${whenPhrase(limiteTaquilla, now)} para pagar`}>
+              Si no pagas antes de esa hora, el puesto se libera para otra persona.
+            </Alert>
+          )}
           {payForm}
         </Card>
       </section>
@@ -457,13 +487,20 @@ function AccionDePago({
     <section aria-labelledby="accion-pago">
       <Card className="flex flex-col gap-4">
         <SectionTitle id="accion-pago">{enRevision ? "Tu pago está en revisión" : "Paga lo que falta"}</SectionTitle>
-        <div>
-          {/* En revisión, la cifra grande es lo enviado; lo que faltaría lo dice la frase de abajo. */}
-          <p className="text-sm text-tinta-suave">{enRevision ? "Por confirmar" : "Te faltan"}</p>
-          <p className="tabular text-3xl font-bold text-tinta">
-            {enRevision ? (enRevisionTexto ?? saldoTexto) : saldoTexto}
-          </p>
-        </div>
+        {/*
+          Una sola cifra grande por pantalla para lo mismo: con pagos en línea, el
+          monto va en el recuadro del método, en la moneda con que se paga (el
+          ticket ya dice el saldo en dólares). En revisión, la cifra es lo enviado;
+          lo que faltaría lo dice la frase de abajo.
+        */}
+        {enRevision || !hayPagoEnLinea ? (
+          <div>
+            <p className="text-sm text-tinta-suave">{enRevision ? "Por confirmar" : "Te faltan"}</p>
+            <p className="tabular text-3xl font-bold text-tinta">
+              {enRevision ? (enRevisionTexto ?? saldoTexto) : saldoTexto}
+            </p>
+          </div>
+        ) : null}
         {enRevision ? (
           <p className="leading-relaxed text-tinta">
             {faltariaTexto
@@ -472,10 +509,18 @@ function AccionDePago({
           </p>
         ) : (
           <>
-            {estado === "PENDIENTE_PAGO" && expiresAt && expiresAt > now ? (
-              <Alert tone="alerta" role="none" title={`Tienes hasta ${whenPhrase(expiresAt, now)} para pagar`}>
-                Si no registras ningún pago antes de esa hora, el puesto se libera.
-              </Alert>
+            {estado === "PENDIENTE_PAGO" && plazo ? (
+              plazo.boundByDeparture ? (
+                // El bus sale antes de que venza la reserva: el riesgo es perder el bus.
+                <Alert tone="alerta" role="none" title="Tu bus sale pronto">
+                  Paga y envía el comprobante cuanto antes, y llega al terminal con tiempo.
+                </Alert>
+              ) : (
+                <Alert tone="alerta" role="none">
+                  Si no registras ningún pago antes de la hora que dice tu ticket, el puesto se libera
+                  para otra persona.
+                </Alert>
+              )
             ) : null}
             <ol className="flex flex-col gap-2">
               {[

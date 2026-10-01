@@ -87,7 +87,16 @@ export function SkeletonPageHeader({
  * instante la equivocada. Dentro de un `<Suspense>` que ya conoce la vista sí
  * se pasa `active`.
  */
-export function SkeletonTabs({ labels, active = -1 }: { labels: readonly string[]; active?: number }) {
+export function SkeletonTabs({
+  labels,
+  active = -1,
+  counts = false,
+}: {
+  labels: readonly string[];
+  active?: number;
+  /** Si las pestañas reales llevan contador (`count` de `PanelTabs`): se pinta su pastilla en barra. */
+  counts?: boolean;
+}) {
   return (
     <div aria-hidden="true" className="flex w-full flex-wrap gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1">
       {labels.map((label, index) => (
@@ -99,6 +108,7 @@ export function SkeletonTabs({ labels, active = -1 }: { labels: readonly string[
           )}
         >
           {label}
+          {counts ? <Skeleton className="h-5 w-7 rounded-pastilla" /> : null}
         </span>
       ))}
     </div>
@@ -155,13 +165,21 @@ export interface SkeletonStat {
   icon?: ReactNode;
   /** Si en la versión compacta del teléfono la cifra lleva un detalle corto debajo ("de 20"). */
   compactDetail?: boolean;
+  /** Etiqueta más corta que usa la versión compacta ("Pasajeros" en vez de "Pasajeros transportados"). */
+  compactLabel?: string;
+  /** En la versión compacta, la cifra ocupa su propia fila (`wide` de `CompactFigures`). */
+  compactWide?: boolean;
 }
+
+/** Columnas de la versión compacta, igual que `CompactFigures`. */
+const COMPACT_COLUMNS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" };
 
 /**
  * Fila de tarjetas de cifra (`StatCard`): la franja superior neutra de 4 px,
  * la etiqueta y el icono reales si se conocen (`stats`), la cifra grande y el
  * detalle en barra. Con `compact` reproduce `CompactFigures`: por debajo de
- * `sm`, una sola tarjeta de tres columnas en vez de tres tarjetas apiladas.
+ * `sm`, una sola tarjeta con las cifras en columnas (y las `compactWide` en
+ * su propia fila) en vez de tarjetas apiladas.
  */
 export function SkeletonStatCards({
   count = 3,
@@ -173,15 +191,28 @@ export function SkeletonStatCards({
   compact?: boolean;
 }) {
   const total = stats?.length ?? count;
+  const enFila = Math.min(3, Math.max(1, total - (stats?.filter((stat) => stat.compactWide).length ?? 0)));
   return (
     <>
       {compact ? (
-        <div aria-hidden="true" className="grid grid-cols-3 divide-x divide-borde rounded-tarjeta border border-borde bg-superficie shadow-1 sm:hidden">
+        <div
+          aria-hidden="true"
+          className={cx(
+            "grid gap-px overflow-hidden rounded-tarjeta border border-borde bg-borde shadow-1 sm:hidden",
+            COMPACT_COLUMNS[enFila],
+          )}
+        >
           {Array.from({ length: total }, (_, i) => (
-            <div key={i} className="flex flex-col items-center gap-1 px-2 py-3 text-center">
+            <div
+              key={i}
+              className={cx(
+                "flex flex-col items-center gap-1 bg-superficie px-2 py-3 text-center",
+                stats?.[i]?.compactWide && "col-span-full",
+              )}
+            >
               <Skeleton className="h-8 w-10" />
               {stats?.[i] ? (
-                <p className="text-sm font-semibold leading-snug text-tinta-suave">{stats[i].label}</p>
+                <p className="text-sm font-semibold leading-snug text-tinta-suave">{stats[i].compactLabel ?? stats[i].label}</p>
               ) : (
                 <Skeleton className="h-4 w-16 rounded-pastilla" />
               )}
@@ -195,7 +226,7 @@ export function SkeletonStatCards({
         className={cx(
           "grid-cols-1 gap-4",
           compact ? "hidden sm:grid" : "grid",
-          total === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4",
+          total === 3 ? "sm:grid-cols-3" : total === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-4",
         )}
       >
         {Array.from({ length: total }, (_, i) => {
@@ -249,9 +280,11 @@ export function SkeletonTable({
   cardAction?: boolean;
   /**
    * `filas`: en el teléfono, filas separadas por líneas (sin tarjeta propia),
-   * para listas que ya van dentro de una tarjeta de sección.
+   * para listas que ya van dentro de una tarjeta de sección. `reservas`: igual,
+   * pero agrupadas por reserva (código y pago arriba, pasajeros debajo), como
+   * la lista de pasajeros de la hoja de salida.
    */
-  mobileVariant?: "tarjetas" | "filas";
+  mobileVariant?: "tarjetas" | "filas" | "reservas";
   /**
    * La tabla va de borde a borde dentro de una tarjeta de sección (sin marco
    * propio), como la lista de pasajeros de la hoja de salida.
@@ -284,7 +317,30 @@ export function SkeletonTable({
           </div>
         ))}
       </div>
-      {mobileVariant === "filas" ? (
+      {mobileVariant === "reservas" ? (
+        <div aria-hidden="true" className="flex flex-col divide-y divide-borde md:hidden">
+          {Array.from({ length: Math.min(rows, 3) }, (_, row) => (
+            <div key={row} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm text-tinta-suave">Código de reserva</p>
+                  <Skeleton className="h-5 w-40 rounded-pastilla" />
+                </div>
+                <Skeleton className="h-6 w-24 rounded-pastilla" />
+              </div>
+              <div className="flex flex-col gap-3 border-l-2 border-borde pl-3">
+                {Array.from({ length: row === 0 ? 2 : 1 }, (_, i) => (
+                  <div key={i} className="flex flex-col gap-1.5">
+                    <Skeleton className="h-6 w-2/3 rounded-pastilla" />
+                    <Skeleton className="h-5 w-1/2 rounded-pastilla" />
+                    <Skeleton className="h-6 w-28 rounded-pastilla" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : mobileVariant === "filas" ? (
         <div aria-hidden="true" className="flex flex-col divide-y divide-borde md:hidden">
           {Array.from({ length: Math.min(rows, 4) }, (_, row) => (
             <div key={row} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">

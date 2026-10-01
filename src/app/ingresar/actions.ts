@@ -8,6 +8,7 @@ import { checkLoginRate, PASSENGER_COOKIE } from "@/modules/auth";
 import { normalizeIdNumber } from "@/lib/identity";
 import { safeNext } from "@/lib/safe-next";
 import { fieldErrorsFromIssues, formText } from "../_publico/form-errors";
+import { ID_NUMBER_EMPTY_ERROR } from "../registro/texts";
 
 export type IngresarField = "idNumber" | "password";
 
@@ -27,7 +28,7 @@ export interface IngresarFormState {
 const INGRESAR_FIELDS: readonly IngresarField[] = ["idNumber", "password"];
 
 const ingresarSchema = z.object({
-  idNumber: z.string().trim().min(1, "Escribe tu cédula."),
+  idNumber: z.string().trim().min(1, ID_NUMBER_EMPTY_ERROR),
   password: z.string().min(1, "Escribe tu contraseña."),
   next: z.string().optional(),
 });

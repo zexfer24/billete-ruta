@@ -26,7 +26,7 @@ export default function TableroAdminLoading() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <TabsSkeleton labels={ADMIN_PERIOD_TAB_LABELS} />
+        <TabsSkeleton labels={ADMIN_PERIOD_TAB_LABELS} grid />
         <LineSkeleton />
       </div>
 

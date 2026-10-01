@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { listAgencyPassengers, listPendingProofQueue } from "@/modules/reports";
-import type { AgencyPassengerRow, ReservationView } from "@/modules/reports";
+import type { AgencyPassengerRow, PendingProofRow, ReservationView } from "@/modules/reports";
 import type { ProofCoverage } from "@/modules/payments";
 import { formatMoney, toDecimal } from "@/lib/decimal";
 import { maskIdNumber } from "@/lib/identity";
@@ -19,6 +19,7 @@ import {
 } from "@/components/panel-ui";
 import { IconCheckCircle, IconChevronLeft, IconChevronRight, IconList, IconSearch } from "@/components/icons";
 import { countLabel } from "../_dashboard/text";
+import { departsInText } from "../_dashboard/attention";
 import { coverageBadge } from "./proof-review";
 import { lastValidPage, pasajerosUrl } from "./urls";
 import { showsUsdEquivalent } from "./money";
@@ -26,11 +27,24 @@ import { LinkPendingIcon, LinkRow } from "./link-pending";
 import { ResponsiveTable } from "../_dashboard/responsive-table";
 
 /**
- * Filas por página: el mismo tamaño en todas las vistas, para que al cambiar
- * de pestaña la lista no cambie de largo sin razón visible.
+ * Filas por página. Las reservas van de 25 en 25. La cola de comprobantes va
+ * de 15 en 15 en todos los anchos (nunca según el dispositivo, para que
+ * `?pagina=2` muestre lo mismo en el teléfono y en el escritorio): es una cola
+ * de trabajo que se atiende de arriba abajo, y así la paginación no queda al
+ * fondo de diez pantallas en el teléfono.
  */
 export const RESERVATIONS_PAGE_SIZE = 25;
-export const PROOFS_PAGE_SIZE = 25;
+export const PROOFS_PAGE_SIZE = 15;
+
+/**
+ * Con su salida a menos de estas horas, un comprobante por revisar lleva una
+ * pastilla de alerta con cuánto falta ("Sale en 44 min"): si no se revisa a
+ * tiempo, el pasajero llega al embarque sin ticket.
+ */
+const URGENT_DEPARTURE_HOURS = 6;
+
+/** Ancho mínimo del nombre de la ruta en las tablas, para que "Caracas – San Cristóbal" no se parta. */
+const ROUTE_CELL_CLASS = "block min-w-52";
 
 /** Estado vacío de cada vista cuando no hay filtros activos. */
 const EMPTY_BY_VIEW: Record<Exclude<ReservationView, "por-revisar">, { title: string; description: string }> = {
@@ -67,6 +81,17 @@ function afterApproval(coverage: ProofCoverage): string {
   return coverage.balanceAfterUsd.greaterThan(0)
     ? `Quedan ${formatMoney(coverage.balanceAfterUsd, "USD")} por pagar`
     : "Queda pagada";
+}
+
+/**
+ * Pastilla de urgencia de un comprobante: solo si su salida todavía no parte
+ * (programada o embarcando) y sale dentro de `URGENT_DEPARTURE_HOURS`.
+ */
+function urgencyBadge(row: PendingProofRow, now: Date): ReactNode {
+  if (row.departureStatus !== "PROGRAMADA" && row.departureStatus !== "MANIFIESTO_CERRADO") return null;
+  const faltaMs = row.departsAt.getTime() - now.getTime();
+  if (faltaMs < 0 || faltaMs > URGENT_DEPARTURE_HOURS * 3_600_000) return null;
+  return <StatusBadge label={departsInText(row.departsAt, now)} tone="alerta" />;
 }
 
 function lowerFirst(text: string): string {
@@ -185,6 +210,64 @@ function ResultsSummary({
   );
 }
 
+/**
+ * Tarjeta de un comprobante por revisar en el teléfono y la tableta. Toda la
+ * tarjeta es el único enlace (con la flecha a la derecha, que cambia por el
+ * indicador de espera mientras se abre), en vez de un botón de ancho completo
+ * debajo: la cédula y el código van en una línea y los dos montos en otras dos,
+ * así cada tarjeta ocupa unos 190 px en vez de 300.
+ */
+function ProofQueueCard({
+  row,
+  href,
+  badge,
+  urgency,
+}: {
+  row: PendingProofRow;
+  href: string;
+  badge: { label: string; tone: StatusTone };
+  urgency: ReactNode;
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        scroll={false}
+        className="foco relative flex h-full items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-colors duration-150 ease-out hover:bg-marca-50/60 motion-reduce:transition-none"
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="break-words text-base font-semibold text-tinta">
+            <span className="sr-only">Revisar el comprobante de </span>
+            {row.holderName}
+          </span>
+          <span className="flex flex-wrap gap-1.5">
+            <StatusBadge label={badge.label} tone={badge.tone} />
+            {urgency}
+          </span>
+          <span className="tabular text-sm text-tinta-suave">
+            <span className="whitespace-nowrap">{row.maskedHolderIdNumber}</span> ·{" "}
+            <span className="whitespace-nowrap">{row.code}</span>
+          </span>
+          <span className="tabular text-sm text-tinta-suave">
+            {row.routeName} · <span className="whitespace-nowrap">{formatCaracasDateTime24(row.departsAt)}</span>
+          </span>
+          <span className="tabular text-[15px] text-tinta">
+            Envió <span className="whitespace-nowrap font-semibold">{formatMoney(row.amount, row.currency)}</span>
+            {showsUsdEquivalent(row.currency) ? (
+              <span className="text-tinta-suave">
+                {" "}
+                (equivale a <span className="whitespace-nowrap">{formatMoney(row.amountUsd, "USD")}</span>)
+              </span>
+            ) : null}
+          </span>
+          <span className="tabular text-sm text-tinta-suave">Si lo apruebas: {lowerFirst(afterApproval(row.coverage))}</span>
+        </span>
+        <LinkPendingIcon icon={<IconChevronRight className="size-5 shrink-0 text-marca-700" />} />
+      </Link>
+    </li>
+  );
+}
+
 /** Paginación con "Anterior" y "Siguiente" de 44 px y la página actual en palabras. */
 function Pagination({
   page,
@@ -221,8 +304,10 @@ function Pagination({
 
 /**
  * Vista "Por revisar": la cola de comprobantes pendientes, del más antiguo al
- * más nuevo. Cada fila tiene un solo enlace, "Revisar", que abre el panel
- * lateral; el resto de la fila lleva al mismo lugar con el ratón.
+ * más nuevo, con una pastilla de alerta en los de salidas próximas. En
+ * escritorio cada fila tiene un solo enlace, "Revisar", que abre el panel
+ * lateral (el resto de la fila lleva al mismo lugar con el ratón); en el
+ * teléfono y la tableta, la tarjeta entera es ese enlace.
  */
 export async function ProofQueueList({
   agencyId,
@@ -259,10 +344,12 @@ export async function ProofQueueList({
     );
   }
 
+  const now = new Date();
   const filas = cola.rows.map((row) => ({
     row,
     href: pasajerosUrl({ vista: "por-revisar", pagina: page, comprobante: row.proofId }),
     badge: coverageBadge(row.coverage),
+    urgency: urgencyBadge(row, now),
   }));
 
   return (
@@ -277,32 +364,8 @@ export async function ProofQueueList({
       <ResponsiveTable
         cards={
           <>
-            {filas.map(({ row, href, badge }) => (
-              <MobileCard
-                key={row.proofId}
-                title={row.holderName}
-                subtitle={
-                  <CardSubtitle
-                    badge={<StatusBadge label={badge.label} tone={badge.tone} />}
-                    idNumber={row.maskedHolderIdNumber}
-                    code={row.code}
-                    trip={`${row.routeName} · ${formatCaracasDateTime24(row.departsAt)}`}
-                  />
-                }
-                details={[
-                  {
-                    label: "Monto enviado",
-                    value: <SentAmount amount={row.amount} currency={row.currency} amountUsd={row.amountUsd} />,
-                  },
-                  { label: "Si lo apruebas", value: afterApproval(row.coverage) },
-                ]}
-                action={
-                  <Link href={href} scroll={false} className={panelButtonClass("secundario", "md", "relative w-full")}>
-                    <LinkPendingIcon />
-                    Revisar comprobante
-                  </Link>
-                }
-              />
+            {filas.map(({ row, href, badge, urgency }) => (
+              <ProofQueueCard key={row.proofId} row={row} href={href} badge={badge} urgency={urgency} />
             ))}
           </>
         }
@@ -328,7 +391,7 @@ export async function ProofQueueList({
               </tr>
             </thead>
             <tbody>
-              {filas.map(({ row, href, badge }) => (
+              {filas.map(({ row, href, badge, urgency }) => (
                 <LinkRow
                   key={row.proofId}
                   selected={row.proofId === selectedProofId}
@@ -339,8 +402,9 @@ export async function ProofQueueList({
                     <HolderIdAndCode idNumber={row.maskedHolderIdNumber} code={row.code} />
                   </td>
                   <td className={PANEL_TD_CLASS}>
-                    <span className="block">{row.routeName}</span>
+                    <span className={ROUTE_CELL_CLASS}>{row.routeName}</span>
                     <span className="tabular block text-tinta-suave">{formatCaracasDateTime24(row.departsAt)}</span>
+                    {urgency ? <span className="mt-1 block">{urgency}</span> : null}
                     {row.departureStatus !== "PROGRAMADA" ? (
                       <span className="block text-alerta">Salida: {departureStatusLabel(row.departureStatus)}</span>
                     ) : null}
@@ -531,7 +595,7 @@ export async function ReservationList({
                     ) : null}
                   </td>
                   <td className={PANEL_TD_CLASS}>
-                    <span className="block">{row.routeName}</span>
+                    <span className={ROUTE_CELL_CLASS}>{row.routeName}</span>
                     <span className="tabular block text-tinta-suave">
                       {formatCaracasDateTime24(row.departsAt)} ·{" "}
                       {countLabel(row.passengerCount, "persona", "personas")}

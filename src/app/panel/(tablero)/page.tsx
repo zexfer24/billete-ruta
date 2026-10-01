@@ -26,7 +26,7 @@ import { DepartureForm } from "@/app/panel/_forms/departure-form";
 import { VehicleForm } from "@/app/panel/_forms/vehicle-form";
 import { DriverForm } from "@/app/panel/_forms/driver-form";
 import { AttentionBlock } from "@/app/panel/_dashboard/attention-block";
-import { FiguresBlock } from "@/app/panel/_dashboard/figures-block";
+import { FiguresBlock, PendingNowLine } from "@/app/panel/_dashboard/figures-block";
 import { FleetBlock } from "@/app/panel/_dashboard/fleet-block";
 import { TicketsBlock } from "@/app/panel/_dashboard/tickets-block";
 import { TripsTodayBlock } from "@/app/panel/_dashboard/trips-today-block";
@@ -35,17 +35,13 @@ import { Collapsible } from "@/app/panel/_dashboard/collapsible";
 import {
   AttentionSkeleton,
   FiguresSkeleton,
+  FleetSkeleton,
   ListRowsSkeleton,
-  SectionSkeleton,
+  PendingNowSkeleton,
+  TicketsSkeleton,
   TripsTodaySkeleton,
 } from "@/app/panel/_dashboard/skeletons";
-import {
-  ACTIVITY_TITLE,
-  activityDescription,
-  FLEET_SECTION,
-  QUICK_REGISTER_SECTION,
-  ticketsSection,
-} from "@/app/panel/_dashboard/section-texts";
+import { ACTIVITY_TITLE, activityDescription, QUICK_REGISTER_SECTION } from "@/app/panel/_dashboard/section-texts";
 import { errorMessage, firstParam, okMessage, type RawSearchParam } from "@/app/panel/_dashboard/search-params";
 
 export const metadata = { title: "Tablero" };
@@ -112,8 +108,8 @@ async function DeparturePanelContent({
 }
 
 /**
- * Tablero del operador (spec 7.2). Arriba lo que necesita atención ahora y
- * las cuatro cifras del periodo; debajo, las salidas del día, la flota, los
+ * Tablero del operador (spec 7.2). Arriba lo que necesita atención ahora
+ * (con la línea en vivo de reservas por cobrar) y las tres cifras del periodo; debajo, las salidas del día, la flota, los
  * tickets nuevos y, plegados, la actividad y el registro rápido. Cada bloque
  * carga por su cuenta dentro de su `<Suspense>`: la cabecera y la acción
  * principal aparecen al instante.
@@ -196,6 +192,10 @@ export default async function PanelPage({
         <Suspense fallback={<AttentionSkeleton />}>
           <AttentionBlock pendingProofs={comprobantes} departures={salidasHoy} now={now} />
         </Suspense>
+        {/* En vivo, no depende del periodo del resumen: por eso va aquí y no entre las cifras. */}
+        <Suspense fallback={<PendingNowSkeleton />}>
+          <PendingNowLine summary={resumen} />
+        </Suspense>
       </section>
 
       <section aria-labelledby="resumen-titulo" className="flex flex-col gap-4">
@@ -228,13 +228,10 @@ export default async function PanelPage({
       </Suspense>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <Suspense fallback={<SectionSkeleton rows={4} {...FLEET_SECTION} />}>
+        <Suspense fallback={<FleetSkeleton />}>
           <FleetBlock fleet={flota} now={now} registerDriverHref={registrarHref("chofer")} />
         </Suspense>
-        <Suspense
-          key={periodo}
-          fallback={<SectionSkeleton rows={4} {...ticketsSection(periodPhrase)} />}
-        >
+        <Suspense key={periodo} fallback={<TicketsSkeleton periodPhrase={periodPhrase} />}>
           <TicketsBlock tickets={tickets} periodPhrase={periodPhrase} now={now} />
         </Suspense>
       </div>
@@ -265,11 +262,9 @@ export default async function PanelPage({
       </div>
 
       {registrar === "cobro" ? (
-        <SidePanel
-          title="Registrar un cobro en efectivo"
-          subtitle="Escribe el código del ticket y el monto que recibiste."
-          closeHref={closeHref}
-        >
+        // Sin subtítulo: el formulario ya explica los dos pasos (buscar la
+        // reserva y luego cobrar) y no conviene decirlo dos veces.
+        <SidePanel title="Registrar un cobro en efectivo" closeHref={closeHref}>
           <CashPaymentForm mode="codigo" returnTo="tablero" error={error} />
         </SidePanel>
       ) : null}

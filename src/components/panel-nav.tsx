@@ -49,6 +49,22 @@ const BADGE_LABELS: Record<PanelNavBadgeKey, (count: number) => string> = {
   pendingProofs: (count) => `${count} ${count === 1 ? "comprobante" : "comprobantes"} por revisar`,
 };
 
+/**
+ * Texto corto que acompaña al número cuando la insignia sale en el botón
+ * "Menú" de la barra superior: ahí no está al lado de su enlace, y un número
+ * suelto no dice qué cuenta.
+ */
+const BADGE_SHORT_LABELS: Record<PanelNavBadgeKey, string> = {
+  pendingProofs: "por revisar",
+};
+
+/**
+ * Clase del contenedor de las insignias en el botón "Menú". `PanelNavBadge`
+ * la detecta con un selector de ancestro y muestra su texto corto, porque el
+ * layout entrega la insignia ya armada (dentro de un `<Suspense>`).
+ */
+const TOP_BAR_BADGE_CLASS = "insignia-barra";
+
 export type PanelNavVariant = "agencia" | "terminal";
 
 /** Etiqueta de rol bajo el logo (spec 6.4). */
@@ -78,7 +94,9 @@ export interface PanelNavProps {
 /**
  * Insignia de trabajo pendiente de un enlace del menú. Es ámbar (alerta), no
  * roja: indica tareas por hacer, no un error. El número se ve y el lector de
- * pantalla oye la frase completa. Con cero no pinta nada.
+ * pantalla oye la frase completa. Con cero no pinta nada. Dentro del botón
+ * "Menú" (contenedor `insignia-barra`) suma un texto corto visible
+ * ("73 por revisar").
  */
 export function PanelNavBadge({ count, badgeKey }: { count: number; badgeKey: PanelNavBadgeKey }) {
   if (!Number.isFinite(count) || count <= 0) return null;
@@ -86,9 +104,12 @@ export function PanelNavBadge({ count, badgeKey }: { count: number; badgeKey: Pa
     <span className="ml-auto inline-flex shrink-0">
       <span
         aria-hidden="true"
-        className="tabular inline-flex h-6 min-w-6 items-center justify-center rounded-pastilla bg-alerta px-1.5 text-xs font-bold text-white"
+        className="tabular inline-flex h-6 min-w-6 items-center justify-center gap-1 rounded-pastilla bg-alerta px-1.5 text-xs font-bold text-white [.insignia-barra_&]:px-2.5 [.insignia-barra_&]:text-sm"
       >
         {count > 99 ? "99+" : count}
+        <span className="hidden font-semibold [.insignia-barra_&]:inline">
+          {BADGE_SHORT_LABELS[badgeKey]}
+        </span>
       </span>
       <span className="sr-only">, {BADGE_LABELS[badgeKey](count)}</span>
     </span>
@@ -270,11 +291,15 @@ export function PanelNav({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
+  // En el botón "Menú" la insignia lleva texto visible ("73 por revisar"),
+  // porque ahí no está junto a su enlace. En el teléfono no cabe al lado del
+  // logo y no se muestra: sigue dentro del menú, junto a su enlace, y el
+  // tablero ya avisa de los comprobantes por revisar.
   const pendingBadges = groups
     .flatMap((group) => group.links)
     .filter((link) => link.badgeKey)
     .map((link) => (
-      <span key={link.href} className="contents">
+      <span key={link.href} className={`${TOP_BAR_BADGE_CLASS} hidden sm:inline-flex`}>
         {renderBadge(link.badgeKey as PanelNavBadgeKey, badges)}
       </span>
     ));

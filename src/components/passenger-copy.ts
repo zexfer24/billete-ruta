@@ -3,6 +3,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { es } from "date-fns/locale/es";
 import type { NoticeKind } from "@/modules/notices";
 import { BUSINESS_TZ, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
+import { dueForRelease12h, UNPAID_EXPIRY_MINUTES } from "@/modules/scheduler";
 import type { PillTone } from "./ui-classes";
 
 /**
@@ -122,6 +123,160 @@ export const PASSENGER_PROOF_STATUS_LABELS: Record<string, string> = {
   APROBADO: "Aprobado",
   RECHAZADO: "Rechazado",
 };
+
+// ---------------------------------------------------------------------------
+// Plazos de pago.
+// ---------------------------------------------------------------------------
+
+/** Lo mínimo de una reserva para saber hasta cuándo puede pagar. */
+export interface DeadlineInput {
+  status: string;
+  departsAt: Date;
+  expiresAt: Date | null;
+  /** Una reserva de taquilla reconfirmada ya no se libera a las 12 horas. */
+  reconfirmedAt?: Date | null;
+}
+
+/**
+ * Hora límite para pagar una reserva y si esa hora la pone la salida del bus
+ * (`boundByDeparture`) en vez de la regla de liberación.
+ */
+export interface PaymentDeadline {
+  at: Date;
+  boundByDeparture: boolean;
+}
+
+/**
+ * Hora límite para pagar en la taquilla: la salida menos el mismo plazo con el
+ * que el barrido libera el puesto (`dueForRelease12h`), como el aviso.
+ */
+export function cashCounterDeadline(departsAt: Date, now: Date): Date {
+  const plazoMs = dueForRelease12h(now).getTime() - now.getTime();
+  return new Date(departsAt.getTime() - plazoMs);
+}
+
+/**
+ * Hasta cuándo puede pagar el pasajero sin perder el puesto, o `null` si no
+ * corre ningún plazo (ya pagó algo, está en revisión, la reserva no sirve o
+ * el plazo ya pasó). Una reserva sin pago vence a las 2 horas de creada, pero
+ * nunca después de la salida: si el bus sale antes, el plazo es la salida.
+ * No cambia la regla de liberación, solo lo que se le dice al pasajero.
+ */
+export function paymentDeadline(reserva: DeadlineInput, now: Date): PaymentDeadline | null {
+  if (reserva.departsAt <= now) return null;
+  if (reserva.status === "PENDIENTE_PAGO") {
+    if (!reserva.expiresAt) return null;
+    const boundByDeparture = reserva.departsAt < reserva.expiresAt;
+    const at = boundByDeparture ? reserva.departsAt : reserva.expiresAt;
+    return at > now ? { at, boundByDeparture } : null;
+  }
+  if (reserva.status === "PAGO_EN_SITIO" && !reserva.reconfirmedAt) {
+    const at = cashCounterDeadline(reserva.departsAt, now);
+    return at > now ? { at, boundByDeparture: false } : null;
+  }
+  return null;
+}
+
+/**
+ * Plazo que tendría una reserva en línea creada ahora para esta salida, para
+ * decirlo antes de reservar: 2 horas, o la hora de salida si es antes.
+ */
+export function estimatedOnlineDeadline(departsAt: Date, now: Date): PaymentDeadline | null {
+  return paymentDeadline(
+    {
+      status: "PENDIENTE_PAGO",
+      departsAt,
+      expiresAt: new Date(now.getTime() + UNPAID_EXPIRY_MINUTES * 60_000),
+    },
+    now,
+  );
+}
+
+/**
+ * El plazo en palabras, listo para ir detrás de "hasta" o "antes de": "hoy a
+ * las 21:02" o, si lo pone la salida, "hoy a las 20:58, cuando sale el bus".
+ */
+export function deadlinePhrase(deadline: PaymentDeadline, now: Date = new Date()): string {
+  const when = whenPhrase(deadline.at, now);
+  return deadline.boundByDeparture ? `${when}, cuando sale el bus` : when;
+}
+
+/** Un plazo de taquilla más lejano que esto no se resalta en el ticket: todavía no apura. */
+const CARD_CASH_DEADLINE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Plazo que se resalta en el ticket: siempre el de una reserva sin pago (dura
+ * como mucho 2 horas) y el de la taquilla solo si vence dentro de 24 horas,
+ * para no poner en tono de alerta algo que falta días para vencer.
+ */
+export function ticketDeadline(reserva: DeadlineInput, now: Date): PaymentDeadline | null {
+  const plazo = paymentDeadline(reserva, now);
+  if (!plazo) return null;
+  if (reserva.status === "PAGO_EN_SITIO" && plazo.at.getTime() - now.getTime() > CARD_CASH_DEADLINE_MS) {
+    return null;
+  }
+  return plazo;
+}
+
+/** Línea del plazo en el ticket: "Paga antes de hoy a las 21:02". */
+export function ticketDeadlineLabel(status: string, deadline: PaymentDeadline, now: Date = new Date()): string {
+  const cuando = deadlinePhrase(deadline, now);
+  return status === "PAGO_EN_SITIO" ? `Paga en la taquilla antes de ${cuando}` : `Paga antes de ${cuando}`;
+}
+
+/** Lo mínimo de una reserva próxima para elegir cuál va en grande en el inicio. */
+export interface HeroCandidate extends DeadlineInput {
+  code: string;
+}
+
+/** Un ticket pagado que sale dentro de este plazo siempre va en grande: se usa para abordar. */
+const HERO_PAID_KEEP_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * Elige la reserva del inicio por la acción que toca, no solo por la hora
+ * (spec 7.1, "la próxima acción en grande"):
+ *
+ * 1. Parte de la salida más cercana; en una misma salida, la más urgente y,
+ *    a igual urgencia, la de código menor.
+ * 2. Si esa reserva no le pide nada al pasajero (pago en revisión, o pagada
+ *    y con más de 3 horas para salir), sube la reserva próxima con el plazo
+ *    de pago más cercano, si hay alguna: es la que se pierde si no actúa.
+ * 3. Un ticket pagado que sale dentro de 3 horas nunca cede su lugar: es lo
+ *    que se muestra al abordar.
+ *
+ * `soonest` es la de la salida más cercana; `promoted` dice si el héroe es
+ * otra por su plazo. `null` si no hay reservas.
+ */
+export function pickHeroReservation<T extends HeroCandidate>(
+  reservas: readonly T[],
+  now: Date,
+): { hero: T; soonest: T; promoted: boolean } | null {
+  const ordenadas = [...reservas].sort(
+    (a, b) =>
+      a.departsAt.getTime() - b.departsAt.getTime() ||
+      reservationUrgency(a.status) - reservationUrgency(b.status) ||
+      a.code.localeCompare(b.code),
+  );
+  const soonest = ordenadas[0];
+  if (!soonest) return null;
+
+  const noPideNada =
+    soonest.status === "EN_VALIDACION" ||
+    (soonest.status === "PAGADA" && soonest.departsAt.getTime() - now.getTime() > HERO_PAID_KEEP_MS);
+  if (!noPideNada) return { hero: soonest, soonest, promoted: false };
+
+  let conPlazo: { reserva: T; at: number } | null = null;
+  for (const reserva of ordenadas) {
+    if (reserva === soonest) continue;
+    const plazo = paymentDeadline(reserva, now);
+    if (plazo && (!conPlazo || plazo.at.getTime() < conPlazo.at)) {
+      conPlazo = { reserva, at: plazo.at.getTime() };
+    }
+  }
+  return conPlazo
+    ? { hero: conPlazo.reserva, soonest, promoted: true }
+    : { hero: soonest, soonest, promoted: false };
+}
 
 // ---------------------------------------------------------------------------
 // Horas con contexto.

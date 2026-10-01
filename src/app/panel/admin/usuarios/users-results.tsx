@@ -5,7 +5,7 @@ import { cx } from "@/components/ui-classes";
 import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
 import { listAccounts } from "@/modules/reports";
 import { accountSearchTerm, countLabel, formatCount, formatPhone } from "../_shared/format";
-import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, Pagination, TimeCell } from "../_shared/lists";
+import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, MobileCardList, Pagination, TimeCell } from "../_shared/lists";
 import { withQuery } from "../_shared/period";
 import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
 
@@ -101,30 +101,38 @@ export async function UsersResults({
 
       <TableShell
         mobile={
-          <ul aria-label="Cuentas de pasajero" className="flex flex-col gap-3">
-            {rows.map((r) => (
+          // En el teléfono, solo lo esencial para reconocer a la persona: el
+          // año de nacimiento y el último ingreso quedan en la tabla de
+          // escritorio. Las primeras 10 tarjetas a la vista y el resto de la
+          // página detrás de "Ver N cuentas más"; la consulta auditada no cambia.
+          <MobileCardList
+            label="Cuentas de pasajero"
+            moreNoun={["cuenta", "cuentas"]}
+            items={rows.map((r) => (
               <MobileCard
                 key={r.id}
                 title={r.fullName}
                 subtitle={
                   <>
-                    <span className="tabular">Cédula {r.idNumber}</span> · Nació en{" "}
-                    <span className="tabular">{r.birthYear}</span>
+                    <span className="block">
+                      <span className="tabular whitespace-nowrap">Cédula {r.idNumber}</span> ·{" "}
+                      <span className="tabular whitespace-nowrap">{formatPhone(r.phone)}</span>
+                    </span>
+                    {/* El registro es el orden de la lista: se ve en cada tarjeta. */}
+                    <span className="block">
+                      <span className="tabular whitespace-nowrap">
+                        Registro {formatCaracasDateTime24(r.createdAt)}
+                      </span>{" "}
+                      ·{" "}
+                      <span className="tabular whitespace-nowrap">
+                        {countLabel(r.paidTrips, "viaje pagado", "viajes pagados")}
+                      </span>
+                    </span>
                   </>
                 }
-                details={[
-                  { label: "Teléfono", value: <span className="whitespace-nowrap">{formatPhone(r.phone)}</span> },
-                  { label: "Viajes pagados", value: formatCount(r.paidTrips) },
-                  // El registro es el orden de la lista: se ve en cada tarjeta.
-                  { label: "Registro", value: formatCaracasDateTime24(r.createdAt) },
-                  {
-                    label: "Último ingreso",
-                    value: r.lastLoginAt ? formatCaracasDateTime24(r.lastLoginAt) : "Nunca",
-                  },
-                ]}
               />
             ))}
-          </ul>
+          />
         }
       >
         <table className="w-full text-left">
@@ -178,7 +186,7 @@ export function UsersResultsSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-80" />
-      <TableSkeleton columns={USER_COLUMNS} rows={10} />
+      <TableSkeleton columns={USER_COLUMNS} rows={10} mobileDetails={0} mobileSubtitleLines={2} />
     </div>
   );
 }

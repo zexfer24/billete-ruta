@@ -15,6 +15,7 @@ import {
   type RegisterField,
 } from "../_publico/form-errors";
 import { afterRegisterHref } from "../_publico/links";
+import { ID_NUMBER_EMPTY_ERROR } from "./texts";
 
 /** Datos que se devuelven al formulario tras un error, para no volver a escribirlos. Nunca las contraseñas. */
 export type RegistroValues = Partial<Record<Exclude<RegisterField, "password" | "confirmPassword">, string>>;
@@ -40,7 +41,7 @@ export interface RegistroFormState {
  */
 const registroSchema = z
   .object({
-    idNumber: z.string().trim().min(1, "Escribe tu cédula: la letra y el número, por ejemplo V12345678."),
+    idNumber: z.string().trim().min(1, ID_NUMBER_EMPTY_ERROR),
     givenNames: z.string().trim().min(2, "Escribe tus nombres como aparecen en tu cédula."),
     surnames: z.string().trim().min(2, "Escribe tus apellidos."),
     phone: z

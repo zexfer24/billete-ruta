@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { IconMapPin } from "@/components/icons";
 import { Isotipo, LogoLockup } from "@/components/logo";
 import { Skeleton, SkeletonCircle, SkeletonText } from "@/components/skeleton";
 
@@ -74,7 +75,11 @@ export function SkeletonTicketCompact({ withAction = false }: { withAction?: boo
   );
 }
 
-/** Ticket grande: cabecera morada con logo, ruta y hora; cuerpo con agencia, QR o barra, y código. */
+/**
+ * Ticket grande del detalle: cabecera morada con logo, ruta y hora; cuerpo con
+ * la agencia (y el estado debajo en el teléfono), la barra de pago, la caja
+ * del código y la de "Dónde abordar", con sus etiquetas reales.
+ */
 export function SkeletonTicketLarge() {
   return (
     <div aria-hidden="true" className="overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1">
@@ -93,15 +98,26 @@ export function SkeletonTicketLarge() {
       <div className="flex flex-col gap-4 p-5">
         <div className="flex items-center gap-3">
           <Skeleton className="h-8 w-12" />
-          <Skeleton className="h-5 flex-1 rounded-pastilla" />
-          <Skeleton className="h-6 w-24 rounded-pastilla" />
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <Skeleton className="h-5 w-2/3 rounded-pastilla sm:w-48" />
+            <Skeleton className="h-7 w-24 rounded-pastilla" />
+          </div>
         </div>
         <div className="flex flex-col gap-2">
           <Skeleton className="h-4 w-48 rounded-pastilla" />
           <Skeleton className="h-2 w-full rounded-pastilla" />
-          <Skeleton className="h-4 w-4/5 rounded-pastilla" />
         </div>
-        <Skeleton className="h-16 w-full" />
+        <div className="rounded-control bg-lienzo px-4 py-3">
+          <p className="text-sm text-tinta-suave">Código de reserva</p>
+          <Skeleton className="mt-1 h-6 w-56 max-w-full rounded-pastilla" />
+        </div>
+        <div className="flex items-start gap-3 rounded-control border border-marca-200 bg-marca-50 px-4 py-3">
+          <IconMapPin aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-marca-600" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <p className="text-sm text-tinta-suave">Dónde abordar</p>
+            <Skeleton className="mt-1 h-5 w-3/4 rounded-pastilla" />
+          </div>
+        </div>
       </div>
     </div>
   );

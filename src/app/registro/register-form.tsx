@@ -9,7 +9,7 @@ import { loginHref } from "../_publico/links";
 import { PasswordField } from "../_publico/password-field";
 import { useFocusFirstError } from "../_publico/use-focus-first-error";
 import { registrarAction, type RegistroFormState } from "./actions";
-import { REGISTER_GROUPS, REGISTER_HINTS } from "./texts";
+import { REGISTER_GROUPS, REGISTER_HINTS, REGISTER_TEXTS, type RegisterMode } from "./texts";
 
 const initialState: RegistroFormState = { error: null };
 
@@ -17,13 +17,17 @@ const initialState: RegistroFormState = { error: null };
  * Formulario de registro (o de activación de una cuenta creada en taquilla),
  * en tres grupos con título: tus datos, cómo te avisamos y tu acceso. Cada
  * error aparece junto a su campo, en lugar de su ayuda, y el foco va al
- * primero; lo escrito se conserva tras un error, salvo las contraseñas.
+ * primero; lo escrito se conserva tras un error, salvo las contraseñas. El
+ * modo solo cambia los textos (botón y título del error): el envío es el
+ * mismo, porque `registerAccount` activa la cuenta de taquilla si la cédula,
+ * el teléfono y el año coinciden.
  */
-export function RegisterForm({ next }: { next?: string }) {
+export function RegisterForm({ next, mode = "crear" }: { next?: string; mode?: RegisterMode }) {
   const [state, formAction] = useActionState(registrarAction, initialState);
   const formRef = useRef<HTMLFormElement>(null);
   useFocusFirstError(formRef, state.attempt);
 
+  const textos = REGISTER_TEXTS[mode];
   const errores = state.fieldErrors ?? {};
   const valores = state.values ?? {};
   // Con error, el error reemplaza a la ayuda: cada mensaje ya dice qué
@@ -38,7 +42,7 @@ export function RegisterForm({ next }: { next?: string }) {
         <Alert
           key={state.attempt}
           tone="peligro"
-          title="No pudimos crear tu cuenta"
+          title={textos.errorTitle}
           action={
             state.errorKind === "ir-a-ingresar" ? (
               <Link href={loginHref(next)} className={buttonClass("secundario", undefined, "sm")}>
@@ -138,8 +142,8 @@ export function RegisterForm({ next }: { next?: string }) {
         />
       </FieldGroup>
 
-      <SubmitButton pendingLabel="Creando tu cuenta…" className={buttonClass("primario", "w-full", "lg")}>
-        Crear mi cuenta
+      <SubmitButton pendingLabel={textos.pending} className={buttonClass("primario", "w-full", "lg")}>
+        {textos.submit}
       </SubmitButton>
     </form>
   );

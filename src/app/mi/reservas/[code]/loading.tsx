@@ -5,7 +5,8 @@ import { SkeletonCard, SkeletonSectionTitle, SkeletonTicketLarge } from "../../_
 
 /**
  * Silueta del detalle de un viaje: el enlace real de volver (el título es
- * solo para lectores de pantalla), ticket grande, tarjeta de pago con la cifra y los campos, y
+ * solo para lectores de pantalla), ticket grande, tarjeta de pago con el
+ * aviso, los pasos, el método con su monto y los campos, y
  * quiénes viajan.
  */
 export default function DetalleReservaLoading() {
@@ -20,12 +21,11 @@ export default function DetalleReservaLoading() {
       <SkeletonTicketLarge />
       <SkeletonCard className="flex flex-col gap-4">
         <Skeleton className="h-6 w-40 rounded-pastilla" />
-        <div className="flex flex-col gap-1.5">
-          <Skeleton className="h-4 w-16 rounded-pastilla" />
-          <Skeleton className="h-9 w-36 rounded-pastilla" />
-        </div>
-        <Skeleton className="h-12 w-full" />
+        {/* Aviso del plazo, los tres pasos y el selector; la cifra a pagar va en el recuadro del método. */}
+        <Skeleton className="h-16 w-full" />
         <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-36 w-full" />
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-14 w-full rounded-pastilla" />
       </SkeletonCard>

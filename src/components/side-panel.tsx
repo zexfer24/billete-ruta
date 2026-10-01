@@ -9,7 +9,9 @@ import { IconClose } from "./icons";
  * un título claro, un botón "Cerrar" de 44 px con foco visible y se cierra
  * también con Escape o tocando el fondo. El foco queda dentro del panel
  * mientras está abierto y vuelve al enlace que lo abrió al cerrarse
- * (`CloseOnEscape`).
+ * (`CloseOnEscape`). Una barra de acciones `sticky bottom-0` puesta al final
+ * del contenido (directa o dentro de su elemento raíz) queda siempre pegada al
+ * pie del panel, tenga poco o mucho contenido.
  */
 export function SidePanel({
   title,
@@ -58,7 +60,10 @@ export function SidePanel({
             Cerrar
           </Link>
         </div>
-        <div className="px-5 py-5 sm:px-6">{children}</div>
+        {/* `panel-lateral-cuerpo` (globals.css) ocupa el alto que sobra: un pie `sticky bottom-0`
+            en el cuerpo o en la raíz del contenido queda pegado al borde inferior aunque haya
+            poco contenido, en vez de flotar a media altura con un hueco vacío debajo. */}
+        <div className="panel-lateral-cuerpo px-5 py-5 sm:px-6">{children}</div>
       </aside>
       <CloseOnEscape href={closeHref} />
     </div>

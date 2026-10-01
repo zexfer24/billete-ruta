@@ -95,7 +95,10 @@ export function ProofDecisionBar({
           </h3>
           <p className="text-sm text-tinta-suave">Compara la referencia y el monto con tu banco antes de decidir.</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        {/* En el teléfono, «Aprobar pago» va a todo el ancho y «Rechazar», más
+            bajo, debajo: la acción principal no se parte en dos líneas ni pesa
+            lo mismo que la secundaria. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <ConfirmDialog
             triggerLabel={
               <>
@@ -117,7 +120,7 @@ export function ProofDecisionBar({
             aria-expanded={rejecting}
             aria-controls={rejecting ? formId : undefined}
             onClick={() => setRejecting((value) => !value)}
-            className={panelButtonClass("secundario", "lg", "w-full sm:w-auto")}
+            className={panelButtonClass("secundario", "md", "w-full sm:min-h-12 sm:w-auto")}
           >
             <IconXCircle className="size-5 shrink-0 text-peligro" />
             Rechazar

@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useActionState, useEffect, useRef, type FormEvent, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
-import { DepartureRow } from "@/components/departure-row";
 import { IconAlertCircle } from "@/components/icons";
-import { currencyName } from "@/components/passenger-copy";
+import { currencyName, deadlinePhrase, estimatedOnlineDeadline } from "@/components/passenger-copy";
 import { StickyActions } from "@/components/sticky-actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Card } from "@/components/ui";
@@ -15,11 +14,11 @@ import { dueForRelease12h } from "@/modules/scheduler";
 import { crearReservaAction, type CrearReservaState } from "./actions";
 import {
   DOCUMENTS_RETURN_HREF,
-  toDepartureRowData,
   type CompanionForm,
   type DepartureVM,
   type PaymentMethodVM,
 } from "./booking-form";
+import { ChosenDeparture } from "./chosen-departure";
 import { convertCents, formatCents, type BookingCost } from "./money";
 import { revealAndFocus } from "./reveal";
 
@@ -103,6 +102,8 @@ export function StepPayment({
   const plazoTaquillaMs = dueForRelease12h(now).getTime() - now.getTime();
   const limiteTaquilla = new Date(new Date(departure.departsAtIso).getTime() - plazoTaquillaMs);
   const total = formatCents(cost.totalCents, "USD");
+  // Si el bus sale antes de que venzan las 2 horas, el plazo es la salida.
+  const plazoEnLinea = estimatedOnlineDeadline(new Date(departure.departsAtIso), now);
   const totalEnMoneda = selectedMethod ? equivalente(cost.totalCents, selectedMethod, exchangeRates) : null;
 
   function metodoOpcion(m: PaymentMethodVM) {
@@ -126,7 +127,10 @@ export function StepPayment({
           />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="break-words font-semibold text-tinta">{m.name}</span>
-            <span className="text-sm text-tinta-suave">Pagas en {currencyName(m.currency)}</span>
+            <span className="text-sm text-tinta-suave">
+              Pagas en {currencyName(m.currency)}
+              {m.currency === "USDT" ? " (dólar digital)" : null}
+            </span>
           </span>
         </label>
       </li>
@@ -147,7 +151,7 @@ export function StepPayment({
       <input type="hidden" name="companions" value={companionsPayload} />
       <input type="hidden" name="policiesAccepted" value={policiesAccepted ? "on" : ""} />
 
-      <DepartureRow departure={toDepartureRowData(departure)} now={now} selected />
+      <ChosenDeparture departure={departure} now={now} />
 
       {availableMethods.length === 0 ? (
         <Alert tone="alerta" role="none" title="Esta salida no tiene formas de pago disponibles">
@@ -176,7 +180,7 @@ export function StepPayment({
           ) : null}
           {!physicalAllowed ? (
             <p className="text-sm text-tinta-suave">
-              Pagar en la taquilla solo se puede elegir hasta 12 horas antes de salir.
+              Esta salida es muy pronto para pagar en la taquilla: paga en línea.
             </p>
           ) : null}
         </fieldset>
@@ -189,7 +193,9 @@ export function StepPayment({
             {[
               "Confirmas tu reserva con el botón de abajo.",
               `Pagas ${totalEnMoneda ?? total} con ${selectedMethod.name}: te mostramos los datos.`,
-              "Subes la captura del pago. Tienes 2 horas para hacerlo.",
+              plazoEnLinea?.boundByDeparture
+                ? `Subes la captura del pago antes de ${deadlinePhrase(plazoEnLinea, now)}.`
+                : "Subes la captura del pago. Tienes 2 horas para hacerlo.",
             ].map((paso, indice) => (
               <li key={paso} className="flex items-start gap-3">
                 <span

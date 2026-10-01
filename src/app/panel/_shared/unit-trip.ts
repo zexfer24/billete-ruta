@@ -1,6 +1,7 @@
 import type { UnitDeparture } from "@/modules/reports";
 import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { caracasDayHeading } from "./day-label";
+import { departureNotice } from "./departure-notice";
 
 /**
  * Cuántas próximas salidas trae como mucho `unitStateOf` en `upcoming`. La
@@ -48,6 +49,13 @@ function restantesText(upcoming: readonly UnitDeparture[], upcomingCount: number
  * Mismas reglas que ya traía `TripCell` en `src/app/panel/flota/page.tsx`:
  * - En ruta: el título es la ruta y el detalle "Salió HH:mm", con la llegada
  *   estimada si se conoce.
+ * - Atrasada (su hora ya pasó y sigue programada, `current.overdue`, o con
+ *   el embarque abierto): el detalle es el mismo aviso que la lista de
+ *   salidas y el tablero ("Debía salir a las 13:00", "Embarque abierto ·
+ *   debía salir a las 13:00") y `late: true`, para que la pantalla lo pinte
+ *   en tono de alerta. Gana sobre las próximas salidas: el bus está
+ *   comprometido con ella. No se agrega "N salidas más", porque ninguna de
+ *   `upcoming` es la que se muestra.
  * - Embarcando: "Embarcando · sale HH:mm".
  * - Sin viaje en curso, con próximas salidas: "Hoy HH:mm", "Mañana HH:mm"
  *   o "dd/MM HH:mm" de la más próxima, con "· N salidas más en 7 días" si hay
@@ -60,10 +68,17 @@ function restantesText(upcoming: readonly UnitDeparture[], upcomingCount: number
  * también la fecha: la de una salida de otro día se muestra con `dd/MM
  * HH:mm`, nunca solo la hora (ver hallazgo V2 de la ronda 4).
  */
+export interface UnitTripText {
+  title: string;
+  detail: string;
+  /** Solo presente (y `true`) cuando el viaje mostrado está atrasado. */
+  late?: true;
+}
+
 export function describeUnitTrip(
   unit: { current: UnitDeparture | null; upcoming: UnitDeparture[]; upcomingCount?: number },
   now: Date,
-): { title: string; detail: string } | null {
+): UnitTripText | null {
   const { current, upcoming, upcomingCount } = unit;
 
   if (current?.status === "EN_RUTA") {
@@ -72,6 +87,11 @@ export function describeUnitTrip(
       ? `Salió ${formatInstant(salioInstant, now)} · llegada estimada ${formatInstant(current.estimatedArrivalAt, now)}`
       : `Salió ${formatInstant(salioInstant, now)}`;
     return { title: current.routeName, detail };
+  }
+
+  if (current?.overdue || current?.status === "MANIFIESTO_CERRADO") {
+    const aviso = departureNotice(current, now);
+    if (aviso?.kind === "atrasada") return { title: current.routeName, detail: aviso.text, late: true };
   }
 
   if (current?.status === "MANIFIESTO_CERRADO") {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { tripMovementText } from "@/app/panel/_dashboard/movements";
-import { porCobrarDetail } from "@/app/panel/_dashboard/text";
+import { porCobrarNowText } from "@/app/panel/_dashboard/text";
 
 // 14:40 UTC = 10:40 en Caracas (UTC−4).
 const at = (hhmm: string) => new Date(`2026-09-30T${hhmm}:00Z`);
@@ -38,14 +38,19 @@ describe("tripMovementText", () => {
   });
 });
 
-describe("porCobrarDetail", () => {
-  it("habla de las mismas reservas que cuenta la cifra", () => {
-    expect(porCobrarDetail(0, 0)).toBe("Ninguna reserva debe dinero");
-    expect(porCobrarDetail(1, 0)).toBe("Debe dinero y su salida aún no parte");
-    expect(porCobrarDetail(262, 0)).toBe("Deben dinero y su salida aún no parte");
-    expect(porCobrarDetail(262, 36)).toBe("Deben dinero y su salida aún no parte. De ellas, 36 pagan en la taquilla.");
-    expect(porCobrarDetail(262, 1)).toBe("Deben dinero y su salida aún no parte. De ellas, 1 paga en la taquilla.");
-    expect(porCobrarDetail(3, 3)).toBe("Deben dinero y su salida aún no parte. Todas pagan en la taquilla.");
-    expect(porCobrarDetail(1, 1)).toBe("Debe dinero y su salida aún no parte. Paga en la taquilla.");
+describe("porCobrarNowText", () => {
+  it("dice que la cifra es en vivo y habla de las mismas reservas que cuenta", () => {
+    expect(porCobrarNowText(0, 0)).toBe("Ahora mismo ninguna reserva debe dinero.");
+    expect(porCobrarNowText(1, 0)).toBe("Ahora mismo, 1 reserva debe dinero y su salida aún no parte.");
+    expect(porCobrarNowText(262, 0)).toBe("Ahora mismo, 262 reservas deben dinero y su salida aún no parte.");
+    expect(porCobrarNowText(262, 36)).toBe(
+      "Ahora mismo, 262 reservas deben dinero y su salida aún no parte. De ellas, 36 pagan en la taquilla.",
+    );
+    expect(porCobrarNowText(262, 1)).toBe(
+      "Ahora mismo, 262 reservas deben dinero y su salida aún no parte. De ellas, 1 paga en la taquilla.",
+    );
+    expect(porCobrarNowText(3, 3)).toBe("Ahora mismo, 3 reservas deben dinero y su salida aún no parte. Todas pagan en la taquilla.");
+    expect(porCobrarNowText(1, 1)).toBe("Ahora mismo, 1 reserva debe dinero y su salida aún no parte. Paga en la taquilla.");
+    expect(porCobrarNowText(1250, 0)).toBe("Ahora mismo, 1.250 reservas deben dinero y su salida aún no parte.");
   });
 });

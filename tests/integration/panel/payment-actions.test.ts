@@ -89,7 +89,22 @@ async function escenario(capacity = 20) {
 }
 
 describe("cashPaymentAction", () => {
-  it("un serial inexistente da error y no crea ningún cobro", async () => {
+  async function reservaEnSitio() {
+    const base = await escenario();
+    const cuenta = await createAccountFixture();
+    // Reserva de un solo pasajero: 45,00 de tarifa + 2,50 de tasa = 47,50 USD.
+    const reserva = await createReservation({
+      accountId: cuenta.id,
+      departureId: base.salida.id,
+      paymentMethodId: base.fisico.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+    currentUser = operatorSession(base.agencia.id, base.operador.id);
+    return { ...base, reserva };
+  }
+
+  it("sin reservationId da el error de reserva no indicada, aunque llegue un código, y no crea ningún cobro", async () => {
     const { agencia, operador } = await escenario();
     currentUser = operatorSession(agencia.id, operador.id);
 
@@ -100,48 +115,31 @@ describe("cashPaymentAction", () => {
     );
 
     expect(url.pathname).toBe("/panel/pasajeros");
-    expect(url.searchParams.get("error")).toBeTruthy();
+    expect(url.searchParams.get("registrar")).toBe("cobro");
+    expect(url.searchParams.get("error")).toBe("Indica la reserva a cobrar.");
     expect(await prisma.cashPayment.count()).toBe(0);
   });
 
   it("un monto no numérico da error", async () => {
-    const { agencia, operador, fisico, salida } = await escenario();
-    const cuenta = await createAccountFixture();
-    const reserva = await createReservation({
-      accountId: cuenta.id,
-      departureId: salida.id,
-      paymentMethodId: fisico.id,
-      companions: [],
-      policiesAccepted: true,
-    });
-    currentUser = operatorSession(agencia.id, operador.id);
+    const { reserva } = await reservaEnSitio();
 
     const url = await captureRedirectUrl(
       cashPaymentAction(
-        buildFormData({ code: reserva.code, amount: "abc", currency: "USD", pagina: "1" }),
+        buildFormData({ reservationId: reserva.reservationId, amount: "abc", currency: "USD", pagina: "1" }),
       ),
     );
 
+    expect(url.searchParams.get("reserva")).toBe(reserva.reservationId);
     expect(url.searchParams.get("error")).toBeTruthy();
     expect(await prisma.cashPayment.count()).toBe(0);
   });
 
   it("un monto con coma que cubre el saldo salda la reserva y emite el ticket", async () => {
-    const { agencia, operador, fisico, salida } = await escenario();
-    const cuenta = await createAccountFixture();
-    // Reserva de un solo pasajero: 45,00 de tarifa + 2,50 de tasa = 47,50 USD.
-    const reserva = await createReservation({
-      accountId: cuenta.id,
-      departureId: salida.id,
-      paymentMethodId: fisico.id,
-      companions: [],
-      policiesAccepted: true,
-    });
-    currentUser = operatorSession(agencia.id, operador.id);
+    const { reserva } = await reservaEnSitio();
 
     const url = await captureRedirectUrl(
       cashPaymentAction(
-        buildFormData({ code: reserva.code, amount: "47,50", currency: "USD", pagina: "1" }),
+        buildFormData({ reservationId: reserva.reservationId, amount: "47,50", currency: "USD", pagina: "1" }),
       ),
     );
 
@@ -157,54 +155,8 @@ describe("cashPaymentAction", () => {
     expect(ticket).not.toBeNull();
   });
 
-  it("un serial con espacios alrededor cobra igual, sin el error de 'no existe'", async () => {
-    const { agencia, operador, fisico, salida } = await escenario();
-    const cuenta = await createAccountFixture();
-    const reserva = await createReservation({
-      accountId: cuenta.id,
-      departureId: salida.id,
-      paymentMethodId: fisico.id,
-      companions: [],
-      policiesAccepted: true,
-    });
-    currentUser = operatorSession(agencia.id, operador.id);
-
-    const url = await captureRedirectUrl(
-      cashPaymentAction(
-        buildFormData({ code: `  ${reserva.code}  `, amount: "47.50", currency: "USD" }),
-      ),
-    );
-
-    expect(url.searchParams.get("ok")).toBe("cobro-ticket");
-    const fila = await prisma.reservation.findUniqueOrThrow({
-      where: { id: reserva.reservationId },
-    });
-    expect(fila.status).toBe("PAGADA");
-  });
-
-  it("un serial de 2 caracteres da 'Ingresa el serial del ticket.'", async () => {
-    const { agencia, operador } = await escenario();
-    currentUser = operatorSession(agencia.id, operador.id);
-
-    const url = await captureRedirectUrl(
-      cashPaymentAction(buildFormData({ code: "AB", amount: "47.50", currency: "USD" })),
-    );
-
-    expect(url.searchParams.get("error")).toBe("Ingresa el serial del ticket.");
-    expect(await prisma.cashPayment.count()).toBe(0);
-  });
-
   it("con reservationId desde el panel de la reserva, vuelve a ese panel y emite el ticket", async () => {
-    const { agencia, operador, fisico, salida } = await escenario();
-    const cuenta = await createAccountFixture();
-    const reserva = await createReservation({
-      accountId: cuenta.id,
-      departureId: salida.id,
-      paymentMethodId: fisico.id,
-      companions: [],
-      policiesAccepted: true,
-    });
-    currentUser = operatorSession(agencia.id, operador.id);
+    const { reserva } = await reservaEnSitio();
 
     const url = await captureRedirectUrl(
       cashPaymentAction(
@@ -229,14 +181,30 @@ describe("cashPaymentAction", () => {
     expect(ticket).not.toBeNull();
   });
 
-  it("con origen=tablero y serial inexistente, vuelve al tablero con el formulario abierto", async () => {
+  it("una reserva ya pagada da un aviso claro y no registra otro cobro", async () => {
+    const { reserva } = await reservaEnSitio();
+    const fd = () =>
+      buildFormData({ reservationId: reserva.reservationId, amount: "47.50", currency: "USD" });
+
+    const primero = await captureRedirectUrl(cashPaymentAction(fd()));
+    expect(primero.searchParams.get("ok")).toBe("cobro-ticket");
+
+    // Segundo envío con la pestaña del detalle todavía abierta.
+    const segundo = await captureRedirectUrl(cashPaymentAction(fd()));
+
+    expect(segundo.searchParams.get("ok")).toBeNull();
+    expect(segundo.searchParams.get("reserva")).toBe(reserva.reservationId);
+    expect(segundo.searchParams.get("error")).toBe("Esta reserva ya está pagada. No se registró ningún cobro.");
+    expect(await prisma.cashPayment.count()).toBe(1);
+  });
+
+  it("con origen=tablero y sin reservationId, vuelve al tablero con el formulario abierto", async () => {
     const { agencia, operador } = await escenario();
     currentUser = operatorSession(agencia.id, operador.id);
 
     const url = await captureRedirectUrl(
       cashPaymentAction(
         buildFormData({
-          code: "TR-INEXISTENTE",
           amount: "47.50",
           currency: "USD",
           origen: "tablero",
@@ -246,17 +214,6 @@ describe("cashPaymentAction", () => {
 
     expect(url.pathname).toBe("/panel");
     expect(url.searchParams.get("registrar")).toBe("cobro");
-    expect(url.searchParams.get("error")).toBeTruthy();
-  });
-
-  it("sin reservationId ni code da el error de reserva no indicada", async () => {
-    const { agencia, operador } = await escenario();
-    currentUser = operatorSession(agencia.id, operador.id);
-
-    const url = await captureRedirectUrl(
-      cashPaymentAction(buildFormData({ amount: "47.50", currency: "USD" })),
-    );
-
     expect(url.searchParams.get("error")).toBe("Indica la reserva a cobrar.");
   });
 

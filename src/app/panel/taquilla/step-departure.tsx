@@ -10,15 +10,22 @@ import { IconCheckCircle, IconSearch } from "@/components/icons";
 import { countLabel } from "../_dashboard/text";
 import type { DepartureOption } from "./counter-sale-form";
 import { CounterField } from "./counter-field";
+import { DAY_CHIP_BASE_CLASS, DAY_CHIP_IDLE_CLASS, DEPARTURE_SEARCH_INPUT_CLASS } from "./classes";
 import { dayKey, groupByDay, normalizeSearch, routeNameAddsInfo } from "./departure-days";
 
 /** Con más salidas que estas, aparecen las fichas de día y el buscador por origen o destino. */
 const SEARCH_THRESHOLD = 6;
 
+/** `id` de la lista de salidas, para llevarla a la vista desde «Continuar». */
+export const DEPARTURE_LIST_ID = "taquilla-salidas";
+
+/** `id` del buscador de salidas, el destino de «Continuar» si la búsqueda no deja ninguna. */
+export const DEPARTURE_SEARCH_ID = "taquilla-buscar-salida";
+
 /** Por debajo de estos puestos libres, la pastilla avisa en ámbar. */
 const FEW_SEATS = 5;
 
-/** Tarjeta de una salida: radio, hora grande, ruta, puestos y tarifa. */
+/** Tarjeta de una salida: radio, hora grande, ruta, puestos y precio final por persona. */
 function DepartureCard({
   departure: d,
   selected,
@@ -57,10 +64,23 @@ function DepartureCard({
               ? `Quedan ${countLabel(d.available, "puesto", "puestos")}`
               : countLabel(d.available, "puesto libre", "puestos libres")}
           </Pill>
-          <span className="tabular text-sm font-semibold text-tinta">
-            Pasaje: {formatUsdString(d.fareUsd)} por persona
-          </span>
+          {d.price ? (
+            <span className="tabular text-sm font-semibold text-tinta">
+              {formatUsdString(d.price.totalUsd)} por persona
+            </span>
+          ) : (
+            <span className="tabular text-sm font-semibold text-tinta">
+              Pasaje: {formatUsdString(d.fareUsd)} por persona
+            </span>
+          )}
         </span>
+        {/* El total es lo que se le dice al pasajero en voz alta; la tasa va
+            aparte para que nadie tenga que sumar de cabeza. */}
+        {d.price ? (
+          <span className="tabular text-sm text-tinta-suave">
+            Incluye la tasa del terminal de {formatUsdString(d.price.taxUsd)}
+          </span>
+        ) : null}
       </span>
       {selected ? <IconCheckCircle className="size-6 shrink-0 text-marca-600" /> : null}
     </label>
@@ -69,8 +89,8 @@ function DepartureCard({
 
 /**
  * Paso 1 del asistente: elige la salida. Con pocas salidas se ven todas,
- * agrupadas por día. Con muchas, unas fichas de día arriba (con cuántas
- * salidas tiene cada uno) muestran un día a la vez, empezando por el primero
+ * agrupadas por día. Con muchas, unas fichas de día arriba muestran un día a
+ * la vez (su título dice cuántas salidas tiene), empezando por el primero
  * que tiene salidas; el buscador por origen o destino busca en los 7 días.
  * Cada tarjeta lleva la hora grande, la ruta, los puestos libres y el precio.
  */
@@ -118,20 +138,22 @@ export function StepDeparture({
     <div className="flex flex-col gap-5">
       {departures.length > SEARCH_THRESHOLD ? (
         <CounterField
-          id="taquilla-buscar-salida"
+          id={DEPARTURE_SEARCH_ID}
           type="search"
           label="Buscar por origen o destino"
-          hint={`Hay ${countLabel(departures.length, "salida", "salidas")} con puestos en los próximos 7 días. La búsqueda mira todos los días.`}
+          hint={`${countLabel(departures.length, "salida", "salidas")} con puestos en los próximos 7 días.`}
           autoComplete="off"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          inputClassName="max-w-md"
+          inputClassName={DEPARTURE_SEARCH_INPUT_CLASS}
         />
       ) : null}
 
       {conFichas && !termino ? (
         // Las fichas bajan de fila en vez de desplazarse de lado: así se ven
-        // todos los días sin adivinar que la tira se desliza. `relative` en el
+        // todos los días sin adivinar que la tira se desliza. Llevan solo el
+        // día: cuántas salidas tiene lo dice el título de la lista, en
+        // palabras, en vez de un número suelto en cada ficha. `relative` en el
         // grupo y en cada ficha contiene el texto `sr-only` (posición
         // absoluta), que de otro modo ensanchaba la página en el teléfono y
         // dejaba la barra de «Continuar» fuera de la pantalla.
@@ -146,23 +168,12 @@ export function StepDeparture({
                   aria-pressed={elegido}
                   onClick={() => setDia(grupo.key)}
                   className={cx(
-                    "foco relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-pastilla border px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none",
-                    elegido
-                      ? "border-marca-600 bg-marca-600 text-white"
-                      : "border-borde-control bg-superficie text-tinta hover:bg-marca-50",
+                    "foco transition-colors duration-150 ease-out motion-reduce:transition-none",
+                    DAY_CHIP_BASE_CLASS,
+                    elegido ? "border-marca-600 bg-marca-600 text-white" : `${DAY_CHIP_IDLE_CLASS} hover:bg-marca-50`,
                   )}
                 >
                   {grupo.chipLabel}
-                  <span
-                    aria-hidden="true"
-                    className={cx(
-                      "tabular min-w-6 rounded-pastilla px-2 py-0.5 text-center text-xs font-bold",
-                      elegido ? "bg-white/20 text-white" : "bg-lienzo text-tinta-suave",
-                    )}
-                  >
-                    {grupo.items.length}
-                  </span>
-                  <span className="sr-only">, {countLabel(grupo.items.length, "salida", "salidas")}</span>
                 </button>
               );
             })}
@@ -181,11 +192,15 @@ export function StepDeparture({
           </button>
         </div>
       ) : (
-        <fieldset className="flex flex-col gap-6">
+        // `id` y `scroll-mt`: «Continuar» sin elegir trae la lista a la vista
+        // por debajo de la barra superior del teléfono (ver `counter-sale-form`).
+        <fieldset id={DEPARTURE_LIST_ID} className="flex scroll-mt-20 flex-col gap-6 lg:scroll-mt-4">
           <legend className="sr-only">Salidas con puestos libres</legend>
           {grupos.map((grupo) => (
             <div key={grupo.key} className="flex flex-col gap-3">
-              <p className="text-sm font-bold text-tinta-suave">{grupo.label}</p>
+              <p className="text-sm font-bold text-tinta-suave">
+                {grupo.label} · {countLabel(grupo.items.length, "salida", "salidas")}
+              </p>
               {grupo.items.map((d) => (
                 <DepartureCard key={d.id} departure={d} selected={d.id === selectedId} onSelect={onSelect} />
               ))}

@@ -1,4 +1,5 @@
 import { firstNamePart } from "@/lib/identity";
+import { UNPAID_EXPIRY_MINUTES } from "@/modules/scheduler";
 
 /**
  * Catálogo de plantillas de mensaje. En el MVP se entregan al proveedor falso y
@@ -31,6 +32,15 @@ export const ONCE_PER_RESERVATION_TEMPLATES: readonly TemplateKey[] = [
   "ticket_emitido",
 ];
 
+/** 120 → "2 horas", 90 → "90 minutos": el plazo de pago tal como lo fija el barrido. */
+function plazoEnPalabras(minutos: number): string {
+  if (minutos % 60 === 0) {
+    const horas = minutos / 60;
+    return `${horas} ${horas === 1 ? "hora" : "horas"}`;
+  }
+  return `${minutos} minutos`;
+}
+
 interface TemplateDefinition {
   params: readonly string[];
   buttons: readonly string[];
@@ -38,11 +48,14 @@ interface TemplateDefinition {
 }
 
 const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
+  // Se envía al crear la reserva, cuando todavía no hay ningún pago: el texto
+  // pide pagar y dice el plazo, que sale de la misma constante que usa el
+  // barrido de liberación. Cuando el payload traiga la ruta, la fecha y la hora
+  // límite, el texto debe nombrarlas en vez del plazo relativo.
   solicitud_recibida: {
     params: ["nombre", "pasajeros", "serial"],
     buttons: [],
-    preview:
-      "¡Hola {{nombre}}! Recibimos tu reserva {{serial}} para {{pasajeros}}. Cuando revisemos tu pago, te enviaremos el ticket.",
+    preview: `¡Hola {{nombre}}! Recibimos tu reserva {{serial}} para {{pasajeros}}. Para no perderla, paga en las próximas ${plazoEnPalabras(UNPAID_EXPIRY_MINUTES)} y envía la foto del comprobante desde tu cuenta. Cuando revisemos tu pago, te enviaremos el ticket.`,
   },
   reserva_condicional: {
     params: ["nombre", "serial", "monto", "salida"],
@@ -85,10 +98,17 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
     preview:
       "Hola {{nombre}}, tu viaje {{serial}} sale el {{salida}}. Paga {{monto}} en la taquilla antes de que falten 12 horas para la salida o tu puesto quedará libre.",
   },
+  // Los botones ASISTE e INCONVENIENTE son los de la spec, pero en el MVP no se
+  // muestran en la bandeja falsa ni hay flujo que procese la respuesta, así que
+  // el texto es un recordatorio sin pregunta. Cuando se conecte Meta y un
+  // webhook reciba la respuesta, el texto puede volver a preguntar. El barrido
+  // corre entre 2 h 5 min y 30 min antes de la salida: de ahí «unas dos horas o
+  // menos».
   confirmacion_2h: {
     params: ["nombre", "serial"],
     buttons: ["ASISTE", "INCONVENIENTE"],
-    preview: "Hola {{nombre}}, tu viaje {{serial}} es en breve. ¿Confirmas tu asistencia?",
+    preview:
+      "Hola {{nombre}}, tu viaje {{serial}} sale en unas dos horas o menos. Ve al terminal con tiempo y con tu cédula en mano. La hora y el lugar de salida están en tu cuenta.",
   },
   reserva_liberada: {
     params: ["nombre", "serial"],
@@ -156,17 +176,31 @@ function personasEnPalabras(valor: string): string {
   return `${cantidad} ${cantidad === 1 ? "persona" : "personas"}`;
 }
 
+/** Parámetros que guardan un monto ya formateado ("$ 41,00", "Bs. 1.200,00"). */
+const PARAMETROS_DE_MONTO = new Set(["monto", "abonado", "saldo"]);
+
+/**
+ * Une el símbolo de la moneda con la cifra mediante un espacio de no separación
+ * (U+00A0), para que el monto nunca se parta entre dos líneas ("$" al final de
+ * una y "41,00" al principio de la siguiente). Corrige también los mensajes ya
+ * guardados, que conservan el espacio normal de `formatMoney`.
+ */
+function montoSinCorte(valor: string): string {
+  return valor.replace(/^(\$|Bs\.|COP|USDT) +/, "$1\u00A0");
+}
+
 /**
  * Valor de un parámetro tal como se escribe en el mensaje. Los payloads guardan
  * datos crudos (nombre completo, número de pasajeros, fecha en cifras) y aquí se
  * pasan a lenguaje llano: primer nombre en el saludo, "1 persona" y la fecha
- * con su día en palabras. Al hacerlo al mostrar, los mensajes ya guardados se
- * leen igual que los nuevos. El proveedor real debe enviar estos mismos valores.
+ * con su día en palabras, y el monto con su símbolo pegado a la cifra. Al
+ * hacerlo al mostrar, los mensajes ya guardados se leen igual que los nuevos. El proveedor real debe enviar estos mismos valores.
  */
 export function displayParam(nombre: string, valor: string): string {
   if (nombre === "nombre") return firstNamePart(valor) || valor;
   if (nombre === "pasajeros") return personasEnPalabras(valor);
   if (nombre === "salida") return fechaEnPalabras(valor);
+  if (PARAMETROS_DE_MONTO.has(nombre)) return montoSinCorte(valor);
   return valor;
 }
 

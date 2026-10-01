@@ -7,6 +7,8 @@ import { PanelField, PanelFixedValue, errorFieldFor, panelFieldAria } from "./pa
 import { upcomingTitle } from "./upcoming-title";
 import { UnitStatusChoice } from "./unit-status-choice";
 
+const AYUDA_NOMBRE = "Nombres y apellidos, como aparecen en la cédula.";
+
 /** Campos del formulario, para ubicar el error de `?campo=`. */
 const CAMPOS = ["fullName", "idNumber", "phone", "active"] as const;
 
@@ -42,15 +44,16 @@ export function DriverForm(props: DriverFormProps) {
       {props.returnTo ? <input type="hidden" name="origen" value="tablero" /> : null}
       {isEdit ? <input type="hidden" name="driverId" value={props.driver.id} /> : null}
 
-      <PanelField id="chofer-nombre" label="Nombre completo" error={errorDe("fullName")}>
+      {/* Sin placeholder: el ejemplo va en la ayuda, como en los demás campos,
+          para que el campo vacío no parezca ya lleno. */}
+      <PanelField id="chofer-nombre" label="Nombre completo" hint={AYUDA_NOMBRE} error={errorDe("fullName")}>
         <input
           name="fullName"
           required
           autoComplete="off"
-          placeholder="Nombres y apellidos"
           defaultValue={isEdit ? props.driver.fullName : undefined}
           className={panelInputClass()}
-          {...panelFieldAria("chofer-nombre", undefined, errorDe("fullName"))}
+          {...panelFieldAria("chofer-nombre", AYUDA_NOMBRE, errorDe("fullName"))}
         />
       </PanelField>
 

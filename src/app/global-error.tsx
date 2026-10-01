@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { IconArrowLeft } from "@/components/icons";
+import { IconAlertCircle, IconArrowLeft } from "@/components/icons";
 import { Logo } from "@/components/logo";
 import { buttonClass } from "@/components/ui-classes";
 import "./globals.css";
@@ -15,8 +15,9 @@ interface GlobalErrorProps {
  * Último recurso (spec 6.6): se muestra cuando falla el propio layout raíz,
  * por eso trae su propio <html> y <body>. Usa la fuente del sistema porque la
  * de marca se carga en el layout que falló. Copia la estructura de
- * `PublicShell` (volver arriba, logo morado sobre la tarjeta) sin depender de
- * otras pantallas, y el enlace de volver recarga la página entera.
+ * `PublicShell` (volver arriba, logo morado sobre la tarjeta, icono de error
+ * en círculo como `error.tsx`) sin depender de otras pantallas, y el enlace de
+ * volver recarga la página entera.
  */
 export default function GlobalError({ error }: GlobalErrorProps) {
   useEffect(() => {
@@ -44,6 +45,15 @@ export default function GlobalError({ error }: GlobalErrorProps) {
               <Logo tone="marca" priority className="mx-auto h-20 w-auto" />
               <div className="flex flex-col gap-5 rounded-tarjeta border border-borde bg-superficie p-5 shadow-1 sm:p-6">
                 <div className="flex flex-col gap-2">
+                  {/* Misma posición que el `eyebrow` de `PublicCard`: encima del título. */}
+                  <div>
+                    <span
+                      aria-hidden="true"
+                      className="grid size-14 place-items-center rounded-full bg-peligro-suave text-peligro [&>svg]:size-7"
+                    >
+                      <IconAlertCircle />
+                    </span>
+                  </div>
                   <h1 className="text-balance text-2xl font-bold tracking-tight text-tinta sm:text-3xl">
                     Algo salió mal de nuestro lado
                   </h1>

@@ -12,6 +12,7 @@ export function FleetBodySkeleton({ vista }: { vista?: FleetView }) {
     <div aria-hidden="true" className="flex flex-col gap-6">
       <SkeletonTabs
         labels={["Vehículos", "Choferes"]}
+        counts
         active={vista === undefined ? -1 : vista === "vehiculos" ? 0 : 1}
       />
       <div className="flex flex-col gap-4">

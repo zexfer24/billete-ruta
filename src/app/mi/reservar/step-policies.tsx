@@ -2,18 +2,22 @@
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
-import { DepartureRow } from "@/components/departure-row";
+import { departureWhenLabel } from "@/components/departure-format";
 import { IconChevronDown, IconClock, IconShield, IconStore, IconTicket, type IconProps } from "@/components/icons";
 import { StickyActions } from "@/components/sticky-actions";
+import { estimatedOnlineDeadline, whenPhrase } from "@/components/passenger-copy";
 import { Card } from "@/components/ui";
 import { buttonClass } from "@/components/ui-classes";
-import { toDepartureRowData, type DepartureVM } from "./booking-form";
+import type { DepartureVM } from "./booking-form";
+import { ChosenDeparture } from "./chosen-departure";
 import { revealAndFocus } from "./reveal";
 
 interface StepPoliciesProps {
   /** Salida elegida: se repite arriba para que se sepa a qué bus corresponde el total. */
   departure: DepartureVM;
   now: Date;
+  /** La salida admite pagar en la taquilla (12 horas o más antes y la agencia lo ofrece). */
+  cashOffered: boolean;
   accepted: boolean;
   onChangeAccepted: (value: boolean) => void;
   summary: ReactNode;
@@ -21,12 +25,33 @@ interface StepPoliciesProps {
   onNext: () => void;
 }
 
-const CONDICIONES: { Icon: ComponentType<IconProps>; texto: string }[] = [
-  { Icon: IconClock, texto: "Si no pagas nada en 2 horas, el puesto se libera para otra persona." },
-  { Icon: IconTicket, texto: "Recibes tu ticket con código QR cuando termines de pagar." },
-  { Icon: IconStore, texto: "Si pagas en la taquilla, hazlo hasta 12 horas antes de salir." },
-  { Icon: IconShield, texto: "Tus datos y los de tus acompañantes solo se usan para este viaje." },
-];
+interface Condicion {
+  Icon: ComponentType<IconProps>;
+  texto: string;
+}
+
+/**
+ * Las condiciones en frases cortas, según esta salida: el plazo para pagar
+ * nunca pasa la hora de salida, y la taquilla solo se nombra si se puede
+ * elegir. No cambia la regla de liberación, solo lo que se le dice al pasajero.
+ */
+function condicionesDe(departure: DepartureVM, now: Date, cashOffered: boolean): Condicion[] {
+  const plazo = estimatedOnlineDeadline(new Date(departure.departsAtIso), now);
+  return [
+    {
+      Icon: IconClock,
+      texto:
+        plazo?.boundByDeparture
+          ? `Tienes que pagar antes de que salga el bus, ${whenPhrase(plazo.at, now)}.`
+          : "Si no pagas nada en 2 horas, el puesto se libera para otra persona.",
+    },
+    { Icon: IconTicket, texto: "Recibes tu ticket con código QR cuando termines de pagar." },
+    ...(cashOffered
+      ? [{ Icon: IconStore, texto: "Si pagas en la taquilla, hazlo hasta 12 horas antes de salir." }]
+      : []),
+    { Icon: IconShield, texto: "Tus datos y los de tus acompañantes solo se usan para este viaje." },
+  ];
+}
 
 /**
  * Paso 3 del asistente: la salida elegida, las condiciones en cuatro frases
@@ -35,12 +60,24 @@ const CONDICIONES: { Icon: ComponentType<IconProps>; texto: string }[] = [
  * la casilla y el aviso al centro de la zona visible (por encima de las
  * barras fijas) y le da el foco. Cada toque vuelve a hacerlo.
  */
-export function StepPolicies({ departure, now, accepted, onChangeAccepted, summary, onBack, onNext }: StepPoliciesProps) {
+export function StepPolicies({
+  departure,
+  now,
+  cashOffered,
+  accepted,
+  onChangeAccepted,
+  summary,
+  onBack,
+  onNext,
+}: StepPoliciesProps) {
   // Contador y no booleano: cada toque de "Continuar" sin la casilla vuelve a disparar el efecto.
   const [intentos, setIntentos] = useState(0);
   const checkboxRef = useRef<HTMLInputElement>(null);
   const grupoRef = useRef<HTMLDivElement>(null);
   const falta = intentos > 0 && !accepted;
+  const condiciones = condicionesDe(departure, now, cashOffered);
+  // El bus sale antes de que venzan las 2 horas: se dice una sola vez, aquí y no en el paso 4.
+  const salePronto = estimatedOnlineDeadline(new Date(departure.departsAtIso), now)?.boundByDeparture ?? false;
 
   // Después del render en que aparece el aviso, para que también quede a la vista.
   useEffect(() => {
@@ -60,11 +97,18 @@ export function StepPolicies({ departure, now, accepted, onChangeAccepted, summa
 
   return (
     <section className="flex flex-col gap-5">
-      <DepartureRow departure={toDepartureRowData(departure)} now={now} selected />
+      <ChosenDeparture departure={departure} now={now} />
+
+      {salePronto ? (
+        <Alert tone="alerta" role="none" title="Este bus sale pronto">
+          {departureWhenLabel(new Date(departure.departsAtIso), now)}. Si pagas en línea, sube la captura
+          cuanto antes y llega al terminal con tiempo.
+        </Alert>
+      ) : null}
 
       <Card>
         <ul className="flex flex-col gap-4">
-          {CONDICIONES.map(({ Icon, texto }) => (
+          {condiciones.map(({ Icon, texto }) => (
             <li key={texto} className="flex items-start gap-3">
               <span
                 aria-hidden="true"

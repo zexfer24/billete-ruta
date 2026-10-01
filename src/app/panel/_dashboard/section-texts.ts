@@ -31,13 +31,12 @@ export function ticketsSection(periodPhrase: string): SectionTexts {
 }
 
 /**
- * Etiquetas de las cuatro cifras del periodo, en el orden del tablero. No
+ * Etiquetas de las tres cifras del periodo, en el orden del tablero. No
  * cambian con el periodo: la silueta las pinta reales.
  */
 export const FIGURE_LABELS = {
-  porCobrar: "Reservas por cobrar",
-  salidas: "Salidas",
   recaudado: "Recaudado",
+  salidas: "Salidas",
   tickets: "Tickets emitidos",
 } as const;
 

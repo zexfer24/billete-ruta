@@ -257,12 +257,19 @@ export default function SkeletonGalleryPage() {
 
   return (
     <div className="min-h-dvh bg-superficie text-tinta">
-      <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-10 px-4 py-8 sm:px-6">
-        <header className="flex flex-col gap-3">
+      {/*
+        Los marcos van a sangre: el contenedor no tiene margen lateral y mide
+        como máximo 1280 px, así cada skeleton tiene exactamente el ancho de la
+        pantalla real hasta ese tamaño (a 375 px, 375; a 1280, 1280, y el
+        contenido del panel 1280 − 272 − 64). Solo los textos de la galería
+        llevan margen. Los cortes de línea son los mismos que en la pantalla.
+      */}
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 py-8">
+        <header className="flex flex-col gap-3 px-4 sm:px-6 xl:px-0">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Galería de skeletons</h1>
           <p className="max-w-3xl text-base leading-relaxed text-tinta-suave">
-            Los {total} skeletons de la aplicación, cada uno con el fondo y el ancho de su pantalla real.
-            Solo existe en desarrollo.
+            Los {total} skeletons de la aplicación, cada uno con el fondo y el ancho de su pantalla real
+            (hasta 1280 px). Solo existe en desarrollo.
           </p>
           <nav aria-label="Índice de skeletons" className="flex flex-col gap-4 pt-2 sm:flex-row sm:flex-wrap sm:gap-8">
             {GROUPS.map((group) => (
@@ -287,7 +294,7 @@ export default function SkeletonGalleryPage() {
 
         {GROUPS.map((group) => (
           <div key={group.title} className="flex flex-col gap-6">
-            <h2 className="text-xl font-bold tracking-tight">{group.title}</h2>
+            <h2 className="px-4 text-xl font-bold tracking-tight sm:px-6 xl:px-0">{group.title}</h2>
             {group.entries.map((entry) => {
               const id = anchorFor(entry);
               return (
@@ -295,14 +302,15 @@ export default function SkeletonGalleryPage() {
                   key={entry.file}
                   id={id}
                   aria-labelledby={`${id}-titulo`}
-                  className="scroll-mt-4 overflow-hidden rounded-tarjeta border border-borde shadow-1"
+                  // Anillo en vez de borde: no resta ancho al marco.
+                  className="scroll-mt-4 overflow-hidden shadow-1 ring-1 ring-borde xl:rounded-tarjeta"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-borde bg-superficie px-4 py-3">
                     <h3 id={`${id}-titulo`} className="font-mono text-base font-semibold text-tinta">
                       {entry.route}
                     </h3>
-                    <p className="text-sm text-tinta-suave">
-                      {FRAME_LABELS[entry.frame]} · <span className="font-mono">{entry.file}</span>
+                    <p className="min-w-0 text-sm text-tinta-suave">
+                      {FRAME_LABELS[entry.frame]} · <span className="break-all font-mono">{entry.file}</span>
                     </p>
                     {entry.note ? <p className="w-full text-sm text-tinta-suave">{entry.note}</p> : null}
                   </div>

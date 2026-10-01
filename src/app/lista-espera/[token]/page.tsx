@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { z } from "zod";
-import { getWaitlistClaim } from "@/modules/booking";
 import { listBookableDepartures } from "@/modules/catalog";
 import { currentPassenger } from "@/modules/auth";
 import { Alert } from "@/components/alert";
@@ -12,6 +10,7 @@ import { IconCheckCircle, IconInfo, IconSeat } from "@/components/icons";
 import { buttonClass, Pill } from "@/components/ui";
 import { passengerHref } from "../../_publico/links";
 import { PublicCard, PublicShell } from "../../_publico/public-shell";
+import { getActiveClaim } from "./claim";
 import { OtherDepartureActions, StateIcon } from "./inactive-link";
 import {
   claimActionLabel,
@@ -23,29 +22,20 @@ import {
 
 export const metadata: Metadata = { title: "Lista de espera" };
 
-/** Un token con forma imposible no llega a la base de datos: se trata como enlace no activo. */
-const tokenSchema = z.string().min(1).max(200);
-
 export default async function ListaEsperaPage({
   params,
 }: {
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const now = new Date();
-  const tokenValido = tokenSchema.safeParse(token);
-
-  const [aviso, pasajero] = await Promise.all([
-    tokenValido.success ? getWaitlistClaim(tokenValido.data, now) : Promise.resolve(null),
-    currentPassenger(),
-  ]);
-  const loggedIn = pasajero !== null;
-
-  // Enlace vencido, ya usado o inexistente: la pantalla de marca de
-  // not-found.tsx, con estado de error (y `noindex`) en vez de un 200.
-  if (!aviso || !aviso.claimExpiresAt) {
+  // El layout ya validó el enlace y respondió 404 si no está activo; esta
+  // consulta es la misma (compartida con `cache`), no una segunda.
+  const [vigente, pasajero] = await Promise.all([getActiveClaim(token), currentPassenger()]);
+  if (!vigente) {
     notFound();
   }
+  const { aviso, claimExpiresAt, now } = vigente;
+  const loggedIn = pasajero !== null;
 
   // Salida todavía reservable, con la agencia y los datos de la ruta.
   const reservables = await listBookableDepartures(
@@ -58,7 +48,7 @@ export default async function ListaEsperaPage({
     return (
       <PublicShell>
         <PublicCard
-          eyebrow={<StateIcon icon={<IconInfo />} />}
+          eyebrow={<StateIcon tone="marca" icon={<IconInfo />} />}
           title="Esta salida ya no admite reservas"
           description={`La salida de ${aviso.departure.route.origin} a ${aviso.departure.route.destination} ya no está disponible. Todavía puedes buscar otra salida con puestos.`}
         >
@@ -97,9 +87,9 @@ export default async function ListaEsperaPage({
         <Alert
           tone="alerta"
           role="none"
-          title={`Resérvalo antes de ${claimDeadlineLabel(aviso.claimExpiresAt, now)}`}
+          title={`Resérvalo antes de ${claimDeadlineLabel(claimExpiresAt, now)}`}
         >
-          <p className="tabular font-semibold">{claimRemainingLabel(aviso.claimExpiresAt, now)}.</p>
+          <p className="tabular font-semibold">{claimRemainingLabel(claimExpiresAt, now)}.</p>
           <p>Después, el puesto pasa a la siguiente persona de la lista.</p>
         </Alert>
 

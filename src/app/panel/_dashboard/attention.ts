@@ -1,4 +1,4 @@
-import { minutesUntil } from "@/lib/time";
+import { formatRelativeDeparture, minutesUntil } from "@/lib/time";
 
 /**
  * Reglas de "Lo que necesita tu atención" del tablero del operador. Módulo
@@ -22,6 +22,21 @@ export type AttentionKind = "atrasada" | "embarcando" | "pronto";
 export interface AttentionDeparture<T> {
   departure: T;
   kind: AttentionKind;
+}
+
+/**
+ * Cuánto falta para una salida, para el cuerpo de un aviso cuyo título ya
+ * lleva la hora: «Sale en 45 min», «Sale en 1 h 30 min» o «Sale en 2 h». No
+ * repite «Sale a las 22:00» debajo de «22:00 · Caracas → Mérida». Por debajo
+ * de una hora usa el mismo texto que el resto de la app
+ * (`formatRelativeDeparture`).
+ */
+export function departsInText(departsAt: Date, now: Date): string {
+  const minutos = minutesUntil(departsAt, now);
+  if (minutos < 60) return formatRelativeDeparture(departsAt, now);
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  return resto === 0 ? `Sale en ${horas} h` : `Sale en ${horas} h ${resto} min`;
 }
 
 const KIND_ORDER: Record<AttentionKind, number> = { atrasada: 0, embarcando: 1, pronto: 2 };

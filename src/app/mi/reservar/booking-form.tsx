@@ -256,6 +256,8 @@ export default function BookingForm({
       )
     : [];
   const selectedMethod = availableMethods.find((m) => m.id === selectedPaymentMethodId) ?? null;
+  // Las condiciones solo nombran la taquilla si esta salida permite elegirla.
+  const cashOffered = availableMethods.some((m) => m.kind === "FISICO");
 
   function goTo(next: Step) {
     setStep(next);
@@ -293,10 +295,14 @@ export default function BookingForm({
   }
 
   // Resumen del costo siempre visible (spec 7.1): tarifa + tasa del terminal = total, en una sola línea.
+  // "del terminal" y no "de tasa": al pasajero "la tasa" le suena a la del dólar (glosario, spec 8).
   const tarifa = formatCents(cost.fareCents, "USD");
   const tasa = formatCents(cost.taxCents, "USD");
   const total = formatCents(cost.totalCents, "USD");
-  const desglose = passengerCount === 1 ? `${tarifa} + ${tasa} de tasa` : `${passengerCount} × (${tarifa} + ${tasa} de tasa)`;
+  const desglose =
+    passengerCount === 1
+      ? `${tarifa} + ${tasa} del terminal`
+      : `${passengerCount} × (${tarifa} + ${tasa} del terminal)`;
   const summary = selectedDeparture ? (
     <p className="tabular flex flex-wrap items-baseline justify-between gap-x-3">
       <span aria-hidden="true">{desglose}</span>
@@ -309,10 +315,18 @@ export default function BookingForm({
       </span>
     </p>
   ) : null;
+  // En el paso 4 el recibo ya desglosa el costo: la barra dice solo el total.
+  const summaryTotal = selectedDeparture ? (
+    <p className="tabular flex justify-end text-base text-tinta">
+      <span>
+        Total <strong className="font-bold">{total}</strong>
+      </span>
+    </p>
+  ) : null;
 
   return (
     // El relleno de abajo deja sitio a la barra fija de los pasos 2 a 4; el paso 1 no la tiene.
-    <div ref={topRef} className={`flex scroll-mt-4 flex-col gap-6 ${step > 1 ? "pb-40" : ""}`}>
+    <div ref={topRef} className={`flex scroll-mt-4 flex-col ${step > 1 ? "gap-6 pb-40" : "gap-4"}`}>
       <Stepper steps={STEP_LABELS} current={step} label="Pasos para reservar" />
 
       {restored ? (
@@ -344,10 +358,15 @@ export default function BookingForm({
         </Alert>
       ) : null}
 
+      {/*
+        En el paso 1 el título queda solo para lectores de pantalla: el Stepper ya
+        dice "Salida" y así la primera salida, con su "Elegir", cabe en la
+        primera pantalla. Sigue siendo el destino del foco al cambiar de paso.
+      */}
       <h2
         ref={headingRef}
         tabIndex={-1}
-        className="text-lg font-semibold text-tinta outline-none"
+        className={step === 1 ? "sr-only" : "text-lg font-semibold text-tinta outline-none"}
       >
         <span className="sr-only">
           Paso {step} de {STEP_LABELS.length}:{" "}
@@ -396,6 +415,7 @@ export default function BookingForm({
         <StepPolicies
           departure={selectedDeparture}
           now={now}
+          cashOffered={cashOffered}
           accepted={policiesAccepted}
           onChangeAccepted={setPoliciesAccepted}
           summary={summary}
@@ -417,7 +437,7 @@ export default function BookingForm({
           exchangeRates={exchangeRates}
           companions={companions}
           policiesAccepted={policiesAccepted}
-          summary={summary}
+          summary={summaryTotal}
           onBack={() => goTo(3)}
           onGoToStep={goTo}
         />

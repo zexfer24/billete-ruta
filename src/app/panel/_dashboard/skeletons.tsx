@@ -1,8 +1,10 @@
 import { Skeleton, SkeletonCircle } from "@/components/skeleton";
 import { PANEL_TH_CLASS, panelButtonClass } from "@/components/panel-ui";
 import type { ReactNode } from "react";
-import { IconBus, IconCash, IconChevronDown, IconChevronRight, IconClock, IconTicket } from "@/components/icons";
-import { FIGURE_LABELS, TRIPS_TODAY_SECTION, type SectionTexts } from "./section-texts";
+import { IconBus, IconCash, IconChevronDown, IconChevronRight, IconTicket } from "@/components/icons";
+import { FIGURE_LABELS, FLEET_SECTION, TRIPS_TODAY_SECTION, ticketsSection, type SectionTexts } from "./section-texts";
+import { FIGURE_CELL_CLASS, FIGURE_WIDE_CELL_CLASS, FIGURES_GRID_CLASS } from "./figure-classes";
+import { FLEET_DRIVER_ROW_CLASS, FLEET_LIST_CLASS, TICKET_ROW_CLASS, TICKETS_LIST_CLASS } from "./list-classes";
 import {
   DASHBOARD_SECTION_ACTION_CLASS,
   DASHBOARD_SECTION_HEADER_CLASS,
@@ -44,11 +46,11 @@ export function AttentionSkeleton() {
 }
 
 /**
- * Silueta de una tarjeta de cifra (`StatCard` con icono y "Ver detalle"). La
- * etiqueta, el icono y "Ver detalle" son fijos y se pintan reales, como en el
- * kit del terminal; solo la cifra y su frase van en barra.
+ * Silueta de una tarjeta de cifra (`StatCard` con icono y, si enlaza, "Ver
+ * detalle"). La etiqueta, el icono y "Ver detalle" son fijos y se pintan
+ * reales, como en el kit del terminal; solo la cifra y su frase van en barra.
  */
-function StatCardSkeleton({ label, icon }: { label: string; icon: ReactNode }) {
+function StatCardSkeleton({ label, icon, link }: { label: string; icon: ReactNode; link: boolean }) {
   return (
     <div className="relative flex flex-col overflow-hidden rounded-tarjeta border border-borde bg-superficie p-5 shadow-1">
       <span className="absolute inset-x-0 top-0 h-1 bg-borde" />
@@ -58,46 +60,67 @@ function StatCardSkeleton({ label, icon }: { label: string; icon: ReactNode }) {
           {icon}
         </span>
       </div>
-      <Skeleton className="mt-1 h-9 w-24" />
+      <Skeleton className="mt-1 h-9 w-24 max-w-full" />
       <Skeleton className="mt-2 h-4 w-3/4 rounded-pastilla" />
-      <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-marca-700">
-        Ver detalle
-        <IconChevronRight className="size-4" />
-      </span>
+      {link ? (
+        <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-marca-700">
+          Ver detalle
+          <IconChevronRight className="size-4" />
+        </span>
+      ) : null}
     </div>
   );
 }
 
-/** Las cuatro cifras en el orden de `FiguresBlock`, con su icono. */
-const FIGURE_CARDS: ReadonlyArray<{ label: string; icon: ReactNode }> = [
-  { label: FIGURE_LABELS.porCobrar, icon: <IconClock /> },
-  { label: FIGURE_LABELS.salidas, icon: <IconBus /> },
-  { label: FIGURE_LABELS.recaudado, icon: <IconCash /> },
-  { label: FIGURE_LABELS.tickets, icon: <IconTicket /> },
+/**
+ * Las tres cifras en el orden y la rejilla de `FiguresBlock`. "Salidas" lleva
+ * "Ver detalle" como en el periodo "hoy", el que se abre por defecto.
+ */
+const FIGURE_CARDS: ReadonlyArray<{ label: string; icon: ReactNode; link: boolean; cell: string }> = [
+  { label: FIGURE_LABELS.recaudado, icon: <IconCash />, link: true, cell: FIGURE_WIDE_CELL_CLASS },
+  { label: FIGURE_LABELS.salidas, icon: <IconBus />, link: true, cell: FIGURE_CELL_CLASS },
+  { label: FIGURE_LABELS.tickets, icon: <IconTicket />, link: false, cell: FIGURE_CELL_CLASS },
 ];
 
-/** Silueta de las cuatro cifras del periodo. */
+/** Silueta de las tres cifras del periodo. */
 export function FiguresSkeleton() {
   return (
-    <div aria-hidden="true" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div aria-hidden="true" className={FIGURES_GRID_CLASS}>
       {FIGURE_CARDS.map((card) => (
-        <StatCardSkeleton key={card.label} label={card.label} icon={card.icon} />
+        <div key={card.label} className={card.cell}>
+          <StatCardSkeleton label={card.label} icon={card.icon} link={card.link} />
+        </div>
       ))}
     </div>
   );
 }
 
-/** Filas de una lista dentro de una tarjeta de sección: título, detalle y pastilla. */
+/** Silueta de la línea en vivo de reservas por cobrar (`PendingNowLine`), con su alto de 44 px. */
+export function PendingNowSkeleton() {
+  return (
+    <div aria-hidden="true" className="flex min-h-11 items-center">
+      <Skeleton className="h-4 w-96 max-w-full rounded-pastilla" />
+    </div>
+  );
+}
+
+/**
+ * Filas de "Actividad reciente" (`ActivityBlock`): la hora en su columna de
+ * 96 px, el punto del tono y la frase. "Tickets nuevos" y "Choferes y buses"
+ * tienen su propia silueta.
+ */
 export function ListRowsSkeleton({ rows }: { rows: number }) {
   return (
     <div aria-hidden="true" className="flex flex-col divide-y divide-borde">
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-          <div className="flex flex-1 flex-col gap-2">
-            <Skeleton className="h-5 w-1/2 rounded-pastilla" />
+        <div key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+          <span className="flex h-6 w-24 shrink-0 items-center">
+            <Skeleton className="h-4 w-12 rounded-pastilla" />
+          </span>
+          <span className="mt-2 size-2 shrink-0 rounded-full bg-borde" />
+          <span className="flex h-6 min-w-0 flex-1 items-center">
             <Skeleton className="h-4 w-3/4 rounded-pastilla" />
-          </div>
-          <Skeleton className="h-6 w-24 rounded-pastilla" />
+          </span>
         </div>
       ))}
     </div>
@@ -136,26 +159,85 @@ function SectionHeaderSkeleton({ texts }: { texts?: Partial<SectionTexts> }) {
   );
 }
 
+/** Barra de una línea de texto de 14 px: la barra mide 16 px dentro de una línea de 20 px, como el texto real. */
+function TextLineBar({ className }: { className: string }) {
+  return (
+    <span className="flex h-5 items-center">
+      <Skeleton className={`h-4 rounded-pastilla ${className}`} />
+    </span>
+  );
+}
+
+/** Textos de la cabecera de "Tickets nuevos": la descripción solo si se conoce el periodo. */
+function ticketsSectionTexts(periodPhrase: string | undefined): Partial<SectionTexts> {
+  const textos = ticketsSection(periodPhrase ?? "");
+  return periodPhrase ? textos : { title: textos.title, actionLabel: textos.actionLabel };
+}
+
 /**
- * Silueta de una tarjeta de sección (`SectionCard`): cabecera con título,
- * descripción y botón (reales si se pasan) y el cuerpo con `rows` filas.
+ * Silueta de "Tickets nuevos" (`TicketsBlock`): cinco filas con la misma
+ * geometría que las reales (el código en un renglón de 44 px, el pasajero con
+ * la ruta y la hora de emisión) y sin pastilla, que en las reales solo
+ * aparece en las ventas de taquilla. Sin `periodPhrase` (el `loading.tsx` no
+ * conoce el periodo), la descripción va en barra.
  */
-export function SectionSkeleton({
-  rows = 4,
-  title,
-  description,
-  actionLabel,
-}: {
-  rows?: number;
-  title?: string;
-  description?: string;
-  actionLabel?: string;
-}) {
+export function TicketsSkeleton({ periodPhrase }: { periodPhrase?: string }) {
   return (
     <div aria-hidden="true" className="rounded-tarjeta border border-borde bg-superficie shadow-1">
-      <SectionHeaderSkeleton texts={{ title, description, actionLabel }} />
+      <SectionHeaderSkeleton texts={ticketsSectionTexts(periodPhrase)} />
       <div className="p-5">
-        <ListRowsSkeleton rows={rows} />
+        <div className={TICKETS_LIST_CLASS}>
+          {Array.from({ length: 5 }, (_, i) => (
+            <div key={i} className={TICKET_ROW_CLASS}>
+              <span className="flex min-h-11 items-center">
+                <Skeleton className="h-5 w-40 rounded-pastilla" />
+              </span>
+              <TextLineBar className="w-3/4" />
+              <TextLineBar className="w-1/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Silueta de "Choferes y buses" (`FleetBlock`): los subtítulos reales «Buses»
+ * y «Choferes», las pastillas del resumen de buses y tres filas de chofer con
+ * el nombre y su pastilla en la primera línea y el detalle del viaje en dos.
+ */
+export function FleetSkeleton() {
+  return (
+    <div aria-hidden="true" className="rounded-tarjeta border border-borde bg-superficie shadow-1">
+      <SectionHeaderSkeleton texts={FLEET_SECTION} />
+      <div className="p-5">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <p className="text-base font-semibold text-tinta">Buses</p>
+            <div className="flex flex-wrap gap-2">
+              <Skeleton className="h-7 w-36 rounded-pastilla" />
+              <Skeleton className="h-7 w-44 rounded-pastilla" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <p className="text-base font-semibold text-tinta">Choferes</p>
+            <div className={FLEET_LIST_CLASS}>
+              {[0, 1, 2].map((i) => (
+                <div key={i} className={FLEET_DRIVER_ROW_CLASS}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="flex h-6 items-center">
+                      <Skeleton className="h-5 w-44 rounded-pastilla" />
+                    </span>
+                    <Skeleton className="h-7 w-24 rounded-pastilla" />
+                  </div>
+                  <TextLineBar className="w-full" />
+                  <TextLineBar className="w-1/2" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -172,7 +254,8 @@ const TRIPS_COLUMNS = [
 /**
  * Silueta de "Salidas de hoy" con la misma forma que el bloque real: por
  * debajo de `xl`, cuatro tarjetas (dos columnas desde `md`) con hora y ruta,
- * pastilla, bus y chofer, la frase de movimientos y la flecha; desde `xl`, la
+ * pastilla (bajo la ruta en el teléfono), bus y chofer, la frase de
+ * movimientos y la flecha; desde `xl`, la
  * tabla con sus cabeceras reales y seis filas.
  */
 export function TripsTodaySkeleton() {
@@ -219,13 +302,22 @@ export function TripsTodaySkeleton() {
               key={i}
               className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
             >
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="flex items-start justify-between gap-2">
-                  <Skeleton className="h-5 w-2/3 rounded-pastilla" />
+              {/* Como la tarjeta real: en el teléfono la pastilla baja bajo la
+                  ruta y la frase de movimientos ocupa dos renglones. */}
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex flex-col items-start gap-1 sm:flex-row sm:justify-between sm:gap-2">
+                  <span className="flex h-6 w-2/3 items-center">
+                    <Skeleton className="h-5 w-full rounded-pastilla" />
+                  </span>
                   <Skeleton className="h-7 w-24 rounded-pastilla" />
                 </div>
-                <Skeleton className="h-4 w-1/2 rounded-pastilla" />
-                <Skeleton className="h-4 w-2/5 rounded-pastilla" />
+                <TextLineBar className="w-1/2" />
+                <span className="flex h-6 items-center">
+                  <Skeleton className="h-4 w-4/5 rounded-pastilla" />
+                </span>
+                <span className="flex h-6 items-center sm:hidden">
+                  <Skeleton className="h-4 w-1/3 rounded-pastilla" />
+                </span>
               </div>
               <IconChevronRight className="size-5 shrink-0 text-marca-700" />
             </div>

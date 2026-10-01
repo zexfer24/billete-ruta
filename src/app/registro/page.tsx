@@ -1,36 +1,63 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { safeNext } from "@/lib/safe-next";
-import { firstParam, loginHref, PUBLIC_TEXT_LINK_CLASS } from "../_publico/links";
+import { firstParam, loginHref, PUBLIC_TEXT_LINK_CLASS, registerHref } from "../_publico/links";
 import { PublicCard, PublicShell } from "../_publico/public-shell";
+import { parseRegisterMode } from "./mode";
 import { RegisterForm } from "./register-form";
-import { COUNTER_NOTICE_TEXT, REGISTER_DESCRIPTION, REGISTER_TITLE } from "./texts";
+import { COUNTER_NOTICE_TEXT, REGISTER_TEXTS } from "./texts";
 
-export const metadata: Metadata = { title: "Crear cuenta" };
+interface RegistroSearchParams {
+  next?: string | string[];
+  modo?: string | string[];
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<RegistroSearchParams>;
+}): Promise<Metadata> {
+  return { title: REGISTER_TEXTS[parseRegisterMode((await searchParams).modo)].pageTitle };
+}
 
 export default async function RegistroPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string | string[] }>;
+  searchParams: Promise<RegistroSearchParams>;
 }) {
+  const params = await searchParams;
   // Un `next` repetido, externo o mal formado se descarta: al terminar se va a
   // /mi/documentos si falta la foto de la cédula, o a /mi si ya está.
-  const next = safeNext(firstParam((await searchParams).next)) ?? undefined;
+  const next = safeNext(firstParam(params.next)) ?? undefined;
+  // "activar" llega desde los enlaces de activación de /ingresar; cualquier
+  // otro valor es la pantalla de crear cuenta.
+  const mode = parseRegisterMode(params.modo);
+  const textos = REGISTER_TEXTS[mode];
 
   return (
     <PublicShell>
-      <PublicCard title={REGISTER_TITLE} description={REGISTER_DESCRIPTION}>
-        <RegisterForm next={next} />
+      <PublicCard title={textos.title} description={textos.description}>
+        <RegisterForm next={next} mode={mode} />
       </PublicCard>
 
+      {/* Dos líneas al pie en los dos modos: el enlace a ingresar y la salida al otro caso. */}
       <div className="flex flex-col gap-2 text-center">
         <p className="text-base text-tinta-suave">
-          ¿Ya tienes cuenta?{" "}
+          {mode === "activar" ? "¿Ya elegiste tu contraseña?" : "¿Ya tienes cuenta?"}{" "}
           <Link href={loginHref(next)} className={PUBLIC_TEXT_LINK_CLASS}>
             Ingresa aquí
           </Link>
         </p>
-        <p className="text-sm leading-relaxed text-tinta-suave">{COUNTER_NOTICE_TEXT}</p>
+        {mode === "activar" ? (
+          <p className="text-base text-tinta-suave">
+            ¿No te registraron en la taquilla?{" "}
+            <Link href={registerHref(next)} className={PUBLIC_TEXT_LINK_CLASS}>
+              Crea tu cuenta
+            </Link>
+          </p>
+        ) : (
+          <p className="text-sm leading-relaxed text-tinta-suave">{COUNTER_NOTICE_TEXT}</p>
+        )}
       </div>
     </PublicShell>
   );

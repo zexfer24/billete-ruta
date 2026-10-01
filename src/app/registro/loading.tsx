@@ -1,27 +1,31 @@
 import type { ReactNode } from "react";
-import { SkeletonScreen } from "@/components/skeleton";
-import { FieldPreview, PrimaryButtonPreview } from "../_publico/form-skeleton";
-import { PublicCard, PublicShell } from "../_publico/public-shell";
-import {
-  COUNTER_NOTICE_TEXT,
-  REGISTER_DESCRIPTION,
-  REGISTER_GROUPS,
-  REGISTER_HINTS,
-  REGISTER_TITLE,
-} from "./texts";
+import { Skeleton, SkeletonScreen } from "@/components/skeleton";
+import { Card } from "@/components/ui";
+import { FieldPreview, PrimaryButtonSkeleton } from "../_publico/form-skeleton";
+import { PublicShell } from "../_publico/public-shell";
+import { REGISTER_GROUPS, REGISTER_HINTS } from "./texts";
 
 /**
  * Silueta del registro (spec 6.5 y 2.2). La pantalla no consulta datos, así
- * que se pinta el formulario real quieto: el logo, el título, los tres
- * grupos con sus etiquetas y ayudas, los campos vacíos, el botón "Crear mi
- * cuenta" y, al pie, el enlace a ingresar y la nota de taquilla. Solo el
- * lector de pantalla oye el aviso de carga.
+ * que se pinta el formulario real quieto: el logo, los tres grupos con sus
+ * etiquetas y ayudas y los campos vacíos. El título, la frase, el texto del
+ * botón y el pie dependen de `?modo=` ("Crea tu cuenta" o "Activa tu
+ * cuenta"), que un `loading.tsx` no recibe: van como barras, para que la
+ * carga nunca diga una cosa y la pantalla otra. Solo el lector de pantalla
+ * oye el aviso de carga.
  */
 export default function RegistroLoading() {
   return (
     <SkeletonScreen label="Cargando el registro…">
       <PublicShell>
-        <PublicCard title={REGISTER_TITLE} description={REGISTER_DESCRIPTION}>
+        <Card className="flex flex-col gap-5 sm:p-6">
+          <div aria-hidden="true" className="flex flex-col gap-2">
+            <Skeleton className="h-8 w-3/5 rounded-pastilla" />
+            <div className="flex flex-col gap-2.5 py-1">
+              <Skeleton className="h-4 w-full rounded-pastilla" />
+              <Skeleton className="h-4 w-3/5 rounded-pastilla" />
+            </div>
+          </div>
           <div aria-hidden="true" className="flex flex-col gap-6">
             <PreviewGroup title={REGISTER_GROUPS.datos}>
               <FieldPreview label="Cédula" hint={REGISTER_HINTS.idNumber} />
@@ -36,17 +40,16 @@ export default function RegistroLoading() {
               <FieldPreview label="Contraseña" hint={REGISTER_HINTS.password} password />
               <FieldPreview label="Repite la contraseña" hint={REGISTER_HINTS.confirmPassword} password />
             </PreviewGroup>
-            <PrimaryButtonPreview>Crear mi cuenta</PrimaryButtonPreview>
+            <PrimaryButtonSkeleton />
           </div>
-        </PublicCard>
-        <div aria-hidden="true" className="flex flex-col gap-2 text-center">
-          <p className="text-base text-tinta-suave">
-            ¿Ya tienes cuenta?{" "}
-            <span className="inline-flex min-h-11 items-center px-1 font-semibold text-marca-700 underline decoration-marca-200 decoration-2 underline-offset-4">
-              Ingresa aquí
-            </span>
-          </p>
-          <p className="text-sm leading-relaxed text-tinta-suave">{COUNTER_NOTICE_TEXT}</p>
+        </Card>
+        <div aria-hidden="true" className="flex flex-col items-center gap-2">
+          <div className="flex min-h-11 w-full items-center justify-center">
+            <Skeleton className="h-4 w-3/5 rounded-pastilla" />
+          </div>
+          <div className="flex min-h-11 w-full items-center justify-center">
+            <Skeleton className="h-4 w-4/5 rounded-pastilla" />
+          </div>
         </div>
       </PublicShell>
     </SkeletonScreen>

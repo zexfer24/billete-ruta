@@ -158,6 +158,7 @@ export function ReservationDetailPanel({
             reservationId={reservation.id}
             balanceUsd={reservation.balanceUsd.toString()}
             currency={reservation.currency}
+            holderName={holder.fullName}
             amountInCurrencyHint={
               reservation.currency !== "USD"
                 ? `Total de la reserva en ${reservation.currency}: ${formatMoney(

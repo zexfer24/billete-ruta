@@ -46,6 +46,22 @@ describe("manifestSummary", () => {
     expect(resumen).toMatchObject({ boarded: 1, pending: 0, expected: 1, free: 2 });
   });
 
+  it("cuenta por separado a quienes todavía deben pagar y no pueden subir", () => {
+    const resumen = manifestSummary({
+      capacity: 20,
+      reservations: [
+        { status: "PAGADA", passengers: [SIN_SUBIR, SIN_SUBIR] },
+        { status: "PAGO_EN_SITIO", passengers: [SIN_SUBIR] },
+        { status: "ABONADA", passengers: [SIN_SUBIR, SIN_SUBIR] },
+        { status: "EN_VALIDACION", passengers: [SIN_SUBIR] },
+        { status: "PENDIENTE_PAGO", passengers: [SIN_SUBIR] },
+        { status: "LIBERADA", passengers: [SIN_SUBIR] },
+      ],
+    });
+    // PAGO_EN_SITIO sí puede subir (el escáner lo deja pasar), así que no cuenta.
+    expect(resumen).toMatchObject({ pending: 7, unpaidPassengers: 4 });
+  });
+
   it("los puestos libres nunca bajan de cero", () => {
     const resumen = manifestSummary({
       capacity: 1,

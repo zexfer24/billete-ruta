@@ -5,6 +5,7 @@ import { EmptyState, StatusBadge, panelButtonClass } from "@/components/panel-ui
 import { DashboardSection } from "./section-card";
 import { IconTicket } from "@/components/icons";
 import { ticketsSection } from "./section-texts";
+import { TICKET_ROW_CLASS, TICKETS_LIST_CLASS } from "./list-classes";
 
 /** Cuántos tickets muestra el tablero antes de remitir a "Pasajeros y pagos". */
 const MAX_FILAS = 5;
@@ -51,9 +52,9 @@ export async function TicketsBlock({
           description="El ticket se emite cuando una reserva queda pagada por completo."
         />
       ) : (
-        <ul className="flex flex-col divide-y divide-borde">
+        <ul className={TICKETS_LIST_CLASS}>
           {visibles.map((ticket) => (
-            <li key={ticket.reservationId} className="flex flex-col gap-0.5 py-2 first:pt-0 last:pb-0">
+            <li key={ticket.reservationId} className={TICKET_ROW_CLASS}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Link
                   href={`/panel/pasajeros?vista=pagadas&reserva=${ticket.reservationId}`}

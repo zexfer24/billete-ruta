@@ -14,7 +14,7 @@ export function InactiveLink({ loggedIn }: { loggedIn: boolean }) {
   return (
     <PublicShell>
       <PublicCard
-        eyebrow={<StateIcon icon={<IconClock />} />}
+        eyebrow={<StateIcon tone="alerta" icon={<IconClock />} />}
         title="Este enlace ya no está activo"
         description="El tiempo para reservar este puesto terminó, o ya usaste el enlace para reservarlo."
       >
@@ -43,12 +43,19 @@ export function OtherDepartureActions({ loggedIn, showTrips = false }: { loggedI
   );
 }
 
+const STATE_ICON_TONES = {
+  /** Algo que requiere atención, como el enlace vencido. */
+  alerta: "bg-alerta-suave text-alerta",
+  /** Información neutra, como la salida que ya no admite reservas (como `EmptyState`). */
+  marca: "bg-marca-50 text-marca-600",
+} as const;
+
 /** Icono grande en círculo que encabeza un estado (enlace vencido, salida no disponible). */
-export function StateIcon({ icon }: { icon: ReactNode }) {
+export function StateIcon({ icon, tone }: { icon: ReactNode; tone: keyof typeof STATE_ICON_TONES }) {
   return (
     <span
       aria-hidden="true"
-      className="grid size-14 place-items-center rounded-full bg-alerta-suave text-alerta [&>svg]:size-7"
+      className={`grid size-14 place-items-center rounded-full ${STATE_ICON_TONES[tone]} [&>svg]:size-7`}
     >
       {icon}
     </span>

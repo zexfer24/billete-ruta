@@ -68,7 +68,7 @@ export function describeActivity(entry: ActivityEntry): { text: string; tone: St
         ? { text: `${actor} vendió en taquilla la reserva ${sujeto}`, tone: "marca" }
         : { text: `El pasajero creó la reserva ${sujeto}`, tone: "marca" };
     case "COMPROBANTE_CARGADO":
-      return { text: `El pasajero cargó un comprobante en ${sujeto}`, tone: "marca" };
+      return { text: `El pasajero cargó un comprobante en ${sujeto}`, tone: "info" };
     case "PAGO_APROBADO":
       return { text: `${actor} aprobó un pago de ${sujeto}`, tone: "exito" };
     case "PAGO_RECHAZADO":

@@ -118,7 +118,7 @@ describe("ADMIN_NAV", () => {
       ["/panel/admin/movimientos", "Movimientos"],
       ["/panel/admin/usuarios", "Usuarios"],
       ["/panel/admin/agencias", "Agencias"],
-      ["/panel/admin/tasas", "Tasas y precios"],
+      ["/panel/admin/tasas", "Tasas del terminal"],
       ["/panel/admin/mensajes", "Mensajes"],
     ]);
   });

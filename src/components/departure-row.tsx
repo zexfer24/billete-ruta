@@ -52,8 +52,8 @@ const SEATS_TONE_CLASSES = {
 
 /**
  * Tarjeta de una salida con la misma jerarquía que el tablero de la portada
- * (`DepartureBoard`): el destino como título, debajo "Desde {origen}" con la
- * agencia (su color como pista, nunca solo), y cuándo sale en una frase que
+ * (`DepartureBoard`): el destino como título, debajo "Desde {origen}" y, en
+ * su propia línea, la agencia (su color como pista, nunca solo), y cuándo sale en una frase que
  * se entiende sola ("Sale a las 13:00", "Mañana a las 07:00", "Jue 1 oct a
  * las 07:00", o "Sale en 15 min" resaltado si falta menos de una hora) junto
  * a la duración. A la derecha, precio por persona y puestos libres. Sin
@@ -81,20 +81,22 @@ export function DepartureRow({
             <span className="sr-only">Hacia </span>
             {departure.destination}
           </p>
-          <p className="break-words text-sm text-tinta-suave">
-            Desde {departure.origin}
-            {agencia ? (
-              <>
-                {" · "}
-                <span
-                  aria-hidden="true"
-                  className="mr-1 inline-block size-2.5 rounded-full align-middle"
-                  style={{ backgroundColor: color.bg }}
-                />
-                {agencia}
-              </>
-            ) : null}
-          </p>
+          <p className="break-words text-sm text-tinta-suave">Desde {departure.origin}</p>
+          {/*
+            La agencia va en su propia línea, como en la lista del paso 1 del
+            asistente: junto al origen se partía en dos ("Expresos" / "Los
+            Andes") cuando la columna del precio y los puestos ocupa el ancho.
+          */}
+          {agencia ? (
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-tinta-suave">
+              <span
+                aria-hidden="true"
+                className="inline-block size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: color.bg }}
+              />
+              <span className="min-w-0 break-words">{agencia}</span>
+            </p>
+          ) : null}
         </div>
         <div className="shrink-0 text-right">
           <p className="tabular text-lg font-bold leading-snug text-tinta">
@@ -144,8 +146,8 @@ export function DepartureRow({
 }
 
 /**
- * Silueta de carga de `DepartureRow`, con sus mismas filas: destino y
- * origen a la izquierda, precio y puestos a la derecha, y la línea de cuándo
+ * Silueta de carga de `DepartureRow`, con sus mismas filas: destino, origen
+ * y agencia a la izquierda, precio y puestos a la derecha, y la línea de cuándo
  * sale. `withAction` agrega el botón de abajo a la derecha.
  */
 export function DepartureRowSkeleton({ withAction = false }: { withAction?: boolean }) {
@@ -154,7 +156,8 @@ export function DepartureRowSkeleton({ withAction = false }: { withAction?: bool
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-2 pt-1">
           <Skeleton className="h-5 w-2/5 rounded-pastilla" />
-          <Skeleton className="h-4 w-4/5 rounded-pastilla" />
+          <Skeleton className="h-4 w-3/5 rounded-pastilla" />
+          <Skeleton className="h-4 w-1/2 rounded-pastilla" />
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 pt-1">
           <Skeleton className="h-5 w-20 rounded-pastilla" />

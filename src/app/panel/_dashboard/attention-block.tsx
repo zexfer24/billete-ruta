@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { AgencyDepartureRow } from "@/modules/catalog";
-import { formatCaracasTime24, formatRelativeDeparture } from "@/lib/time";
+import { formatCaracasTime24 } from "@/lib/time";
 import { Alert } from "@/components/alert";
 import { panelButtonClass } from "@/components/panel-ui";
 import { IconChevronRight } from "@/components/icons";
 import {
+  departsInText,
   departuresNeedingAttention,
   MAX_ATTENTION_DEPARTURES,
   BOARDING_SOON_MINUTES,
@@ -23,11 +24,11 @@ function departureMessage(departure: AgencyDepartureRow, kind: AttentionKind, no
       const cuando =
         departure.departsAt.getTime() < now.getTime()
           ? `Debía salir a las ${hora}`
-          : formatRelativeDeparture(departure.departsAt, now);
+          : departsInText(departure.departsAt, now);
       return `El embarque está abierto. ${cuando}. ${puestos}.`;
     }
     case "pronto":
-      return `${formatRelativeDeparture(departure.departsAt, now)}. ${puestos}.`;
+      return `${departsInText(departure.departsAt, now)}. ${puestos}.`;
   }
 }
 

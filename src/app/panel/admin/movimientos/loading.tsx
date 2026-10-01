@@ -2,6 +2,7 @@ import { IconDownload } from "@/components/icons";
 import { panelButtonClass } from "@/components/panel-ui";
 import { SkeletonScreen } from "@/components/skeleton";
 import { ADMIN_PERIOD_TAB_LABELS } from "../_shared/period";
+import { FILTER_BUTTON_LABEL } from "../_shared/period-filter";
 import { FilterCardSkeleton, LineSkeleton, PageHeaderSkeleton, TabsSkeleton } from "../_shared/skeletons";
 import { MovementsListSkeleton } from "./movements-list";
 
@@ -20,8 +21,8 @@ export default function MovimientosAdminLoading() {
         }
       />
       <div className="flex flex-col gap-3">
-        <TabsSkeleton labels={ADMIN_PERIOD_TAB_LABELS} />
-        <FilterCardSkeleton labels={["Agencia"]} button="Aplicar filtros" />
+        <TabsSkeleton labels={ADMIN_PERIOD_TAB_LABELS} grid />
+        <FilterCardSkeleton labels={["Agencia"]} button={FILTER_BUTTON_LABEL} />
         <LineSkeleton />
       </div>
       <MovementsListSkeleton />

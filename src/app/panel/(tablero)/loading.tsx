@@ -7,14 +7,12 @@ import {
   AttentionSkeleton,
   CollapsibleSkeleton,
   FiguresSkeleton,
-  SectionSkeleton,
+  FleetSkeleton,
+  PendingNowSkeleton,
+  TicketsSkeleton,
   TripsTodaySkeleton,
 } from "@/app/panel/_dashboard/skeletons";
-import {
-  ACTIVITY_TITLE,
-  FLEET_SECTION,
-  QUICK_REGISTER_SECTION,
-} from "@/app/panel/_dashboard/section-texts";
+import { ACTIVITY_TITLE, QUICK_REGISTER_SECTION } from "@/app/panel/_dashboard/section-texts";
 
 /**
  * Silueta del tablero del operador mientras llega la página (spec 6.5). Los
@@ -58,12 +56,18 @@ export default function TableroLoading() {
           </div>
         </div>
         <AttentionSkeleton />
+        <PendingNowSkeleton />
       </div>
 
       <div className="flex flex-col gap-4">
         <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <Skeleton className="h-6 w-40 rounded-pastilla" />
-          <SkeletonTabs labels={DASHBOARD_PERIODS.map((p) => DASHBOARD_PERIOD_LABELS[p])} active={-1} />
+          {/* Envoltorio sin ancho propio, como el `<nav>` de `PanelTabs`: así el
+              control se encoge a su contenido y queda en la misma fila que el
+              título, en vez de ocupar una fila entera y saltar al llegar la página. */}
+          <div>
+            <SkeletonTabs labels={DASHBOARD_PERIODS.map((p) => DASHBOARD_PERIOD_LABELS[p])} active={-1} />
+          </div>
         </div>
         <FiguresSkeleton />
       </div>
@@ -71,8 +75,8 @@ export default function TableroLoading() {
       <TripsTodaySkeleton />
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <SectionSkeleton rows={4} {...FLEET_SECTION} />
-        <SectionSkeleton rows={4} title="Tickets nuevos" actionLabel="Ver todos" />
+        <FleetSkeleton />
+        <TicketsSkeleton />
       </div>
 
       <div className="flex flex-col gap-4">

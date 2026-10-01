@@ -20,7 +20,8 @@ import { withQuery } from "../_shared/period";
 import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
 import { MESSAGES_PATH, payloadToParams, templateName } from "./messages";
 
-export const MESSAGES_PAGE_SIZE = 50;
+/** Mensajes por página: 25, como las demás listas paginadas del panel. */
+export const MESSAGES_PAGE_SIZE = 25;
 
 /** Cabeceras de la tabla, compartidas con su silueta de carga. */
 const MESSAGE_COLUMNS = ["Para", "Mensaje", "Estado", "Enviado"] as const;
@@ -28,8 +29,8 @@ const MESSAGE_COLUMNS = ["Para", "Mensaje", "Estado", "Enviado"] as const;
 /** Diferencia desde la que el envío se considera fuera de la hora programada (un reintento, por ejemplo). */
 const SCHEDULE_GAP_MS = 60_000;
 
-/** Con más caracteres que estos, el texto se recorta a dos líneas y se abre con "Ver mensaje completo". */
-const LONG_TEXT = 140;
+/** Códigos de reserva dentro del texto (`TR-1002-6PAX-7WQF`), que no deben partirse por el guion. */
+const RESERVATION_CODE = /(TR-[0-9A-Z]+(?:-[0-9A-Z]+)*)/;
 
 interface MessageRow {
   id: string;
@@ -43,20 +44,27 @@ interface MessageRow {
   lastError: string | null;
 }
 
+/**
+ * Texto que recibe el pasajero, siempre entero. Las plantillas no pasan de
+ * unos 260 caracteres (tres líneas en la tabla, unas seis en la tarjeta):
+ * recortarlo a dos líneas y sumar un "Ver mensaje completo" de 44 px casi
+ * nunca ahorraba altura y parecía un enlace roto cuando el texto ya cabía.
+ * Los códigos de reserva van en una sola pieza para leerlos de un vistazo.
+ */
 function MessageText({ text }: { text: string }) {
-  if (text.length <= LONG_TEXT) return <p className="text-sm leading-relaxed text-tinta-suave">{text}</p>;
+  const parts = text.split(RESERVATION_CODE);
   return (
-    <details className="group">
-      <summary className="foco cursor-pointer list-none rounded-control [&::-webkit-details-marker]:hidden">
-        <span className="line-clamp-2 text-sm leading-relaxed text-tinta-suave group-open:hidden">{text}</span>
-        <span className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-[15px] font-semibold text-marca-700">
-          <span className="group-open:hidden">Ver mensaje completo</span>
-          <span className="hidden group-open:inline">Ver menos</span>
-          <DisclosureChevron />
-        </span>
-      </summary>
-      <p className="text-sm leading-relaxed text-tinta-suave">{text}</p>
-    </details>
+    <p className="text-sm leading-relaxed text-tinta-suave">
+      {parts.map((part, index) =>
+        index % 2 === 1 ? (
+          <span key={index} className="tabular whitespace-nowrap">
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </p>
   );
 }
 
@@ -86,14 +94,20 @@ function MessageStatusBlock({ message }: { message: MessageRow }) {
   );
 }
 
+/** Si el envío salió en otro momento que el programado (un reintento, por ejemplo). */
+function sentOffSchedule(message: MessageRow): boolean {
+  return (
+    message.sentAt !== null && Math.abs(message.sentAt.getTime() - message.scheduledFor.getTime()) >= SCHEDULE_GAP_MS
+  );
+}
+
 /**
- * Cuándo salió el mensaje. La hora programada solo se agrega si todavía no
- * sale o si salió en otro momento (un reintento): casi siempre coinciden y
- * repetirla en cada fila era ruido. En la tabla va como `TimeCell` (la hora
- * y debajo la fecha), igual que en las demás tablas del terminal; en la
- * tarjeta del teléfono, fecha y hora en una línea.
+ * Cuándo salió el mensaje, en la tabla. La hora programada solo se agrega si
+ * todavía no sale o si salió en otro momento (un reintento): casi siempre
+ * coinciden y repetirla en cada fila era ruido. Va como `TimeCell` (la hora y
+ * debajo la fecha), igual que en las demás tablas del terminal.
  */
-function SendTime({ message, layout }: { message: MessageRow; layout: "tabla" | "tarjeta" }) {
+function SendTime({ message }: { message: MessageRow }) {
   const scheduled = formatCaracasDateTime24(message.scheduledFor);
   if (!message.sentAt) {
     return (
@@ -103,17 +117,27 @@ function SendTime({ message, layout }: { message: MessageRow; layout: "tabla" | 
       </span>
     );
   }
-  const differs = Math.abs(message.sentAt.getTime() - message.scheduledFor.getTime()) >= SCHEDULE_GAP_MS;
   return (
     <span className="flex flex-col">
-      {layout === "tabla" ? (
-        <TimeCell time={formatCaracasTime24(message.sentAt)} date={formatCaracasDate(message.sentAt)} />
-      ) : (
-        <span className="tabular font-medium text-tinta">{formatCaracasDateTime24(message.sentAt)}</span>
-      )}
-      {differs ? <span className="tabular text-sm text-tinta-suave">Programado para el {scheduled}</span> : null}
+      <TimeCell time={formatCaracasTime24(message.sentAt)} date={formatCaracasDate(message.sentAt)} />
+      {sentOffSchedule(message) ? (
+        <span className="tabular text-sm text-tinta-suave">Programado para el {scheduled}</span>
+      ) : null}
     </span>
   );
+}
+
+/**
+ * Cuándo salió el mensaje, en la tarjeta del teléfono: una línea secundaria
+ * bajo el destinatario, sin etiqueta aparte, para que la tarjeta sea corta.
+ */
+function sendLine(message: MessageRow): string {
+  const scheduled = formatCaracasDateTime24(message.scheduledFor);
+  if (!message.sentAt) {
+    return `${message.status === "FALLIDO" ? "No salió" : "Todavía no sale"}. Programado para el ${scheduled}`;
+  }
+  const sent = `Enviado el ${formatCaracasDateTime24(message.sentAt)}`;
+  return sentOffSchedule(message) ? `${sent}. Programado para el ${scheduled}` : sent;
 }
 
 /**
@@ -224,18 +248,13 @@ export async function MessagesList({
                   <div className="min-w-0 flex-1">
                     <p className="break-words text-base font-semibold text-tinta">{m.name}</p>
                     <p className="tabular text-sm text-tinta-suave">Para {m.phone}</p>
+                    <p className="tabular text-sm text-tinta-suave">{sendLine(m)}</p>
                   </div>
                   <div className="max-w-[55%] shrink-0">
                     <MessageStatusBlock message={m} />
                   </div>
                 </div>
                 <MessageText text={m.text} />
-                <dl>
-                  <dt className="text-sm text-tinta-suave">Enviado</dt>
-                  <dd className="text-[15px]">
-                    <SendTime message={m} layout="tarjeta" />
-                  </dd>
-                </dl>
               </li>
             ))}
           </ul>
@@ -266,7 +285,7 @@ export async function MessagesList({
                   <MessageStatusBlock message={m} />
                 </td>
                 <td className={cx(ADMIN_TD_CLASS, "align-top")}>
-                  <SendTime message={m} layout="tabla" />
+                  <SendTime message={m} />
                 </td>
               </tr>
             ))}
@@ -284,7 +303,14 @@ export function MessagesListSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-72" />
-      <TableSkeleton columns={MESSAGE_COLUMNS} rows={8} mobileStatus mobileDetails={1} />
+      <TableSkeleton
+        columns={MESSAGE_COLUMNS}
+        rows={8}
+        mobileStatus
+        mobileDetails={0}
+        mobileSubtitleLines={2}
+        mobileTextLines={4}
+      />
     </div>
   );
 }

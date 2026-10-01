@@ -9,6 +9,7 @@ import {
   templateButtons,
   templateParams,
 } from "@/modules/messaging/templates";
+import { UNPAID_EXPIRY_MINUTES } from "@/modules/scheduler";
 
 describe("catálogo de plantillas", () => {
   it("declara exactamente las diez plantillas de la especificación", () => {
@@ -72,8 +73,8 @@ describe("renderPreview", () => {
       abonado: "$ 50,00",
       saldo: "$ 92,50",
     });
-    expect(texto).toContain("$ 50,00");
-    expect(texto).toContain("$ 92,50");
+    expect(texto).toContain("$\u00A050,00");
+    expect(texto).toContain("$\u00A092,50");
   });
 });
 
@@ -140,7 +141,7 @@ describe("textos de las plantillas", () => {
     };
     const condicional = renderPreview("reserva_condicional", params);
     expect(condicional).toContain("Tu viaje sale el jueves 1 de octubre a las 06:00.");
-    expect(condicional).toContain("Paga $ 26,00 en la taquilla");
+    expect(condicional).toContain("Paga $\u00A026,00 en la taquilla");
     const ticket = renderPreview("ticket_emitido", params);
     expect(ticket).toContain("sale el jueves 1 de octubre a las 06:00 desde Terminal La Bandera.");
     for (const key of TEMPLATE_KEYS) {
@@ -166,7 +167,39 @@ describe("textos de las plantillas", () => {
       pasajeros: "1",
       serial: "TR-1",
     });
-    expect(texto).toBe("¡Hola Yolanda! Recibimos tu reserva TR-1 para 1 persona. Cuando revisemos tu pago, te enviaremos el ticket.");
+    expect(texto).toBe(
+      "¡Hola Yolanda! Recibimos tu reserva TR-1 para 1 persona. Para no perderla, paga en las próximas 2 horas y envía la foto del comprobante desde tu cuenta. Cuando revisemos tu pago, te enviaremos el ticket.",
+    );
+  });
+
+  it("la solicitud recibida pide pagar y dice el plazo antes de liberar el puesto", () => {
+    const texto = renderPreview("solicitud_recibida", { nombre: "Ana", pasajeros: "1", serial: "TR-1" });
+    expect(texto).toContain(`paga en las próximas ${UNPAID_EXPIRY_MINUTES / 60} horas`);
+    expect(texto).toContain("foto del comprobante");
+  });
+
+  it("el aviso de dos horas antes es un recordatorio, sin pregunta que no se puede contestar", () => {
+    const texto = renderPreview("confirmacion_2h", { nombre: "Ana Pérez", serial: "TR-0922-1PAX-JLRC" });
+    expect(texto).toBe(
+      "Hola Ana, tu viaje TR-0922-1PAX-JLRC sale en unas dos horas o menos. Ve al terminal con tiempo y con tu cédula en mano. La hora y el lugar de salida están en tu cuenta.",
+    );
+    expect(texto).not.toContain("?");
+  });
+
+  it("pegan el símbolo de la moneda a la cifra para que el monto no se parta entre líneas", () => {
+    expect(displayParam("monto", "$ 41,00")).toBe("$\u00A041,00");
+    expect(displayParam("abonado", "Bs. 1.200,50")).toBe("Bs.\u00A01.200,50");
+    expect(displayParam("saldo", "COP 80.000,00")).toBe("COP\u00A080.000,00");
+    expect(displayParam("monto", "USDT 10,00")).toBe("USDT\u00A010,00");
+    expect(displayParam("serial", "$ 41,00")).toBe("$ 41,00");
+    const guardado = renderStoredPreview("abono_registrado", {
+      nombre: "Ana",
+      serial: "TR-1",
+      abonado: "$ 26,65",
+      saldo: "$ 14,35",
+    });
+    expect(guardado).toContain("tu pago de $\u00A026,65 para");
+    expect(guardado).toContain("Te falta pagar $\u00A014,35.");
   });
 
   it("deja igual una fecha que no tiene el formato guardado", () => {

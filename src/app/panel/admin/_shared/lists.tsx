@@ -40,7 +40,8 @@ export function DisclosureChevron() {
 /**
  * Lista de `MobileCard` para pantallas angostas. Muestra las primeras
  * `initial` y guarda el resto detrás de "Ver N más", para no obligar a
- * desplazarse por cien tarjetas.
+ * desplazarse por cien tarjetas. Si sobra una sola, se muestra: un botón
+ * casi tan alto como la tarjeta que esconde solo agrega un toque.
  */
 export function MobileCardList({
   items,
@@ -54,8 +55,9 @@ export function MobileCardList({
   /** Singular y plural de lo que se lista, para "Ver 1 recorrido más" o "Ver 12 recorridos más". */
   moreNoun: [string, string];
 }) {
-  const visible = items.slice(0, initial);
-  const rest = items.slice(initial);
+  const cut = items.length > initial + 1 ? initial : items.length;
+  const visible = items.slice(0, cut);
+  const rest = items.slice(cut);
 
   return (
     <div className="flex flex-col gap-3">

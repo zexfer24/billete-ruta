@@ -1,17 +1,26 @@
+import Link from "next/link";
 import type { AgencyDashboard, RecentTicketRow } from "@/modules/reports";
 import type { AgencyDepartureRow } from "@/modules/catalog";
 import { formatMoney } from "@/lib/decimal";
 import { formatCaracas, formatCaracasDate, formatCaracasTime24, type DashboardPeriod } from "@/lib/time";
 import { StatCard } from "@/components/panel-ui";
-import { IconBus, IconCash, IconClock, IconTicket } from "@/components/icons";
-import { countLabel, departuresDetail, porCobrarDetail } from "./text";
+import { IconBus, IconCash, IconChevronRight, IconTicket } from "@/components/icons";
+import { countLabel, departuresDetail, porCobrarNowText } from "./text";
 import { isOverdue } from "./attention";
 import { FIGURE_LABELS } from "./section-texts";
+import { FIGURE_CELL_CLASS, FIGURE_WIDE_CELL_CLASS, FIGURES_GRID_CLASS } from "./figure-classes";
 
 /**
- * Las cuatro cifras del periodo (spec 1.3: nunca más de cuatro a la vez), cada
- * una con una frase que le da contexto y un enlace a su detalle. "Reservas por
- * cobrar" es en vivo; las otras tres dependen del periodo elegido.
+ * Las tres cifras del periodo elegido (spec 1.3: nunca más de cuatro a la
+ * vez), cada una con una frase que le da contexto. Todas dependen del periodo:
+ * lo que va en vivo, como las reservas por cobrar, vive en "Lo que necesita
+ * tu atención" (`PendingNowLine`), para que al cambiar de periodo no quede una
+ * cifra quieta bajo "Resumen de…". Solo enlazan a su detalle cuando ese
+ * detalle muestra la misma cifra: "Recaudado" abre Reportes con el mismo
+ * periodo y "Salidas" abre la lista de salidas solo en "hoy" (esa lista no
+ * filtra por 7 o 30 días). "Tickets emitidos" no enlaza: "Pagadas" cuenta
+ * todas las fechas, y los últimos tickets del periodo ya están en "Tickets
+ * nuevos", justo debajo.
  */
 export async function FiguresBlock({
   summary,
@@ -28,9 +37,7 @@ export async function FiguresBlock({
   now: Date;
 }) {
   const [resumen, emitidos, salidasHoy] = await Promise.all([summary, tickets, todayDepartures]);
-  const { pendingTickets, departures, revenue } = resumen;
-
-  const detallePorCobrar = porCobrarDetail(pendingTickets.total, pendingTickets.payOnSite);
+  const { departures, revenue } = resumen;
 
   const detalleSalidas = departuresDetail(
     departures,
@@ -47,39 +54,56 @@ export async function FiguresBlock({
     : "Todavía no se emite ninguno";
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <StatCard
-        label={FIGURE_LABELS.porCobrar}
-        value={pendingTickets.total}
-        detail={detallePorCobrar}
-        href="/panel/pasajeros?vista=por-cobrar"
-        icon={<IconClock />}
-      />
-      <StatCard
-        label={FIGURE_LABELS.salidas}
-        value={departures.total}
-        detail={detalleSalidas}
-        href="/panel/salidas"
-        icon={<IconBus />}
-      />
-      <StatCard
-        label={FIGURE_LABELS.recaudado}
-        value={formatMoney(revenue.totalUsd, "USD")}
-        detail={
-          revenue.payments > 0
-            ? countLabel(revenue.payments, "pago recibido", "pagos recibidos")
-            : "Todavía no hay pagos"
-        }
-        href={`/panel/reportes?vista=recaudacion&periodo=${periodo}`}
-        icon={<IconCash />}
-      />
-      <StatCard
-        label={FIGURE_LABELS.tickets}
-        value={emitidos.total}
-        detail={detalleTickets}
-        href="/panel/pasajeros?vista=pagadas"
-        icon={<IconTicket />}
-      />
+    <div className={FIGURES_GRID_CLASS}>
+      <div className={FIGURE_WIDE_CELL_CLASS}>
+        <StatCard
+          label={FIGURE_LABELS.recaudado}
+          value={formatMoney(revenue.totalUsd, "USD")}
+          detail={
+            revenue.payments > 0
+              ? countLabel(revenue.payments, "pago recibido", "pagos recibidos")
+              : "Todavía no hay pagos"
+          }
+          href={`/panel/reportes?vista=recaudacion&periodo=${periodo}`}
+          icon={<IconCash />}
+        />
+      </div>
+      <div className={FIGURE_CELL_CLASS}>
+        <StatCard
+          label={FIGURE_LABELS.salidas}
+          value={departures.total}
+          detail={detalleSalidas}
+          href={periodo === "hoy" ? "/panel/salidas" : undefined}
+          icon={<IconBus />}
+        />
+      </div>
+      <div className={FIGURE_CELL_CLASS}>
+        <StatCard label={FIGURE_LABELS.tickets} value={emitidos.total} detail={detalleTickets} icon={<IconTicket />} />
+      </div>
     </div>
+  );
+}
+
+/**
+ * Línea en vivo de "Lo que necesita tu atención": cuántas reservas deben
+ * dinero ahora mismo, con su enlace a "Por cobrar". Es información, no un
+ * aviso: una cifra que casi siempre es mayor que cero no debe competir con los
+ * comprobantes por revisar ni con las salidas que embarcan pronto.
+ */
+export async function PendingNowLine({ summary }: { summary: Promise<AgencyDashboard> }) {
+  const { pendingTickets } = await summary;
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 text-[15px] text-tinta-suave">
+      <span className="tabular">{porCobrarNowText(pendingTickets.total, pendingTickets.payOnSite)}</span>
+      {pendingTickets.total > 0 ? (
+        <Link
+          href="/panel/pasajeros?vista=por-cobrar"
+          className="foco inline-flex min-h-11 items-center gap-1 rounded-control px-2 font-semibold text-marca-700 hover:bg-marca-50"
+        >
+          Ver por cobrar
+          <IconChevronRight className="size-5" />
+        </Link>
+      ) : null}
+    </p>
   );
 }

@@ -121,6 +121,42 @@ describe("describeUnitTrip", () => {
     );
   });
 
+  it("atrasada de hoy: dice a qué hora debía salir, con las palabras del tablero", () => {
+    const current = unidad({ departsAt: new Date("2026-09-13T13:00:00Z"), overdue: true });
+    expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
+      title: "Caracas - Maracaibo",
+      detail: "Debía salir a las 09:00",
+      late: true,
+    });
+  });
+
+  it("atrasada de ayer: el aviso lleva el día", () => {
+    const current = unidad({ departsAt: new Date("2026-09-12T23:00:00Z"), overdue: true });
+    expect(describeUnitTrip({ current, upcoming: [] }, NOW)?.detail).toBe("Debía salir ayer a las 19:00");
+  });
+
+  it("atrasada con próximas salidas: gana la atrasada y no suma «salidas más»", () => {
+    const current = unidad({ id: "dep-0", departsAt: new Date("2026-09-13T13:00:00Z"), overdue: true });
+    const upcoming = [
+      unidad({ routeName: "Caracas - Mérida", departsAt: new Date("2026-09-13T22:00:00Z") }),
+      unidad({ routeName: "Caracas - Mérida", departsAt: new Date("2026-09-14T22:00:00Z") }),
+    ];
+    expect(describeUnitTrip({ current, upcoming, upcomingCount: 2 }, NOW)).toEqual({
+      title: "Caracas - Maracaibo",
+      detail: "Debía salir a las 09:00",
+      late: true,
+    });
+  });
+
+  it("embarque abierto cuya hora ya pasó: no dice «sale» con una hora vencida", () => {
+    const current = unidad({ status: "MANIFIESTO_CERRADO", departsAt: new Date("2026-09-13T13:00:00Z") });
+    expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
+      title: "Caracas - Maracaibo",
+      detail: "Embarque abierto · debía salir a las 09:00",
+      late: true,
+    });
+  });
+
   it("sin viaje en curso ni próximas salidas, devuelve null", () => {
     expect(describeUnitTrip({ current: null, upcoming: [] }, NOW)).toBeNull();
   });

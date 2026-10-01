@@ -1,10 +1,11 @@
 import Link from "next/link";
-import type { AgencyFleetStatus } from "@/modules/reports";
+import type { AgencyFleetStatus, UnitDeparture } from "@/modules/reports";
 import { UNIT_STATE_LABELS, unitStateTone, type UnitState } from "@/lib/labels";
 import { countLabel } from "./text";
 import { FLEET_SECTION } from "./section-texts";
 import { EmptyState, StatusBadge, panelButtonClass } from "@/components/panel-ui";
 import { DashboardSection } from "./section-card";
+import { FLEET_DRIVER_ROW_CLASS, FLEET_LIST_CLASS } from "./list-classes";
 import { IconChevronRight, IconUsers } from "@/components/icons";
 import { describeUnitTrip } from "../_shared/unit-trip";
 
@@ -27,20 +28,31 @@ const BUS_STATE_PHRASES: Record<UnitState, { singular: string; plural: string }>
 };
 
 /**
- * Línea del viaje de un chofer: placa, ruta y hora. Si además tiene otras
- * salidas programadas en los próximos 7 días lo dice en palabras ("y otro
- * viaje esta semana") en vez de "+N más". La lista de próximas salidas llega
- * recortada a tres, así que con tres no se da una cifra exacta.
+ * La ruta como «origen → destino», igual que «Salidas de hoy» y «Lo que
+ * necesita tu atención», en vez del nombre libre de la ruta («Caracas –
+ * Mérida»): así el tablero escribe la ruta de una sola manera.
+ */
+function withArrowRoute(departure: UnitDeparture): UnitDeparture {
+  return { ...departure, routeName: `${departure.origin} → ${departure.destination}` };
+}
+
+/**
+ * Línea del viaje de un chofer: placa, ruta y hora, y si tiene más salidas
+ * programadas en los próximos 7 días, cuántas («· 2 salidas más en 7 días»)
+ * con el total real (`upcomingCount`), igual que la pantalla de flota.
  */
 function driverTripLine(chofer: AgencyFleetStatus["drivers"][number], now: Date): string {
-  const viaje = describeUnitTrip({ current: chofer.current, upcoming: chofer.upcoming.slice(0, 1) }, now);
-  if (!viaje) return "Sin viajes asignados esta semana";
+  const viaje = describeUnitTrip(
+    {
+      current: chofer.current ? withArrowRoute(chofer.current) : null,
+      upcoming: chofer.upcoming.map(withArrowRoute),
+      upcomingCount: chofer.upcomingCount,
+    },
+    now,
+  );
+  if (!viaje) return "Sin viajes en los próximos 7 días";
   const placa = chofer.current?.vehiclePlate ?? chofer.upcoming[0]?.vehiclePlate;
-  const enCurso = chofer.current?.status === "EN_RUTA" || chofer.current?.status === "MANIFIESTO_CERRADO";
-  const otros = enCurso ? 0 : chofer.upcoming.length - 1;
-  const linea = [placa, viaje.title, viaje.detail].filter(Boolean).join(" · ");
-  if (otros <= 0) return linea;
-  return `${linea}, y ${otros === 1 ? "otro viaje" : "otros viajes"} esta semana`;
+  return [placa, viaje.title, viaje.detail].filter(Boolean).join(" · ");
 }
 
 /** Máximo de choferes que muestra la lista antes de remitir a la flota completa. */
@@ -109,11 +121,11 @@ export async function FleetBlock({
 
           <div className="flex flex-col gap-2">
             <h3 className="text-base font-semibold text-tinta">Choferes</h3>
-            <ul className="flex flex-col divide-y divide-borde">
+            <ul className={FLEET_LIST_CLASS}>
               {visibles.map((chofer) => {
                 const linea = driverTripLine(chofer, now);
                 return (
-                  <li key={chofer.id} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
+                  <li key={chofer.id} className={FLEET_DRIVER_ROW_CLASS}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-semibold text-tinta">{chofer.fullName}</p>
                       <StatusBadge label={UNIT_STATE_LABELS[chofer.state]} tone={unitStateTone(chofer.state)} />

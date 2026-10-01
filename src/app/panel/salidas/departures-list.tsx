@@ -31,12 +31,21 @@ const DIA_MS = 24 * HORA_MS;
 /** Tope de filas que devuelve `listAgencyDepartures`; si se alcanza, se avisa en pantalla. */
 const TOPE_CONSULTA = 200;
 
-/** Ocupación de una salida en palabras y con el tono de la barra: nunca solo el color. */
+/** Con esta cantidad de puestos libres o menos, la salida se marca "Casi llena". */
+const CASI_LLENA_LIBRES = 4;
+
+/**
+ * Ocupación de una salida en palabras y con el tono de la barra: nunca solo el
+ * color. El aviso "Casi llena" se decide por los puestos libres, no por el
+ * porcentaje, para que la misma cifra reciba siempre el mismo color, y nunca
+ * reemplaza la cifra: "Casi llena · 4 libres".
+ */
 function ocupacion(s: AgencyDepartureRow): { label: string; detail: string; tone: ProgressTone } {
   const label = `${s.occupied} de ${plural(s.capacity, "puesto", "puestos")}`;
   if (s.capacity > 0 && s.occupied >= s.capacity) return { label, detail: "Llena", tone: "peligro" };
-  if (s.capacity > 0 && s.occupied / s.capacity >= 0.9) return { label, detail: "Casi llena", tone: "alerta" };
-  return { label, detail: plural(s.available, "libre", "libres"), tone: "marca" };
+  const libres = plural(s.available, "libre", "libres");
+  if (s.capacity > 0 && s.available <= CASI_LLENA_LIBRES) return { label, detail: `Casi llena · ${libres}`, tone: "alerta" };
+  return { label, detail: libres, tone: "marca" };
 }
 
 /**
@@ -221,10 +230,22 @@ export async function DeparturesList({
                 </ul>
               }
             >
-              <table className="w-full min-w-[760px]">
+              {/* Desde `xl` los anchos son fijos (`table-fixed` con `<colgroup>`):
+                  así las columnas de "Hoy" y "Mañana" quedan alineadas de una
+                  tabla a la otra. Por debajo, en la tableta, el ancho se reparte
+                  según el contenido, porque seis columnas fijas no caben. */}
+              <table className="w-full min-w-[760px] xl:table-fixed">
+                <colgroup>
+                  <col className="xl:w-20" />
+                  <col />
+                  <col className="xl:w-40" />
+                  <col className="xl:w-44" />
+                  <col className="xl:w-44" />
+                  <col className="xl:w-36" />
+                </colgroup>
                 <thead className="border-b border-borde bg-lienzo">
                   <tr>
-                    <th scope="col" className={cx(PANEL_TH_CLASS, "w-24")}>Hora</th>
+                    <th scope="col" className={cx(PANEL_TH_CLASS, "w-20")}>Hora</th>
                     <th scope="col" className={PANEL_TH_CLASS}>Ruta</th>
                     <th scope="col" className={cx(PANEL_TH_CLASS, "min-w-40")}>Vehículo y chofer</th>
                     <th scope="col" className={cx(PANEL_TH_CLASS, "w-44")}>Puestos</th>

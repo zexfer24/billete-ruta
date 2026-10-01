@@ -300,11 +300,9 @@ export default async function PasajerosPage({
       </Suspense>
 
       {registrarCobro ? (
-        <SidePanel
-          title="Registrar un cobro en efectivo"
-          subtitle="Escribe el código del ticket y el monto que recibiste."
-          closeHref={closeHref}
-        >
+        // Sin subtítulo: el formulario ya explica los dos pasos (buscar la
+        // reserva y luego cobrar) y no conviene decirlo dos veces.
+        <SidePanel title="Registrar un cobro en efectivo" closeHref={closeHref}>
           <CashPaymentForm mode="codigo" hidden={hiddenFiltros} error={error} />
         </SidePanel>
       ) : reservaId ? (

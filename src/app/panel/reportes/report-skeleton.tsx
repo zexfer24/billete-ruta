@@ -1,9 +1,12 @@
 import { Skeleton } from "@/components/skeleton";
-import { IconBus, IconCash, IconChart, IconClock, IconRoute, IconUsers } from "@/components/icons";
+import { IconBus, IconCash, IconChart, IconClock, IconUsers } from "@/components/icons";
 import { SkeletonStatCards, SkeletonTable } from "../_shared/skeletons";
 import type { ReportView } from "./range";
 
-/** Silueta de los datos de un reporte: la línea del rango con su botón, tres cifras y la tabla. */
+/**
+ * Silueta de los datos de un reporte: la línea del rango con su botón, las
+ * cifras (en el teléfono, la tarjeta compacta de `CompactFigures`) y la tabla.
+ */
 export function ReportDataSkeleton({ vista }: { vista: ReportView }) {
   return (
     <div aria-hidden="true" className="flex flex-col gap-6">
@@ -12,17 +15,17 @@ export function ReportDataSkeleton({ vista }: { vista: ReportView }) {
         <Skeleton className="h-11 w-56" />
       </div>
       <SkeletonStatCards
+        compact
         stats={
           vista === "recaudacion"
             ? [
                 { label: "Total cobrado", icon: <IconCash /> },
                 { label: "Pagos registrados", icon: <IconChart /> },
-                { label: "Ruta que más cobró", icon: <IconRoute /> },
               ]
             : [
                 { label: "Viajes", icon: <IconBus /> },
-                { label: "Pasajeros transportados", icon: <IconUsers /> },
-                { label: "Duración promedio", icon: <IconClock /> },
+                { label: "Pasajeros transportados", compactLabel: "Pasajeros", icon: <IconUsers /> },
+                { label: "Duración promedio", icon: <IconClock />, compactWide: true },
               ]
         }
       />

@@ -59,7 +59,10 @@ export default async function UsuariosAdminPage({
           Buscar por cédula, nombre o teléfono
         </label>
         <div className="flex flex-wrap gap-2">
+          {/* `key`: el campo no es controlado; al cambiar la búsqueda de la URL
+              (por ejemplo con "Limpiar búsqueda") se vuelve a montar con su valor. */}
           <input
+            key={query ?? ""}
             type="search"
             id="q"
             name="q"

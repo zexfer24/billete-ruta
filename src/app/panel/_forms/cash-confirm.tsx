@@ -42,6 +42,7 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
   const [abierto, setAbierto] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
+  const excessId = useId();
 
   function restoreScroll() {
     if (previousOverflow.current === null) return;
@@ -113,7 +114,9 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
       <dialog
         ref={dialogRef}
         aria-labelledby={titleId}
-        aria-describedby={descriptionId}
+        // El aviso del excedente va fuera del bloque de descripción (ocupa todo
+        // el ancho), así que se suma aparte para que el lector también lo lea.
+        aria-describedby={texto?.excess ? `${descriptionId} ${excessId}` : descriptionId}
         onClose={() => {
           setAbierto(false);
           restoreScroll();
@@ -148,6 +151,7 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
 
           {texto?.excess ? (
             <p
+              id={excessId}
               className={cx(
                 "tabular flex items-start gap-2 rounded-control border border-alerta/30 bg-alerta-suave px-4 py-3",
                 "text-base font-semibold text-alerta",

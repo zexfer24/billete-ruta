@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { ClickableRow } from "@/components/clickable-row";
 import { IconChevronRight, IconRoute } from "@/components/icons";
-import { EmptyState, MobileCard, StatusBadge, TableShell, panelButtonClass } from "@/components/panel-ui";
+import { EmptyState, StatusBadge, TableShell, panelButtonClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { departureStatusLabel, departureStatusTone } from "@/lib/labels";
-import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24, formatDuration } from "@/lib/time";
+import { formatCaracasDate, formatCaracasTime24, formatDuration } from "@/lib/time";
 import { agencyMovements } from "@/modules/reports";
 import { countLabel, formatCount } from "../_shared/format";
 import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, MobileCardList, TimeCell } from "../_shared/lists";
@@ -34,14 +34,77 @@ function boardingText(boardingStartedAt: Date, reference: Date | null): string {
   return `Embarque desde ${hour.time}${hour.date ? ` del ${hour.date}` : ""}`;
 }
 
+type Movement = Awaited<ReturnType<typeof agencyMovements>>[number];
+
+/**
+ * Horas del viaje en una línea para la tarjeta del teléfono: "Salió 07:55 ·
+ * Llegó 16:36", con la fecha de la llegada solo si cae otro día. Sin salida,
+ * la hora del embarque.
+ */
+function tripHoursLine(m: Movement): string {
+  if (!m.departedAt) {
+    return m.boardingStartedAt ? `Embarque desde ${formatCaracasTime24(m.boardingStartedAt)}` : "";
+  }
+  const parts = [`Salió ${formatCaracasTime24(m.departedAt)}`];
+  const arrival = hourFrom(m.arrivedAt, m.departedAt);
+  if (arrival) parts.push(`Llegó ${arrival.time}${arrival.date ? ` del ${arrival.date}` : ""}`);
+  return parts.join(" · ");
+}
+
+/**
+ * Tarjeta de un viaje en el teléfono: agencia, ruta, estado, las horas en una
+ * línea y la fecha con los pasajeros. Toda la tarjeta es el enlace al detalle,
+ * como la fila de la tabla (sin un botón repetido en cada tarjeta); el
+ * embarque y la duración están en el panel de detalle.
+ */
+function MovementCard({ movement: m, href }: { movement: Movement; href: string }) {
+  const status = tripStatus(m);
+  const reference = m.departedAt ?? m.boardingStartedAt;
+  const hours = tripHoursLine(m);
+  return (
+    <li>
+      <Link
+        href={href}
+        scroll={false}
+        className="foco flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-colors duration-150 ease-out hover:border-marca-600 motion-reduce:transition-none"
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-2">
+          <span className="flex items-start justify-between gap-3">
+            <span className="min-w-0 flex-1">
+              <span className="sr-only">{DETAIL_LABEL}: </span>
+              <span className="block break-words text-base font-semibold text-tinta">{m.agencyName}</span>
+              <span className="block text-sm text-tinta-suave">
+                {m.origin} → {m.destination}
+              </span>
+            </span>
+            {status === "FINALIZADA" ? null : (
+              <span className="max-w-[55%] shrink-0">
+                <StatusBadge label={departureStatusLabel(status)} tone={departureStatusTone(status)} />
+              </span>
+            )}
+          </span>
+          <span className="flex flex-col text-[15px]">
+            {hours ? <span className="tabular font-medium text-tinta">{hours}</span> : null}
+            <span className="tabular text-sm text-tinta-suave">
+              {reference ? `${formatCaracasDate(reference)} · ` : ""}
+              {countLabel(m.passengerCount, "pasajero", "pasajeros")}
+            </span>
+          </span>
+        </span>
+        <IconChevronRight className="size-5 shrink-0 text-marca-700" />
+      </Link>
+    </li>
+  );
+}
+
 /**
  * Lista de movimientos del periodo y la agencia elegidos: tabla en escritorio
- * y tarjetas en móvil, con los mismos datos. Cada viaje abre su detalle en el
- * panel lateral. Un viaje sin salida o sin llegada muestra su estado
- * ("Embarcando", "En ruta") en vez de una raya; uno que ya llegó no lo
- * repite. En la tabla, cada hora va como en `TimeCell` (la hora y debajo la
- * fecha, que solo se repite en la llegada o el embarque si caen otro día); en
- * las tarjetas, fecha y hora en una línea ("29/09/2026 18:07").
+ * y tarjetas en móvil. Cada viaje abre su detalle en el panel lateral. Un
+ * viaje sin salida o sin llegada muestra su estado ("Embarcando", "En ruta")
+ * en vez de una raya; uno que ya llegó no lo repite. En la tabla, cada hora
+ * va como en `TimeCell` (la hora y debajo la fecha, que solo se repite en la
+ * llegada o el embarque si caen otro día); en las tarjetas, solo lo esencial
+ * (`MovementCard`).
  */
 export async function MovementsList({
   range,
@@ -90,46 +153,9 @@ export async function MovementsList({
           <MobileCardList
             label="Movimientos"
             moreNoun={["viaje", "viajes"]}
-            items={movements.map((m) => {
-              const status = tripStatus(m);
-              return (
-                <MobileCard
-                  key={m.tripLogId}
-                  title={m.agencyName}
-                  subtitle={`${m.origin} → ${m.destination}`}
-                  status={
-                    status === "FINALIZADA" ? undefined : (
-                      <StatusBadge label={departureStatusLabel(status)} tone={departureStatusTone(status)} />
-                    )
-                  }
-                  details={[
-                    {
-                      label: "Embarque",
-                      value: m.boardingStartedAt ? formatCaracasDateTime24(m.boardingStartedAt) : "—",
-                    },
-                    {
-                      label: "Salió",
-                      value: m.departedAt ? formatCaracasDateTime24(m.departedAt) : "Todavía no",
-                    },
-                    { label: "Llegó", value: m.arrivedAt ? formatCaracasDateTime24(m.arrivedAt) : "Todavía no" },
-                    {
-                      label: "Duración",
-                      value: m.durationMinutes !== null ? formatDuration(m.durationMinutes) : "—",
-                    },
-                    { label: "Pasajeros", value: formatCount(m.passengerCount) },
-                  ]}
-                  action={
-                    <Link
-                      href={movementsHref(range, agencyId, m.tripLogId)}
-                      scroll={false}
-                      className={panelButtonClass("secundario", "md", "w-full")}
-                    >
-                      {DETAIL_LABEL}
-                    </Link>
-                  }
-                />
-              );
-            })}
+            items={movements.map((m) => (
+              <MovementCard key={m.tripLogId} movement={m} href={movementsHref(range, agencyId, m.tripLogId)} />
+            ))}
           />
         }
       >
@@ -240,7 +266,7 @@ export function MovementsListSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-60" />
-      <TableSkeleton columns={MOVEMENT_COLUMNS} rows={8} mobileDetails={5} mobileAction />
+      <TableSkeleton columns={MOVEMENT_COLUMNS} rows={8} mobileDetails={0} mobileSubtitleLines={3} />
     </div>
   );
 }

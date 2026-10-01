@@ -88,5 +88,5 @@ export async function RecurringCard() {
 }
 
 export function RecurringCardSkeleton() {
-  return <StatCardSkeleton label={RECURRING_LABEL} />;
+  return <StatCardSkeleton label={RECURRING_LABEL} icon={<IconTicket />} />;
 }

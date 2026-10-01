@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { safeNext } from "@/lib/safe-next";
 import { firstParam, PUBLIC_TEXT_LINK_CLASS, registerHref } from "../_publico/links";
+import { activateHref } from "../registro/texts";
 import { PublicCard, PublicShell } from "../_publico/public-shell";
 import { LoginForm } from "./login-form";
 
@@ -21,13 +22,26 @@ export default async function IngresarPage({
         <LoginForm next={next} />
       </PublicCard>
 
-      {/* El mismo patrón que registro: una línea con enlace, que no compite con "Ingresar". */}
-      <p className="text-center text-base text-tinta-suave">
-        ¿No tienes cuenta o te registraron en la taquilla?{" "}
-        <Link href={registerHref(next)} className={PUBLIC_TEXT_LINK_CLASS}>
-          Crea o activa tu cuenta
-        </Link>
-      </p>
+      {/*
+        El mismo patrón que registro: líneas con enlace, que no compiten con
+        "Ingresar". Crear y activar son dos casos distintos, cada uno con su
+        enlace, para que quien fue registrado en la taquilla llegue a una
+        pantalla que dice "Activa tu cuenta".
+      */}
+      <div className="flex flex-col gap-2 text-center">
+        <p className="text-base text-tinta-suave">
+          ¿No tienes cuenta?{" "}
+          <Link href={registerHref(next)} className={PUBLIC_TEXT_LINK_CLASS}>
+            Crea tu cuenta
+          </Link>
+        </p>
+        <p className="text-base text-tinta-suave">
+          ¿Te registraron en la taquilla?{" "}
+          <Link href={activateHref(next)} className={PUBLIC_TEXT_LINK_CLASS}>
+            Activa tu cuenta
+          </Link>
+        </p>
+      </div>
     </PublicShell>
   );
 }

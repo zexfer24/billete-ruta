@@ -40,8 +40,12 @@ export default async function ReservarPage({
   const params = parsed.success ? parsed.data : {};
   const now = new Date();
 
-  // Todas las salidas reservables, sin tope de días: el paso 1 muestra un día
-  // a la vez y como mucho ocho salidas por día, así la lista no se recarga.
+  // Todas las salidas reservables, sin tope de días, a propósito (ronda de
+  // calidad 2, mi-reservar-01): con el tope de 7 días una salida ya programada
+  // para más adelante no se podía reservar desde la portada ni desde aquí, y
+  // nada lo decía. La carga la acotan el propio catálogo (`take: 200` en
+  // `listBookableDepartures`) y el paso 1, que muestra un día a la vez y como
+  // mucho ocho salidas por día.
   const [salidas, origenesDestinos, tasaSalida, documentos, tasaVes, tasaCop] = await Promise.all([
     listBookableDepartures({ onlyWithSeats: false }, now),
     listOriginsAndDestinations(),

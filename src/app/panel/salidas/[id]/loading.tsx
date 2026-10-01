@@ -50,7 +50,7 @@ export default function SalidaDetalleLoading() {
           rows={6}
           cardDetails={2}
           cardAction={false}
-          mobileVariant="filas"
+          mobileVariant="reservas"
           bare
         />
       </SkeletonSectionCard>

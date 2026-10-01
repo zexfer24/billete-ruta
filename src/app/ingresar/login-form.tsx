@@ -6,9 +6,10 @@ import { Alert } from "@/components/alert";
 import { IconChevronDown } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonClass, Field } from "@/components/ui";
-import { PUBLIC_TEXT_LINK_CLASS, registerHref } from "../_publico/links";
+import { PUBLIC_TEXT_LINK_CLASS } from "../_publico/links";
 import { PasswordField } from "../_publico/password-field";
 import { useFocusFirstError } from "../_publico/use-focus-first-error";
+import { activateHref, ID_NUMBER_HINT } from "../registro/texts";
 import { ingresarAction, type IngresarFormState } from "./actions";
 
 const initialState: IngresarFormState = { error: null };
@@ -37,7 +38,7 @@ export function LoginForm({ next }: { next?: string }) {
           title="No pudimos ingresar"
           action={
             state.errorKind === "no-coinciden" ? (
-              <Link href={registerHref(next)} className={buttonClass("secundario", undefined, "sm")}>
+              <Link href={activateHref(next)} className={buttonClass("secundario", undefined, "sm")}>
                 Activar mi cuenta
               </Link>
             ) : undefined
@@ -58,7 +59,8 @@ export function LoginForm({ next }: { next?: string }) {
         inputMode="text"
         autoComplete="username"
         autoCapitalize="characters"
-        hint="La letra y el número, por ejemplo V12345678. Con o sin puntos."
+        // Con error, el error reemplaza a la ayuda, como en el registro.
+        hint={errores.idNumber ? undefined : ID_NUMBER_HINT}
         defaultValue={state.idNumber ?? ""}
         error={errores.idNumber}
         errorAfterSubmit

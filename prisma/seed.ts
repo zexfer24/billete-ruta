@@ -5,8 +5,8 @@ const prisma = new PrismaClient();
 
 const ADMIN = { email: "admin@ticketruta.test", password: "Admin.2026", name: "Dirección del Terminal" };
 const OPERADORES = [
-  { email: "andes@ticketruta.test", password: "Operador.2026", name: "Taquilla Los Andes" },
-  { email: "caribe@ticketruta.test", password: "Operador.2026", name: "Taquilla Caribe" },
+  { email: "andes@ticketruta.test", password: "Operador.2026", name: "María Fernanda Rojas" },
+  { email: "caribe@ticketruta.test", password: "Operador.2026", name: "Carlos Eduardo Salazar" },
 ];
 const PASAJEROS = [
   {
@@ -184,7 +184,7 @@ async function main(): Promise<void> {
       choferes: [
         { fullName: "Jesús Antonio Mora", idNumber: "V10111222", phone: "+584161112233" },
         { fullName: "Carmen Elena Duque", idNumber: "V13444555", phone: "+584161112244" },
-        { fullName: "Rafael Ignacio Pino", idNumber: "V09888777", phone: "+584161112255" },
+        { fullName: "Rafael Ignacio Pino", idNumber: "V9888777", phone: "+584161112255" },
         { fullName: "María Gabriela Colmenares", idNumber: "V15222333", phone: "+584161112266" },
         { fullName: "José Gregorio Quintero", idNumber: "V11777888", phone: "+584161112277" },
         { fullName: "Douglas Enrique Sivira", idNumber: "V12999000", phone: "+584161112288" },

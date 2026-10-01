@@ -9,21 +9,28 @@ import { IconSpinner } from "@/components/icons";
  * solo cambian los `searchParams`, el `loading.tsx` no vuelve a mostrarse y
  * la pantalla quedaba quieta hasta que llegaban los datos: mientras el enlace
  * se abre, su icono cambia por un indicador de espera y se anuncia
- * «Abriendo…». Tiene que vivir dentro del `Link` para leer su estado. Sin
+ * «Abriendo…» en una región viva que está siempre montada. Tiene que vivir dentro del `Link` para leer su estado. Sin
  * `icon`, el indicador solo aparece durante la espera. El `Link` que lo
  * contiene debe llevar `relative` para contener el texto oculto.
  */
 export function LinkPendingIcon({ icon }: { icon?: ReactNode }) {
   const { pending } = useLinkStatus();
-  if (pending) {
-    return (
-      <span className="inline-flex shrink-0 items-center" role="status">
-        <IconSpinner className="size-5 animate-spin motion-reduce:animate-none" />
-        <span className="sr-only">Abriendo…</span>
+  return (
+    <>
+      {pending ? (
+        <span aria-hidden="true" className="inline-flex shrink-0 items-center">
+          <IconSpinner className="size-5 animate-spin motion-reduce:animate-none" />
+        </span>
+      ) : (
+        (icon ?? null)
+      )}
+      {/* Siempre montada y vacía hasta la espera: los lectores de pantalla no
+          anuncian una región viva que aparece ya con contenido. */}
+      <span role="status" className="sr-only">
+        {pending ? "Abriendo…" : ""}
       </span>
-    );
-  }
-  return icon ?? null;
+    </>
+  );
 }
 
 const INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label, summary, form";

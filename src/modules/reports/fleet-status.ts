@@ -4,6 +4,16 @@ import type { UnitState } from "@/lib/labels";
 
 const SIETE_DIAS_MS = 7 * 24 * 3_600_000;
 
+/**
+ * Cuánto tiempo hacia atrás una salida PROGRAMADA vencida o con el manifiesto
+ * cerrado sigue decidiendo el estado de la unidad. Doce horas cubren un atraso
+ * real y el cruce de medianoche; una salida más vieja que nadie cerró (por
+ * ejemplo, porque el worker no corrió) ya no compromete al bus ni al chofer y
+ * no debe dejarlos "Embarcando" para siempre. EN_RUTA no tiene este límite: es
+ * un viaje que salió de verdad y lo cierra `registerArrival`.
+ */
+const VIGENCIA_EN_CURSO_MS = 12 * 3_600_000;
+
 export interface UnitDeparture {
   id: string;
   status: DepartureStatus;
@@ -17,9 +27,10 @@ export interface UnitDeparture {
   estimatedArrivalAt: Date | null;
   /**
    * `true` solo en el `current` que devuelve `unitStateOf` cuando es una salida
-   * PROGRAMADA cuya hora ya pasó y nadie cerró su manifiesto (el barrido
-   * `sweepAutoClose` del worker aún no la tomó). La pantalla la muestra como
-   * atrasada con texto, por ejemplo "Atrasada · debía salir 13:00".
+   * PROGRAMADA cuya hora ya pasó, dentro de las últimas 12 horas, y nadie cerró
+   * su manifiesto (el barrido `sweepAutoClose` del worker aún no la tomó).
+   * `describeUnitTrip` la muestra con el mismo aviso que el tablero, por
+   * ejemplo "Debía salir a las 13:00", en tono de alerta.
    */
   overdue?: boolean;
 }
@@ -48,14 +59,17 @@ export function unitStateOf(
   // Regla 1: el viaje en curso es la salida EN_RUTA más antigua, o si no hay,
   // la MANIFIESTO_CERRADO más antigua, o si no hay, la PROGRAMADA más antigua
   // cuya hora ya pasó (atrasada: el worker la cerraría en su próximo barrido,
-  // así que la vista no depende de que el worker esté al día).
+  // así que la vista no depende de que el worker esté al día). Las dos últimas
+  // solo cuentan dentro de `VIGENCIA_EN_CURSO_MS`: más atrás no deciden nada.
+  const corte = now.getTime() - VIGENCIA_EN_CURSO_MS;
+  const vigentes = input.departures.filter((d) => d.departsAt.getTime() >= corte);
   const atrasada = masAntigua(
-    input.departures.filter((d) => d.departsAt.getTime() <= now.getTime()),
+    vigentes.filter((d) => d.departsAt.getTime() <= now.getTime()),
     "PROGRAMADA",
   );
   const current =
     masAntigua(input.departures, "EN_RUTA") ??
-    masAntigua(input.departures, "MANIFIESTO_CERRADO") ??
+    masAntigua(vigentes, "MANIFIESTO_CERRADO") ??
     (atrasada ? { ...atrasada, overdue: true } : null);
 
   // Regla 4: las próximas salidas se calculan siempre, sin importar el estado.
@@ -145,15 +159,18 @@ export async function agencyFleetStatus(
   now: Date = new Date(),
 ): Promise<AgencyFleetStatus> {
   const limiteProximas = new Date(now.getTime() + SIETE_DIAS_MS);
+  const corte = new Date(now.getTime() - VIGENCIA_EN_CURSO_MS);
 
   const [salidas, choferes, vehiculos] = await Promise.all([
     prisma.departure.findMany({
       where: {
         route: { agencyId },
         OR: [
-          { status: { in: ["EN_RUTA", "MANIFIESTO_CERRADO"] } },
-          // Sin cota inferior: una PROGRAMADA vencida es el viaje atrasado de la unidad.
-          { status: "PROGRAMADA", departsAt: { lte: limiteProximas } },
+          { status: "EN_RUTA" },
+          // Misma ventana que `unitStateOf`: una salida vencida hace más de
+          // 12 horas no decide el estado y no se trae.
+          { status: "MANIFIESTO_CERRADO", departsAt: { gte: corte } },
+          { status: "PROGRAMADA", departsAt: { gte: corte, lte: limiteProximas } },
         ],
       },
       include: { route: true, vehicle: true, driver: true, tripLog: true },

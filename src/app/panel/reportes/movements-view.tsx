@@ -12,6 +12,7 @@ import {
   panelButtonClass,
 } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
+import { CompactFigures } from "../_shared/compact-figures";
 import { ReportRangeLine } from "./report-range-line";
 import type { ReportRange } from "./range";
 
@@ -80,7 +81,21 @@ export function MovementsView({
     <div className="flex flex-col gap-6">
       <ReportRangeLine range={range} downloadHref={downloadHref} />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/* En el teléfono, las tres cifras en una sola tarjeta (la duración, que es
+          larga, en su propia fila); desde `sm`, tres tarjetas. */}
+      <CompactFigures
+        figures={[
+          { label: "Viajes", value: movimientos.length },
+          { label: "Pasajeros", value: pasajeros },
+          {
+            label: "Duración promedio",
+            value: promedio !== null ? formatDuration(promedio) : "—",
+            detail: promedio !== null ? undefined : "Ningún viaje ha llegado todavía",
+            wide: true,
+          },
+        ]}
+      />
+      <div className="hidden grid-cols-1 gap-4 sm:grid sm:grid-cols-3">
         <StatCard label="Viajes" value={movimientos.length} detail="Con embarque, salida o llegada registrada" icon={<IconBus />} />
         <StatCard label="Pasajeros transportados" value={pasajeros} detail="Los que subieron al bus" icon={<IconUsers />} />
         <StatCard

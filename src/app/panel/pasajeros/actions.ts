@@ -17,6 +17,9 @@ import { pasajerosUrl } from "./urls";
 
 const CURRENCIES = ["USD", "VES", "COP", "USDT"] as const;
 
+/** Aviso cuando se intenta cobrar una reserva que ya quedó pagada (un archivo "use server" solo exporta funciones). */
+const ALREADY_PAID_MESSAGE = "Esta reserva ya está pagada. No se registró ningún cobro.";
+
 const paginaSchema = z.coerce.number().int().min(1).catch(1);
 
 /** Acepta coma o punto decimal y exige un número finito mayor que cero, como en `admin/tasas`. */
@@ -174,8 +177,6 @@ export async function cashPaymentAction(formData: FormData): Promise<void> {
 
   const reservationIdParsed = z.string().uuid().safeParse(formData.get("reservationId"));
   const reservationId = reservationIdParsed.success ? reservationIdParsed.data : undefined;
-  const codeRaw = formData.get("code");
-  const hayCode = typeof codeRaw === "string" && codeRaw.trim().length > 0;
 
   function errorRedirect(mensaje: string): never {
     if (origen === "tablero") {
@@ -187,23 +188,11 @@ export async function cashPaymentAction(formData: FormData): Promise<void> {
     redirect(pasajerosUrl({ ...destino, registrar: "cobro", error: mensaje }));
   }
 
-  if (!reservationId && !hayCode) {
-    errorRedirect("Indica la reserva a cobrar.");
-  }
-
-  // El serial solo se valida (y recorta) cuando no viene un `reservationId`: con
-  // reserva ya fija no hace falta serial, y no debe rechazarse por su longitud.
-  let code: string | undefined;
+  // El cobro siempre llega desde el detalle de una reserva: la búsqueda por
+  // código vive en `findCashReservationAction`, que abre ese detalle con el
+  // titular y el saldo antes de cobrar.
   if (!reservationId) {
-    const codeParsed = z
-      .string()
-      .trim()
-      .min(4, "Ingresa el serial del ticket.")
-      .safeParse(codeRaw);
-    if (!codeParsed.success) {
-      errorRedirect(codeParsed.error.issues[0]?.message ?? "Ingresa el serial del ticket.");
-    }
-    code = codeParsed.data;
+    errorRedirect("Indica la reserva a cobrar.");
   }
 
   const schema = z.object({
@@ -223,21 +212,23 @@ export async function cashPaymentAction(formData: FormData): Promise<void> {
 
   let errorMessage: string | null = null;
   let shouldIssueTicket = false;
-  let targetReservationId = reservationId;
   try {
-    if (!targetReservationId) {
-      const reserva = await prisma.reservation.findUnique({
-        where: { code: code!.toUpperCase() },
-        include: { departure: { include: { route: true } } },
-      });
-      if (!reserva || reserva.departure.route.agencyId !== agencyId) {
-        throw new ValidationError("No existe ninguna reserva con ese serial en esta agencia.");
-      }
-      targetReservationId = reserva.id;
+    // Si otro operador ya saldó la reserva (o se envió dos veces), el dominio
+    // no registra nada: se avisa en vez de decir «Cobro registrado».
+    const actual = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      select: { status: true, departure: { select: { route: { select: { agencyId: true } } } } },
+    });
+    if (
+      actual &&
+      actual.departure.route.agencyId === agencyId &&
+      (actual.status === "PAGADA" || actual.status === "ABORDADA")
+    ) {
+      throw new ValidationError(ALREADY_PAID_MESSAGE);
     }
 
     const resultado = await registerCashPayment({
-      reservationId: targetReservationId,
+      reservationId,
       panelUserId: user.id,
       agencyId,
       amount,
@@ -245,7 +236,7 @@ export async function cashPaymentAction(formData: FormData): Promise<void> {
     });
     shouldIssueTicket = resultado.shouldIssueTicket;
     if (shouldIssueTicket) {
-      await issueTicket(targetReservationId);
+      await issueTicket(reservationId);
     }
   } catch (error) {
     const mensaje = userFacingMessage(error);
@@ -265,8 +256,5 @@ export async function cashPaymentAction(formData: FormData): Promise<void> {
   if (origen === "tablero") {
     redirect(panelFeedbackUrl("/panel", { ok }));
   }
-  if (reservationId) {
-    redirect(pasajerosUrl({ ...destino, reserva: reservationId, ok }));
-  }
-  redirect(pasajerosUrl({ ...destino, ok }));
+  redirect(pasajerosUrl({ ...destino, reserva: reservationId, ok }));
 }

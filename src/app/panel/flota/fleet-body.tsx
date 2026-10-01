@@ -7,7 +7,7 @@ import { Alert } from "@/components/alert";
 import { ClickableRow } from "@/components/clickable-row";
 import { PanelFeedback } from "@/components/panel-feedback";
 import { SidePanel } from "@/components/side-panel";
-import { IconBus, IconUser } from "@/components/icons";
+import { IconBus, IconUser, IconWarning } from "@/components/icons";
 import {
   EmptyState,
   MobileCard,
@@ -55,7 +55,15 @@ function TripSummary({
   return (
     <span className="flex flex-col">
       <span className="font-semibold text-tinta">{viaje.title}</span>
-      <span className="tabular text-sm text-tinta-suave">{viaje.detail}</span>
+      {viaje.late ? (
+        // Atrasada: mismo aviso, icono y tono que la lista de salidas y el tablero.
+        <span className="tabular flex items-start gap-1.5 text-sm font-semibold text-alerta">
+          <IconWarning className="mt-0.5 size-4 shrink-0" />
+          <span>{viaje.detail}</span>
+        </span>
+      ) : (
+        <span className="tabular text-sm text-tinta-suave">{viaje.detail}</span>
+      )}
     </span>
   );
 }
@@ -156,7 +164,8 @@ function VehiclesList({ vehicles, selectedId, now }: { vehicles: VehicleStatusRo
               >
                 <td className={PANEL_TD_CLASS}>
                   <p className="tabular text-base font-bold">{v.plate}</p>
-                  <p className="text-sm text-tinta-suave">
+                  {/* Marca y modelo en una línea: a 820 px no se parte "O500 / RS". */}
+                  <p className="whitespace-nowrap text-sm text-tinta-suave">
                     {v.brand} {v.model}
                   </p>
                 </td>
@@ -250,7 +259,7 @@ function DriversList({ drivers, selectedId, now }: { drivers: DriverStatusRow[];
                 <td className={PANEL_TD_CLASS}>
                   <p className="font-semibold">{c.fullName}</p>
                   {/* La cédula va completa: el chofer es personal de la propia agencia. */}
-                  <p className="tabular text-sm text-tinta-suave">Cédula {c.idNumber}</p>
+                  <p className="tabular whitespace-nowrap text-sm text-tinta-suave">Cédula {c.idNumber}</p>
                 </td>
                 <td className={PANEL_TD_CLASS}>
                   <StatusBadge label={UNIT_STATE_LABELS[c.state]} tone={unitStateTone(c.state)} />

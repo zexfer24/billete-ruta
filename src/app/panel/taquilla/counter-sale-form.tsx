@@ -18,9 +18,10 @@ import { Stepper } from "@/components/stepper";
 import { Alert } from "@/components/alert";
 import { FieldError } from "@/components/ui";
 import { panelButtonClass } from "@/components/panel-ui";
+import { cx } from "@/components/ui-classes";
 import { IconChevronLeft, IconChevronRight, IconCash, IconSearch, IconSpinner } from "@/components/icons";
 import { lookupHolderAction, quoteSaleAction, sellAtCounterAction, type CounterSaleState } from "./actions";
-import { StepDeparture } from "./step-departure";
+import { DEPARTURE_LIST_ID, DEPARTURE_SEARCH_ID, StepDeparture } from "./step-departure";
 import { StepHolder, type NewHolderErrors } from "./step-holder";
 import {
   StepCompanions,
@@ -33,8 +34,9 @@ import { StepPayment, formatAmount, type QuoteResult } from "./step-payment";
 import { ChargeDialog } from "./charge-dialog";
 import { SaleResult } from "./sale-result";
 import { changeFromReceived } from "./change";
-import { countLabel } from "../_dashboard/text";
+import { countLabel, joinPhrases } from "../_dashboard/text";
 import { dayChipLabel } from "./departure-days";
+import type { PerPassengerPrice } from "./price";
 import { COUNTER_STEP_HINTS, COUNTER_STEP_LABELS, COUNTER_STEP_TITLES, type CounterStep } from "./texts";
 
 export interface DepartureOption {
@@ -45,6 +47,8 @@ export interface DepartureOption {
   departsAtIso: string;
   available: number;
   fareUsd: string;
+  /** Precio por persona con la tasa del terminal incluida; `null` si no hay tasa configurada. */
+  price: PerPassengerPrice | null;
 }
 
 export interface PaymentMethodOption {
@@ -219,18 +223,19 @@ function Wizard({
   const companionsValid = companions.every(companionIsValid);
   const passengerCount = 1 + companions.length;
 
-  // Faltantes de cada paso, en frases cortas: se muestran junto a "Continuar".
+  // Faltantes de cada paso, como órdenes cortas en minúscula: se unen en una
+  // sola frase junto a "Continuar" ("Para continuar, elige una salida.").
   const faltantes: Record<Step, string[]> = {
-    1: departureId === null ? ["Elige una salida."] : [],
+    1: departureId === null ? ["elige una salida"] : [],
     // Sin búsqueda no se llega a "Continuar": en su lugar está "Buscar titular".
     2: [
-      ...(lookupResult && !lookupResult.found && !nuevaCuentaValida ? ["Completa los datos del titular."] : []),
-      ...(lookupResult && needsCedulaFile && !hasCedulaFile ? ["Toma la foto de la cédula."] : []),
+      ...(lookupResult && !lookupResult.found && !nuevaCuentaValida ? ["completa los datos del titular"] : []),
+      ...(lookupResult && needsCedulaFile && !hasCedulaFile ? ["toma la foto de la cédula"] : []),
     ],
     3: [
-      ...(!companionsValid ? ["Revisa los datos de los acompañantes."] : []),
-      ...(needsTravelPermitFile && !hasTravelPermitFile ? ["Toma la foto del permiso de viaje."] : []),
-      ...(!policiesAccepted ? ["Marca que el pasajero aceptó las políticas."] : []),
+      ...(!companionsValid ? ["revisa los datos de los acompañantes"] : []),
+      ...(needsTravelPermitFile && !hasTravelPermitFile ? ["toma la foto del permiso de viaje"] : []),
+      ...(!policiesAccepted ? ["marca que el pasajero aceptó las políticas"] : []),
     ],
     4: [],
   };
@@ -297,6 +302,22 @@ function Wizard({
     // El resumen de lo que falta aparece junto al botón y se anuncia con role="alert";
     // el foco se queda en "Continuar" para no perder el lugar.
     setAttempted((prev) => (prev.includes(step) ? prev : [...prev, step]));
+    if (step === 1) showDepartureList();
+  }
+
+  /**
+   * En el paso 1, «Continuar» sin elegir trae la lista de salidas a la vista
+   * (en el teléfono queda por debajo de la barra fija) y pone el foco en la
+   * primera, para que el aviso y las salidas se vean a la vez.
+   */
+  function showDepartureList() {
+    const lista = document.getElementById(DEPARTURE_LIST_ID);
+    const destino = lista ?? document.getElementById(DEPARTURE_SEARCH_ID);
+    if (!destino) return;
+    const sinMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    destino.scrollIntoView({ block: "start", behavior: sinMovimiento ? "auto" : "smooth" });
+    const primera = lista?.querySelector<HTMLInputElement>('input[type="radio"]') ?? (lista ? null : destino);
+    primera?.focus({ preventScroll: true });
   }
 
   function addCompanion() {
@@ -385,7 +406,11 @@ function Wizard({
           <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold tracking-tight text-tinta outline-none">
             {COUNTER_STEP_TITLES[step]}
           </h2>
-          <p className="mt-1 text-[15px] text-tinta-suave">{COUNTER_STEP_HINTS[step]}</p>
+          {/* En el teléfono, la pista del paso 1 se oculta: la pregunta ya dice
+              qué hacer y así las salidas suben a la primera pantalla. */}
+          <p className={cx("mt-1 text-[15px] text-tinta-suave", step === 1 && "hidden sm:block")}>
+            {COUNTER_STEP_HINTS[step]}
+          </p>
         </div>
         {step > 1 && salidaElegida ? (
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-control border border-marca-200 bg-marca-50 px-4 py-2.5">
@@ -505,7 +530,7 @@ function Wizard({
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 border-t border-borde bg-superficie px-4 py-3 shadow-2 sm:mx-0 sm:rounded-tarjeta sm:border">
         {intentado && faltanAhora.length > 0 ? (
           <FieldError id="taquilla-faltantes" afterSubmit>
-            Para continuar falta: {faltanAhora.join(" ")}
+            Para continuar, {joinPhrases(faltanAhora)}.
           </FieldError>
         ) : null}
         {step === 4 && faltaDinero ? (

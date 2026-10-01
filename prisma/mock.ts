@@ -217,7 +217,67 @@ interface DatosGenerados {
   efectivo: readonly Prisma.CashPaymentCreateManyInput[];
   tickets: readonly Prisma.TicketCreateManyInput[];
   viajes: readonly Prisma.TripLogCreateManyInput[];
+  /** Salidas futuras del seed, con su ocupación estimada de la unidad. */
+  programadas: readonly OcupacionProgramada[];
   bitacora: readonly Prisma.AuditLogCreateManyInput[];
+}
+
+/** Tiempo en que una salida programada ocupa su vehículo y su chofer. */
+interface OcupacionProgramada {
+  departureId: string;
+  vehicleId: string;
+  driverId: string;
+  /** Inicio del embarque: la unidad ya debe estar en el terminal. */
+  desde: number;
+  /** Llegada estimada con el peor retraso de la operación. */
+  hasta: number;
+}
+
+/**
+ * Ocupación de una salida programada: desde la preparación previa al embarque
+ * hasta la llegada con el peor retraso que se registra (25 % del tiempo
+ * estimado y 25 minutos de salida tardía), igual que en `prisma/seed.ts`.
+ */
+function ocupacionProgramada(salida: {
+  id: string;
+  vehicleId: string;
+  driverId: string;
+  departsAt: Date;
+  estimatedMinutes: number;
+}): OcupacionProgramada {
+  const inicio = salida.departsAt.getTime();
+  return {
+    departureId: salida.id,
+    vehicleId: salida.vehicleId,
+    driverId: salida.driverId,
+    desde: inicio - PREPARACION_MIN * MIN,
+    hasta: inicio + (salida.estimatedMinutes * 1.25 + 25) * MIN,
+  };
+}
+
+/** Unidades (vehículo o chofer) con dos tramos de ocupación que se cruzan. */
+function unidadesSolapadas(
+  tramos: readonly { vehicleId: string; driverId: string; desde: number; hasta: number }[],
+): string[] {
+  const solapadas: string[] = [];
+  for (const campo of ["vehicleId", "driverId"] as const) {
+    const porUnidad = new Map<string, { desde: number; hasta: number }[]>();
+    for (const tramo of tramos) {
+      const lista = porUnidad.get(tramo[campo]) ?? [];
+      lista.push({ desde: tramo.desde, hasta: tramo.hasta });
+      porUnidad.set(tramo[campo], lista);
+    }
+    for (const [unidad, lista] of porUnidad) {
+      lista.sort((a, b) => a.desde - b.desde);
+      for (let i = 1; i < lista.length; i += 1) {
+        if (lista[i]!.desde < lista[i - 1]!.hasta) {
+          solapadas.push(`${campo} ${unidad}`);
+          break;
+        }
+      }
+    }
+  }
+  return solapadas;
 }
 
 function ms(valor: Date | string | null | undefined): number | null {
@@ -321,23 +381,22 @@ function verificarCoherencia(datos: DatosGenerados): void {
     }
   }
 
-  // Ningún vehículo ni chofer puede estar en dos viajes a la vez.
-  for (const campo of ["vehicleId", "driverId"] as const) {
-    const porUnidad = new Map<string, { desde: number; hasta: number }[]>();
-    for (const v of datos.viajes) {
-      const lista = porUnidad.get(v[campo]) ?? [];
-      lista.push({ desde: ms(v.departedAt) ?? 0, hasta: ms(v.arrivedAt) ?? 0 });
-      porUnidad.set(v[campo], lista);
-    }
-    for (const [unidad, lista] of porUnidad) {
-      lista.sort((a, b) => a.desde - b.desde);
-      for (let i = 1; i < lista.length; i += 1) {
-        if (lista[i]!.desde < lista[i - 1]!.hasta) {
-          problemas.push(`Viajes solapados de ${campo} ${unidad}`);
-          break;
-        }
-      }
-    }
+  // Ningún vehículo ni chofer puede estar en dos viajes a la vez, ni entre los
+  // ya cumplidos ni entre estos y las salidas programadas.
+  for (const v of datos.viajes) {
+    if (futuro(v.departedAt) || futuro(v.arrivedAt)) problemas.push("Viaje cumplido con fecha futura");
+  }
+  const tramos = [
+    ...datos.viajes.map((v) => ({
+      vehicleId: v.vehicleId,
+      driverId: v.driverId,
+      desde: ms(v.departedAt) ?? 0,
+      hasta: ms(v.arrivedAt) ?? 0,
+    })),
+    ...datos.programadas,
+  ];
+  for (const unidad of unidadesSolapadas(tramos)) {
+    problemas.push(`Viajes solapados de ${unidad}`);
   }
 
   if (problemas.length > 0) {
@@ -392,6 +451,32 @@ async function main(): Promise<void> {
   const agencias = await prisma.agency.count();
   if (agencias === 0) {
     process.stderr.write("Primero ejecuta `pnpm seed` para cargar agencias, rutas y flota.\n");
+    process.exitCode = 1;
+    return;
+  }
+
+  // Las salidas futuras las crea el seed y este archivo no las toca. Si una base
+  // sembrada con una versión anterior trae una unidad en dos salidas que se
+  // cruzan, se detiene aquí, antes de borrar nada, para que no llegue al tablero.
+  const solapesDelSeed = unidadesSolapadas(
+    (
+      await prisma.departure.findMany({
+        where: { departsAt: { gte: new Date() } },
+        include: { route: { select: { estimatedMinutes: true } } },
+      })
+    ).map((d) => ocupacionProgramada({ ...d, estimatedMinutes: d.route.estimatedMinutes })),
+  );
+  if (solapesDelSeed.length > 0) {
+    process.stderr.write(
+      [
+        `Salidas programadas solapadas: ${solapesDelSeed.length} unidades tienen dos salidas que se cruzan.`,
+        "La base se sembró con una versión anterior del seed. Regenérala completa:",
+        "  pnpm exec dotenv -e .env -- prisma migrate reset --force --skip-seed",
+        "  pnpm seed",
+        "  pnpm mock",
+        "",
+      ].join("\n"),
+    );
     process.exitCode = 1;
     return;
   }
@@ -478,6 +563,10 @@ async function main(): Promise<void> {
 
       const partida = masMinutos(departsAt, entero(-5, 25));
       const duracion = Math.round(ruta.estimatedMinutes * (1 + entero(-12, 25) / 100));
+      const llegada = masMinutos(partida, duracion);
+      // Solo viajes ya cumplidos: uno que todavía va en camino no puede figurar
+      // como finalizado ni con una hora de llegada que aún no ocurrió.
+      if (llegada >= ahora) continue;
       candidatas.push({
         id: randomUUID(),
         routeId: ruta.id,
@@ -489,31 +578,48 @@ async function main(): Promise<void> {
         recomendaciones: ruta.travelTips ?? RECOMENDACION_GENERAL,
         pasada: true,
         partida,
-        llegada: masMinutos(partida, duracion),
+        llegada,
       });
     }
   }
   candidatas.sort((a, b) => a.departsAt.getTime() - b.departsAt.getTime());
 
+  // Salidas futuras ya sembradas: los últimos viajes cumplidos no pueden
+  // dejar a una unidad ocupada cuando le toca la primera de ellas.
+  const futuras = await prisma.departure.findMany({
+    where: { departsAt: { gte: ahora } },
+    include: { route: true },
+  });
+  const primeraProgramada = new Map<string, number>();
+  for (const d of futuras) {
+    const embarque = d.departsAt.getTime() - PREPARACION_MIN * MIN;
+    for (const unidad of [d.vehicleId, d.driverId]) {
+      primeraProgramada.set(unidad, Math.min(primeraProgramada.get(unidad) ?? Infinity, embarque));
+    }
+  }
+
   // Cada salida recibe un vehículo y un chofer que ya llegaron de su viaje
-  // anterior y descansaron. Si no hay ninguno libre, la salida no se crea:
-  // nunca se asigna una unidad ocupada.
+  // anterior y descansaron, y que volverán a tiempo para su próxima salida
+  // programada. Si no hay ninguno libre, la salida no se crea: nunca se
+  // asigna una unidad ocupada.
   const libreVehiculo = new Map<string, number>();
   const libreChofer = new Map<string, number>();
   const salidasFiltradas: SalidaMock[] = [];
   for (const candidata of candidatas) {
+    const libre = candidata.llegada.getTime() + DESCANSO_MIN * MIN;
+    const aTiempo = (unidad: { id: string }) =>
+      libre <= (primeraProgramada.get(unidad.id) ?? Infinity);
     const vehiculo = unidadLibre(
-      vehiculosPorAgencia.get(candidata.agencyId) ?? [],
+      (vehiculosPorAgencia.get(candidata.agencyId) ?? []).filter(aTiempo),
       libreVehiculo,
       candidata.departsAt,
     );
     const chofer = unidadLibre(
-      choferesPorAgencia.get(candidata.agencyId) ?? [],
+      (choferesPorAgencia.get(candidata.agencyId) ?? []).filter(aTiempo),
       libreChofer,
       candidata.departsAt,
     );
     if (!vehiculo || !chofer) continue;
-    const libre = candidata.llegada.getTime() + DESCANSO_MIN * MIN;
     libreVehiculo.set(vehiculo.id, libre);
     libreChofer.set(chofer.id, libre);
     salidasFiltradas.push({
@@ -538,10 +644,6 @@ async function main(): Promise<void> {
   });
 
   // --- Salidas futuras ya sembradas --------------------------------------
-  const futuras = await prisma.departure.findMany({
-    where: { departsAt: { gte: ahora } },
-    include: { route: true },
-  });
   const todas: SalidaMock[] = [
     ...salidasFiltradas,
     ...futuras.map((d) => ({
@@ -1233,6 +1335,9 @@ async function main(): Promise<void> {
     efectivo,
     tickets,
     viajes,
+    programadas: todas
+      .filter((salida) => !salida.pasada)
+      .map((salida) => ocupacionProgramada(salida)),
     bitacora,
   });
 

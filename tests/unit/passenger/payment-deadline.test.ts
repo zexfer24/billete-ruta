@@ -1,0 +1,119 @@
+import { describe, expect, it } from "vitest";
+import {
+  deadlinePhrase,
+  estimatedOnlineDeadline,
+  paymentDeadline,
+  pickHeroReservation,
+  ticketDeadline,
+  ticketDeadlineLabel,
+  type HeroCandidate,
+} from "@/components/passenger-copy";
+
+// 2026-09-30 20:19 en Caracas (UTC-4).
+const AHORA = new Date("2026-10-01T00:19:00.000Z");
+const MIN = 60_000;
+const HORA = 60 * MIN;
+
+function en(ms: number): Date {
+  return new Date(AHORA.getTime() + ms);
+}
+
+describe("paymentDeadline", () => {
+  it("una reserva sin pago vence a las 2 horas si el bus sale después", () => {
+    const plazo = paymentDeadline({ status: "PENDIENTE_PAGO", departsAt: en(10 * HORA), expiresAt: en(2 * HORA) }, AHORA);
+    expect(plazo).toEqual({ at: en(2 * HORA), boundByDeparture: false });
+  });
+
+  it("si el bus sale en 39 min, el plazo es la salida y no las 2 horas", () => {
+    const plazo = paymentDeadline({ status: "PENDIENTE_PAGO", departsAt: en(39 * MIN), expiresAt: en(2 * HORA) }, AHORA);
+    expect(plazo).toEqual({ at: en(39 * MIN), boundByDeparture: true });
+    expect(deadlinePhrase(plazo!, AHORA)).toBe("hoy a las 20:58, cuando sale el bus");
+  });
+
+  it("la taquilla vence 12 horas antes de salir, salvo que esté reconfirmada", () => {
+    const salida = en(30 * HORA);
+    expect(paymentDeadline({ status: "PAGO_EN_SITIO", departsAt: salida, expiresAt: null }, AHORA)).toEqual({
+      at: en(18 * HORA),
+      boundByDeparture: false,
+    });
+    expect(
+      paymentDeadline({ status: "PAGO_EN_SITIO", departsAt: salida, expiresAt: null, reconfirmedAt: AHORA }, AHORA),
+    ).toBeNull();
+  });
+
+  it("no hay plazo si ya pagó algo, si está en revisión, si ya venció o si el bus ya salió", () => {
+    expect(paymentDeadline({ status: "ABONADA", departsAt: en(5 * HORA), expiresAt: en(HORA) }, AHORA)).toBeNull();
+    expect(paymentDeadline({ status: "EN_VALIDACION", departsAt: en(5 * HORA), expiresAt: en(HORA) }, AHORA)).toBeNull();
+    expect(paymentDeadline({ status: "PENDIENTE_PAGO", departsAt: en(5 * HORA), expiresAt: en(-MIN) }, AHORA)).toBeNull();
+    expect(paymentDeadline({ status: "PENDIENTE_PAGO", departsAt: en(-MIN), expiresAt: en(HORA) }, AHORA)).toBeNull();
+  });
+
+  it("antes de reservar estima 2 horas o la salida, lo que llegue antes", () => {
+    expect(estimatedOnlineDeadline(en(39 * MIN), AHORA)).toEqual({ at: en(39 * MIN), boundByDeparture: true });
+    expect(estimatedOnlineDeadline(en(5 * HORA), AHORA)).toEqual({ at: en(2 * HORA), boundByDeparture: false });
+  });
+});
+
+describe("ticketDeadline", () => {
+  it("el ticket resalta la taquilla solo si vence dentro de 24 horas", () => {
+    expect(ticketDeadline({ status: "PAGO_EN_SITIO", departsAt: en(30 * HORA), expiresAt: null }, AHORA)).not.toBeNull();
+    expect(ticketDeadline({ status: "PAGO_EN_SITIO", departsAt: en(72 * HORA), expiresAt: null }, AHORA)).toBeNull();
+  });
+
+  it("dice qué hacer y hasta cuándo", () => {
+    const plazo = { at: en(43 * MIN), boundByDeparture: false };
+    expect(ticketDeadlineLabel("PENDIENTE_PAGO", plazo, AHORA)).toBe("Paga antes de hoy a las 21:02");
+    expect(ticketDeadlineLabel("PAGO_EN_SITIO", plazo, AHORA)).toBe("Paga en la taquilla antes de hoy a las 21:02");
+  });
+});
+
+describe("pickHeroReservation", () => {
+  const merida: HeroCandidate = { code: "TR-A", status: "EN_VALIDACION", departsAt: en(5 * HORA), expiresAt: null };
+  const barinas: HeroCandidate = {
+    code: "TR-B",
+    status: "PENDIENTE_PAGO",
+    departsAt: en(11 * HORA),
+    expiresAt: en(43 * MIN),
+  };
+
+  it("sin reservas no hay héroe", () => {
+    expect(pickHeroReservation([], AHORA)).toBeNull();
+  });
+
+  it("si el viaje más cercano no pide nada, sube la reserva que se libera pronto", () => {
+    const eleccion = pickHeroReservation([merida, barinas], AHORA);
+    expect(eleccion).toEqual({ hero: barinas, soonest: merida, promoted: true });
+  });
+
+  it("si el viaje más cercano pide pagar, se queda en grande", () => {
+    const abonada: HeroCandidate = { ...merida, status: "ABONADA" };
+    expect(pickHeroReservation([barinas, abonada], AHORA)).toEqual({ hero: abonada, soonest: abonada, promoted: false });
+  });
+
+  it("un ticket pagado que sale dentro de 3 horas nunca cede su lugar", () => {
+    const pagada: HeroCandidate = { ...merida, status: "PAGADA", departsAt: en(2 * HORA) };
+    expect(pickHeroReservation([barinas, pagada], AHORA)?.hero).toBe(pagada);
+  });
+
+  it("un ticket pagado que sale más tarde cede su lugar a un plazo de pago", () => {
+    const pagada: HeroCandidate = { ...merida, status: "PAGADA", departsAt: en(4 * HORA) };
+    expect(pickHeroReservation([pagada, barinas], AHORA)?.hero).toBe(barinas);
+  });
+
+  it("entre varias con plazo sube la que vence antes", () => {
+    const taquilla: HeroCandidate = { code: "TR-C", status: "PAGO_EN_SITIO", departsAt: en(14 * HORA), expiresAt: null };
+    expect(pickHeroReservation([merida, taquilla, barinas], AHORA)?.hero).toBe(barinas);
+  });
+
+  it("sin otra con plazo, el héroe sigue siendo el viaje más cercano", () => {
+    const otra: HeroCandidate = { ...merida, code: "TR-D", status: "PAGADA", departsAt: en(20 * HORA) };
+    expect(pickHeroReservation([otra, merida], AHORA)).toEqual({ hero: merida, soonest: merida, promoted: false });
+  });
+
+  it("en una misma salida va la más urgente y, a igual urgencia, la de código menor", () => {
+    const a: HeroCandidate = { code: "TR-2", status: "PAGADA", departsAt: en(HORA), expiresAt: null };
+    const b: HeroCandidate = { code: "TR-1", status: "ABONADA", departsAt: en(HORA), expiresAt: null };
+    const c: HeroCandidate = { code: "TR-0", status: "ABONADA", departsAt: en(HORA), expiresAt: null };
+    expect(pickHeroReservation([a, b, c], AHORA)?.hero).toBe(c);
+  });
+});

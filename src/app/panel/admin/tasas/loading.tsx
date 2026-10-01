@@ -1,7 +1,7 @@
 import { PANEL_LABEL_CLASS, panelButtonClass } from "@/components/panel-ui";
 import { Skeleton, SkeletonScreen } from "@/components/skeleton";
 import { InputSkeleton, PageHeaderSkeleton } from "../_shared/skeletons";
-import { AMOUNT_HINT, PAGE_DESCRIPTION } from "./texts";
+import { PAGE_DESCRIPTION, PAGE_TITLE, amountHint } from "./texts";
 
 const CARD = "rounded-tarjeta border border-borde bg-superficie shadow-1";
 
@@ -16,13 +16,14 @@ function CurrentValueSkeleton({ label }: { label: string }) {
   );
 }
 
-/** Campo de la tasa nueva, vacío con su borde, con su etiqueta y el botón reales. */
-function RateFieldSkeleton({ label, primary = false }: { label: string; primary?: boolean }) {
+/** Campo de la tasa nueva, vacío con su borde, con su etiqueta, su ayuda y el botón reales. */
+function RateFieldSkeleton({ label, example, primary = false }: { label: string; example: string; primary?: boolean }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <p className={PANEL_LABEL_CLASS}>{label}</p>
         <InputSkeleton />
+        <p className="text-sm leading-snug text-tinta-suave">{amountHint(example)}</p>
       </div>
       <div>
         <span className={panelButtonClass(primary ? "primario" : "secundario", "md", "w-full sm:w-auto")}>
@@ -68,8 +69,8 @@ function SectionHeader({ title, description }: { title: string; description: str
 }
 
 const EXCHANGE_BLOCKS = [
-  { title: "Bolívar", label: "Nueva tasa, en bolívares por cada dólar" },
-  { title: "Peso colombiano", label: "Nueva tasa, en pesos por cada dólar" },
+  { title: "Bolívar", label: "Nueva tasa, en bolívares por cada dólar", example: "36,74" },
+  { title: "Peso colombiano", label: "Nueva tasa, en pesos por cada dólar", example: "4012,50" },
 ] as const;
 
 /**
@@ -81,7 +82,7 @@ const EXCHANGE_BLOCKS = [
 export default function TasasAdminLoading() {
   return (
     <SkeletonScreen label="Cargando las tasas…" className="flex flex-col gap-6">
-      <PageHeaderSkeleton title="Tasas y precios" description={`${PAGE_DESCRIPTION} ${AMOUNT_HINT}`} />
+      <PageHeaderSkeleton title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
 
       <div aria-hidden="true" className={CARD}>
         <SectionHeader
@@ -91,7 +92,7 @@ export default function TasasAdminLoading() {
         <div className="p-5">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <CurrentValueSkeleton label="Vigente, por pasajero" />
-            <RateFieldSkeleton label="Nueva tasa de salida, en dólares por pasajero" primary />
+            <RateFieldSkeleton label="Nueva tasa de salida, en dólares por pasajero" example="2,50" primary />
           </div>
           <div className="mt-6 border-t border-borde pt-4">
             <HistorySkeleton rows={3} />
@@ -109,7 +110,7 @@ export default function TasasAdminLoading() {
             <div key={block.title} className="flex flex-col gap-5 rounded-control border border-borde p-4">
               <p className="text-base font-semibold text-tinta">{block.title}</p>
               <CurrentValueSkeleton label="Vigente, por cada dólar" />
-              <RateFieldSkeleton label={block.label} />
+              <RateFieldSkeleton label={block.label} example={block.example} />
               <div className="border-t border-borde pt-4">
                 <HistorySkeleton rows={1} />
               </div>

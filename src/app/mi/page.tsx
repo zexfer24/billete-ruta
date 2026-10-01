@@ -5,6 +5,7 @@ import { requirePassenger } from "@/modules/auth";
 import { listNoticesForAccount } from "@/modules/notices";
 import { prisma } from "@/lib/prisma";
 import { formatUsdString } from "@/lib/decimal";
+import { passengerStatusLabel } from "@/lib/labels";
 import { buttonClass, Card, SectionTitle } from "@/components/ui";
 import { NoticeCard } from "@/components/notice-card";
 import { TicketCard, type TicketCardData } from "@/components/ticket-card";
@@ -12,7 +13,11 @@ import { DepartureBoard } from "@/components/departure-board";
 import type { DepartureRowData } from "@/components/departure-row";
 import { Isotipo } from "@/components/logo";
 import { IconCamera, IconChevronRight } from "@/components/icons";
-import { reservationActionLabel, reservationUrgency } from "@/components/passenger-copy";
+import {
+  pickHeroReservation,
+  reservationActionLabel,
+  ticketDeadline,
+} from "@/components/passenger-copy";
 
 export const metadata: Metadata = {
   title: "Inicio",
@@ -29,8 +34,14 @@ const ESTADOS_PROXIMO_VIAJE = [
 
 const SEIS_HORAS_MS = 6 * 60 * 60 * 1000;
 
-/** Próximas reservas que se leen para elegir la del héroe; basta con cubrir una salida. */
+/**
+ * Próximas reservas que se leen para elegir la del héroe: cubren la salida
+ * más cercana y las siguientes, donde puede estar una con plazo de pago.
+ */
 const LIMITE_PROXIMAS = 12;
+
+/** Avisos de plazo de pago: si su reserva ya va en grande, el ticket dice la hora y no se repiten. */
+const AVISOS_DE_PLAZO = new Set(["RESERVA_POR_LIBERAR", "RECONFIRMAR_PAGO_EN_SITIO"]);
 
 /** Enlace de texto con área táctil de 44 px, para "Ver todos". */
 const ENLACE_SECCION =
@@ -42,11 +53,12 @@ const ENLACE_SECCION =
  * aviso con el enlace al resto y, solo si no hay un viaje próximo, las
  * salidas de las próximas horas.
  *
- * El héroe es la reserva de la salida más cercana. Si en esa misma salida hay
- * varias reservas, va la más urgente (primero lo que se pierde si no se
- * paga) y, a igual urgencia, la de código menor, para que el resultado no
- * dependa del orden de la base. Una reserva de una salida más lejana nunca
- * sube por urgencia: para eso está el aviso de "reserva por liberar".
+ * El héroe lo elige `pickHeroReservation`: la reserva de la salida más
+ * cercana, salvo que esa no pida nada (pago en revisión, o ticket pagado que
+ * sale en más de 3 horas) y otra reserva próxima tenga un plazo de pago
+ * corriendo. Entonces sube esa, con su hora límite en el ticket y el botón
+ * para pagarla, y el viaje más cercano queda como enlace debajo. Un ticket
+ * pagado que sale dentro de 3 horas nunca cede su lugar.
  */
 export default async function MiInicioPage() {
   const pasajero = await requirePassenger();
@@ -72,13 +84,20 @@ export default async function MiInicioPage() {
     listBookableDepartures({ to: new Date(now.getTime() + SEIS_HORAS_MS), onlyWithSeats: true }, now),
   ]);
 
-  const primeraSalida = proximas[0]?.departureId;
-  const proximaReserva =
-    proximas
-      .filter((reserva) => reserva.departureId === primeraSalida)
-      .sort(
-        (a, b) => reservationUrgency(a.status) - reservationUrgency(b.status) || a.code.localeCompare(b.code),
-      )[0] ?? null;
+  const eleccion = pickHeroReservation(
+    proximas.map((reserva) => ({
+      reserva,
+      code: reserva.code,
+      status: reserva.status,
+      departsAt: reserva.departure.departsAt,
+      expiresAt: reserva.expiresAt,
+      reconfirmedAt: reserva.reconfirmedAt,
+    })),
+    now,
+  );
+  const proximaReserva = eleccion?.hero.reserva ?? null;
+  // Con un héroe que sube por su plazo, el viaje más cercano queda a un toque.
+  const viajeMasCercano = eleccion?.promoted ? eleccion.soonest.reserva : null;
 
   const totalViajes = salidasDeViajes.length;
   const faltaCedula = avisos.some((aviso) => aviso.kind === "DOCUMENTO_FALTANTE");
@@ -96,14 +115,32 @@ export default async function MiInicioPage() {
         paidUsd: proximaReserva.paidUsd.toString(),
         balanceUsd: balanceUsd(proximaReserva.totalUsd, proximaReserva.paidUsd).toString(),
         passengerCount: proximaReserva.passengerCount,
+        deadline: ticketDeadline(
+          {
+            status: proximaReserva.status,
+            departsAt: proximaReserva.departure.departsAt,
+            expiresAt: proximaReserva.expiresAt,
+            reconfirmedAt: proximaReserva.reconfirmedAt,
+          },
+          now,
+        ),
       }
     : null;
 
-  // Si la acción principal ya es subir la cédula, su aviso no se repite debajo.
+  // Si la acción principal ya es subir la cédula, su aviso no se repite debajo;
+  // tampoco el plazo de pago de la reserva que va en grande, que su ticket ya dice.
   const heroEsCedula = !ticketData && faltaCedula;
-  const avisosRestantes = heroEsCedula
-    ? avisos.filter((aviso) => aviso.kind !== "DOCUMENTO_FALTANTE")
-    : avisos;
+  const avisosRestantes = avisos.filter((aviso) => {
+    if (heroEsCedula && aviso.kind === "DOCUMENTO_FALTANTE") return false;
+    if (ticketData && AVISOS_DE_PLAZO.has(aviso.kind) && aviso.reservationCode === ticketData.code) return false;
+    return true;
+  });
+
+  const accionPrincipal = ticketData
+    ? eleccion?.promoted && ticketData.status === "PENDIENTE_PAGO"
+      ? `Pagar mi viaje a ${ticketData.destination}`
+      : reservationActionLabel(ticketData.status, formatUsdString(ticketData.balanceUsd))
+    : null;
   const avisoDestacado = avisosRestantes[0] ?? null;
 
   const salidasVM: DepartureRowData[] = salidas.map((salida) => ({
@@ -125,16 +162,25 @@ export default async function MiInicioPage() {
         {ticketData ? (
           <>
             <h1 id="accion-principal" className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">
-              Tu próximo viaje
+              {viajeMasCercano ? "Paga para no perder tu puesto" : "Tu próximo viaje"}
             </h1>
             <TicketCard data={ticketData} size="compacta" />
             <Link
               href={`/mi/reservas/${ticketData.code}`}
               className={buttonClass("primario", "w-full", "lg")}
             >
-              {reservationActionLabel(ticketData.status, formatUsdString(ticketData.balanceUsd))}
+              {accionPrincipal}
             </Link>
-            {totalProximas > 1 ? (
+            {viajeMasCercano ? (
+              <Link href={`/mi/reservas/${viajeMasCercano.code}`} className={`${ENLACE_SECCION} self-center text-center`}>
+                <span>
+                  Tu viaje a {viajeMasCercano.departure.route.destination} ·{" "}
+                  {passengerStatusLabel(viajeMasCercano.status)} · Ver
+                </span>
+                <IconChevronRight aria-hidden="true" className="size-4 shrink-0" />
+              </Link>
+            ) : null}
+            {totalProximas > (viajeMasCercano ? 2 : 1) ? (
               <Link href="/mi/reservas" className={`${ENLACE_SECCION} self-center`}>
                 {totalViajes > 1
                   ? `Tienes ${totalViajes} viajes próximos · Ver todos`

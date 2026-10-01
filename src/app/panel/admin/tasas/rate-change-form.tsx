@@ -14,11 +14,8 @@ export interface RateChangeFormProps {
   /** Campos ocultos adicionales, como la moneda. */
   hiddenFields?: Record<string, string>;
   label: string;
-  /**
-   * `id` del texto que explica el formato del monto. La regla se escribe una
-   * sola vez en la pantalla y cada campo la enlaza con `aria-describedby`.
-   */
-  hintId: string;
+  /** Ayuda visible bajo el campo con el formato del monto y un ejemplo (`amountHint`). */
+  hint: string;
   /** Prefijo de la moneda del monto: "$", "Bs.", "COP". */
   prefix: string;
   /** Qué se cambia, para la pregunta: "la tasa de salida". */
@@ -38,8 +35,8 @@ const EMPTY_AMOUNT_MESSAGE = "Escribe el monto nuevo para poder guardarlo.";
  * Campo para escribir una tasa nueva y botón "Guardar nueva tasa". Antes de
  * guardar pide confirmación con el valor anterior y el nuevo, porque el
  * cambio afecta a todas las reservas que se hagan desde ese momento. El campo
- * no lleva ejemplo dentro: se confundía con un valor ya escrito, y el formato
- * ya lo explica la ayuda de la pantalla (`hintId`).
+ * no lleva ejemplo dentro: se confundía con un valor ya escrito; el formato y
+ * el ejemplo van en la ayuda visible bajo el campo (`hint`).
  *
  * El botón nunca queda deshabilitado, para que se alcance con el teclado:
  * sin un monto válido (con la misma regla que aplica el servidor), pulsarlo
@@ -52,7 +49,7 @@ export function RateChangeForm({
   fieldName,
   hiddenFields,
   label,
-  hintId,
+  hint,
   prefix,
   subject,
   unit,
@@ -65,6 +62,7 @@ export function RateChangeForm({
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const errorId = `${inputId}-error`;
+  const hintId = `${inputId}-hint`;
 
   const parsed = parseAmount(value);
   const isEmpty = value.trim() === "";
@@ -100,6 +98,9 @@ export function RateChangeForm({
             className={panelInputClass(prefix.length >= 3 ? "pl-14" : "pl-9")}
           />
         </div>
+        <p id={hintId} className="text-sm leading-snug text-tinta-suave">
+          {hint}
+        </p>
         <div aria-live="polite">
           {showError ? (
             <p id={errorId} className="flex items-start gap-1.5 text-sm font-semibold leading-snug text-peligro">

@@ -15,7 +15,9 @@ export const metadata: Metadata = {
  * y misma altura del logo) pero sin el enlace de volver de arriba: aquí iría
  * al mismo destino que la acción principal y serían dos controles seguidos
  * para lo mismo. El icono en círculo es el mismo de las demás pantallas de
- * estado (enlace vencido, salida que ya no admite reservas).
+ * estado (enlace vencido, salida que ya no admite reservas), en el tono de
+ * orientación de `EmptyState` (marca): una página inexistente no es un plazo
+ * vencido ni algo pendiente, que es lo que significa el tono alerta.
  */
 export default function NotFound() {
   return (
@@ -29,7 +31,7 @@ export default function NotFound() {
             eyebrow={
               <span
                 aria-hidden="true"
-                className="grid size-14 place-items-center rounded-full bg-alerta-suave text-alerta [&>svg]:size-7"
+                className="grid size-14 place-items-center rounded-full bg-marca-50 text-marca-600 [&>svg]:size-7"
               >
                 <IconSearch />
               </span>

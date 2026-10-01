@@ -5,6 +5,9 @@ import { AdminTabs } from "./admin-tabs";
 import { GetForm, GetSubmitButton } from "./get-form";
 import { describeAdminRange, periodQuery, periodTabs, type AdminRange } from "./period";
 
+/** Botón del formulario cuando solo trae otros filtros (la agencia), en singular. */
+export const FILTER_BUTTON_LABEL = "Filtrar";
+
 /**
  * Selector de periodo del administrador: pestañas (Últimas 24 horas, 7 días,
  * 30 días, Otras fechas), el formulario de fechas cuando se eligió "Otras
@@ -39,7 +42,7 @@ export function PeriodFilter({
 
   return (
     <div className="flex flex-col gap-3">
-      <AdminTabs label="Periodo" tabs={tabs.map(({ href, label, active }) => ({ href, label, active }))} />
+      <AdminTabs label="Periodo" grid tabs={tabs.map(({ href, label, active }) => ({ href, label, active }))} />
 
       {showForm ? (
         <GetForm
@@ -79,11 +82,17 @@ export function PeriodFilter({
             </>
           ) : null}
           {extraFields}
+          {/* Con un solo filtro y sin fechas, el botón corto queda en la misma
+              fila que la lista en el teléfono, para no empujar la lista de viajes. */}
           <GetSubmitButton
             pendingLabel="Buscando…"
-            className={panelButtonClass(extraFields ? "secundario" : "primario", "md", "w-full sm:w-auto")}
+            className={panelButtonClass(
+              extraFields ? "secundario" : "primario",
+              "md",
+              extraFields && !isCustom ? undefined : "w-full sm:w-auto",
+            )}
           >
-            {extraFields ? "Aplicar filtros" : "Ver estas fechas"}
+            {extraFields ? FILTER_BUTTON_LABEL : "Ver estas fechas"}
           </GetSubmitButton>
         </GetForm>
       ) : null}

@@ -6,13 +6,15 @@ import { BUSINESS_TZ } from "@/lib/time";
 import { formatUsdString } from "@/lib/decimal";
 import { passengerStatusLabel } from "@/lib/labels";
 import { AgencyBadge } from "./agency-badge";
-import { IconChevronRight } from "./icons";
+import { IconChevronRight, IconClock } from "./icons";
 import { Isotipo, LogoLockup } from "./logo";
 import {
   isInactiveReservation,
   passengerStatusTone,
   paymentPhrase,
   reservationActionLabel,
+  ticketDeadlineLabel,
+  type PaymentDeadline,
 } from "./passenger-copy";
 import { Pill, ProgressBar } from "./ui";
 import { cx } from "./ui-classes";
@@ -29,6 +31,11 @@ export interface TicketCardData {
   paidUsd: string;
   balanceUsd: string;
   passengerCount: number;
+  /**
+   * Plazo para pagar sin perder el puesto (`ticketDeadline`), ya calculado
+   * por la página; sin él, el ticket no dice ninguna hora límite.
+   */
+  deadline?: PaymentDeadline | null;
 }
 
 interface TicketCardProps {
@@ -124,6 +131,15 @@ export function TicketCard({
     <Pill tone={passengerStatusTone(data.status)}>{passengerStatusLabel(data.status)}</Pill>
   );
 
+  // El plazo va en el propio ticket, en tono de alerta y con icono: es lo que se pierde si no se paga.
+  const deadlineLine =
+    data.deadline && !inactive ? (
+      <p className="tabular flex items-start gap-2 text-sm font-semibold text-alerta">
+        <IconClock aria-hidden="true" className="mt-px size-5 shrink-0" />
+        <span>{ticketDeadlineLabel(data.status, data.deadline)}</span>
+      </p>
+    ) : null;
+
   const headerTone = inactive ? "bg-lienzo text-tinta" : "bg-marca-600 text-white";
   const headerMuted = inactive ? "text-tinta-suave" : "text-white/85";
 
@@ -160,11 +176,17 @@ export function TicketCard({
         <Perforation inactive={inactive} />
 
         <div className="flex flex-col gap-4 p-5">
-          <div className="flex flex-wrap items-center gap-3">
+          {/*
+            En el teléfono la pastilla va debajo del nombre: así el nombre no se
+            parte y la cabecera mide lo mismo en cualquier estado.
+          */}
+          <div className="flex items-center gap-3">
             {/* El nombre ya va al lado: el bloque es decorativo para no leerlo dos veces. */}
             <AgencyBadge agencyId={data.agencyId} name={data.agencyName} size="sm" decorative />
-            <p className="min-w-0 flex-1 font-semibold text-tinta">{data.agencyName}</p>
-            {statusPill}
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <p className="min-w-0 break-words font-semibold text-tinta">{data.agencyName}</p>
+              {statusPill}
+            </div>
           </div>
 
           {showQr ? (
@@ -200,6 +222,7 @@ export function TicketCard({
                   detail={review ? `${review} en revisión` : undefined}
                 />
               )}
+              {deadlineLine}
               {hidePaymentPhrase ? null : (
                 <p className="text-base text-tinta">{paymentPhrase(data.status, balance)}</p>
               )}
@@ -247,6 +270,7 @@ export function TicketCard({
             {data.code}
           </p>
         </div>
+        {deadlineLine}
         {href ? (
           <p className="flex items-center justify-between gap-2 border-t border-borde pt-3 font-semibold text-marca-700">
             <span>{reservationActionLabel(data.status, balance)}</span>

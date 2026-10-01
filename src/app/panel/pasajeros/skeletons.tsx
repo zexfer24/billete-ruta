@@ -1,5 +1,6 @@
 import { Skeleton, SkeletonText } from "@/components/skeleton";
-import { PANEL_TD_CLASS, PANEL_TH_CLASS } from "@/components/panel-ui";
+import { PANEL_TD_CLASS, PANEL_TH_CLASS, panelButtonClass } from "@/components/panel-ui";
+import { IconChevronRight } from "@/components/icons";
 
 /**
  * Siluetas de carga de "Pasajeros y pagos" (spec 6.5), compartidas por
@@ -59,6 +60,12 @@ const TABLE_HEADERS: Record<ListSkeletonVariant, readonly string[]> = {
   reservas: ["Pasajero", "Viaje", "Pagado", "Estado"],
 };
 
+/** Texto real del enlace de cada fila de la tabla. */
+const ROW_LINK_LABELS: Record<ListSkeletonVariant, string> = {
+  comprobantes: "Revisar",
+  reservas: "Ver detalle",
+};
+
 /** Etiquetas de los dos datos de la tarjeta del teléfono. */
 const CARD_LABELS: Record<ListSkeletonVariant, readonly [string, string]> = {
   comprobantes: ["Monto enviado", "Si lo apruebas"],
@@ -82,7 +89,8 @@ function RowStatusCells({ variant }: { variant: ListSkeletonVariant }) {
     return (
       <>
         <td className={PANEL_TD_CLASS}>
-          <CellLines widths={["w-24", "w-28", "w-32"]} />
+          {/* Monto, equivalente, «Referencia» y el código, que baja de línea. */}
+          <CellLines widths={["w-24", "w-28", "w-20", "w-32"]} />
         </td>
         <td className={PANEL_TD_CLASS}>
           <div className="flex flex-col gap-1.5">
@@ -157,7 +165,7 @@ export function ListSkeleton({
                   </td>
                   <RowStatusCells variant={variant} />
                   <td className={`${PANEL_TD_CLASS} text-right`}>
-                    <Skeleton className="ml-auto h-11 w-28" />
+                    <span className={panelButtonClass("secundario")}>{ROW_LINK_LABELS[variant]}</span>
                   </td>
                 </tr>
               ))}
@@ -166,26 +174,57 @@ export function ListSkeleton({
         </div>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:hidden">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
-              <div className="flex flex-col gap-1">
-                <Skeleton className="h-5 w-2/3 rounded-pastilla" />
-                <Skeleton className="my-1.5 h-7 w-36 rounded-pastilla" />
-                <CellLines widths={["w-24", "w-36", "w-3/4"]} />
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                {[labelA, labelB].map((label) => (
-                  <div key={label} className="flex min-w-0 flex-col gap-1">
-                    <span className="text-sm text-tinta-suave">{label}</span>
-                    <Skeleton className="h-5 w-24 rounded-pastilla" />
-                  </div>
-                ))}
-              </div>
-              <Skeleton className="h-11 w-full" />
-            </div>
-          ))}
+          {Array.from({ length: 4 }, (_, i) =>
+            variant === "comprobantes" ? <ProofCardSkeleton key={i} /> : <ReservationCardSkeleton key={i} labels={[labelA, labelB]} />,
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Tarjeta de comprobante del teléfono (`ProofQueueCard`): toda la tarjeta es
+ * el enlace, con la flecha a la derecha; nombre, pastillas, cédula y código,
+ * viaje, monto enviado y qué pasa si se aprueba.
+ */
+function ProofCardSkeleton() {
+  return (
+    <div className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex h-6 items-center">
+          <Skeleton className="h-5 w-2/3 rounded-pastilla" />
+        </span>
+        <Skeleton className="h-7 w-36 rounded-pastilla" />
+        <CellLines widths={["w-3/4", "w-4/5"]} />
+        <span className="flex h-6 items-center">
+          <Skeleton className="h-4 w-1/2 rounded-pastilla" />
+        </span>
+        <CellLines widths={["w-2/3"]} />
+      </div>
+      <IconChevronRight className="size-5 shrink-0 text-marca-700" />
+    </div>
+  );
+}
+
+/** Tarjeta de reserva del teléfono (`MobileCard`): datos, los dos montos y «Ver detalle». */
+function ReservationCardSkeleton({ labels }: { labels: readonly [string, string] }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
+      <div className="flex flex-col gap-1">
+        <Skeleton className="h-5 w-2/3 rounded-pastilla" />
+        <Skeleton className="my-1.5 h-7 w-36 rounded-pastilla" />
+        <CellLines widths={["w-24", "w-36", "w-3/4"]} />
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+        {labels.map((label) => (
+          <div key={label} className="flex min-w-0 flex-col gap-1">
+            <span className="text-sm text-tinta-suave">{label}</span>
+            <Skeleton className="h-5 w-24 rounded-pastilla" />
+          </div>
+        ))}
+      </div>
+      <span className={panelButtonClass("secundario", "md", "w-full")}>Ver detalle</span>
     </div>
   );
 }
