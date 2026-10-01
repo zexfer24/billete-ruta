@@ -41,20 +41,53 @@ export interface UnitDeparture {
   departedAt: Date | null;
   estimatedArrivalAt: Date | null;
   /**
+   * Cuándo un operador abrió el embarque (`startBoarding`). Es la única señal
+   * de "embarque abierto": el barrido `sweepAutoClose` del worker también deja
+   * la salida en MANIFIESTO_CERRADO al pasar su hora, pero solo cierra la
+   * venta y no registra embarque. Ausente o `null`: nadie inició el embarque.
+   */
+  boardingStartedAt?: Date | null;
+  /**
    * `true` solo en el `current` que devuelve `unitStateOf` cuando es una salida
-   * PROGRAMADA cuya hora ya pasó, dentro de las últimas 12 horas, y nadie cerró
-   * su manifiesto (el barrido `sweepAutoClose` del worker aún no la tomó).
-   * `describeUnitTrip` la muestra con el mismo aviso que el tablero, por
-   * ejemplo "Debía salir a las 13:00", en tono de alerta.
+   * cuya hora ya pasó, dentro de las últimas 12 horas, y nadie abrió su
+   * embarque: sigue PROGRAMADA, o el worker la pasó a MANIFIESTO_CERRADO sin
+   * `boardingStartedAt` (ver `isOverdueDeparture`). `describeUnitTrip` la
+   * muestra con el mismo aviso que el tablero, por ejemplo "Debía salir a las
+   * 13:00", en tono de alerta.
    */
   overdue?: boolean;
 }
 
-/** La salida con `status` dado y `departsAt` más antigua, o `null` si no hay ninguna. */
-function masAntigua(departures: UnitDeparture[], status: DepartureStatus): UnitDeparture | null {
-  const candidatas = departures.filter((d) => d.status === status);
+/** La salida con `departsAt` más antigua de las que cumplen `cumple`, o `null` si no hay ninguna. */
+function masAntiguaQue(
+  departures: UnitDeparture[],
+  cumple: (d: UnitDeparture) => boolean,
+): UnitDeparture | null {
+  const candidatas = departures.filter(cumple);
   if (candidatas.length === 0) return null;
   return candidatas.reduce((a, b) => (a.departsAt <= b.departsAt ? a : b));
+}
+
+/** La salida con `status` dado y `departsAt` más antigua, o `null` si no hay ninguna. */
+function masAntigua(departures: UnitDeparture[], status: DepartureStatus): UnitDeparture | null {
+  return masAntiguaQue(departures, (d) => d.status === status);
+}
+
+/**
+ * Salida atrasada: su hora ya pasó y nadie abrió el embarque. Sigue
+ * PROGRAMADA (el worker aún no la tomó), o está en MANIFIESTO_CERRADO sin
+ * `boardingStartedAt` porque la cerró el barrido `sweepAutoClose` y no un
+ * operador. Con el worker activo la segunda es la forma normal de una salida
+ * atrasada a los pocos minutos de su hora. No mira la ventana de 12 horas:
+ * eso lo decide `unitStateOf`.
+ */
+export function isOverdueDeparture(
+  departure: { status: DepartureStatus; departsAt: Date; boardingStartedAt?: Date | null },
+  now: Date,
+): boolean {
+  if (departure.departsAt.getTime() > now.getTime()) return false;
+  if (departure.status === "PROGRAMADA") return true;
+  return departure.status === "MANIFIESTO_CERRADO" && !departure.boardingStartedAt;
 }
 
 /**
@@ -72,19 +105,20 @@ export function unitStateOf(
   upcomingCount: number;
 } {
   // Regla 1: el viaje en curso es la salida EN_RUTA más antigua, o si no hay,
-  // la MANIFIESTO_CERRADO más antigua, o si no hay, la PROGRAMADA más antigua
-  // cuya hora ya pasó (atrasada: el worker la cerraría en su próximo barrido,
-  // así que la vista no depende de que el worker esté al día). Las dos últimas
-  // solo cuentan dentro de `VIGENCIA_EN_CURSO_MS`: más atrás no deciden nada.
+  // la MANIFIESTO_CERRADO más antigua con el embarque abierto, o si no hay, la
+  // atrasada más antigua (`isOverdueDeparture`: su hora pasó y nadie abrió el
+  // embarque, siga PROGRAMADA o la haya cerrado el worker; así la vista no
+  // depende de que el worker corra o no). Las dos últimas solo cuentan dentro
+  // de `VIGENCIA_EN_CURSO_MS`: más atrás no deciden nada.
   const corte = now.getTime() - VIGENCIA_EN_CURSO_MS;
   const vigentes = input.departures.filter((d) => d.departsAt.getTime() >= corte);
-  const atrasada = masAntigua(
-    vigentes.filter((d) => d.departsAt.getTime() <= now.getTime()),
-    "PROGRAMADA",
-  );
+  const atrasada = masAntiguaQue(vigentes, (d) => isOverdueDeparture(d, now));
   const current =
     masAntigua(input.departures, "EN_RUTA") ??
-    masAntigua(vigentes, "MANIFIESTO_CERRADO") ??
+    masAntiguaQue(
+      vigentes,
+      (d) => d.status === "MANIFIESTO_CERRADO" && !isOverdueDeparture(d, now),
+    ) ??
     (atrasada ? { ...atrasada, overdue: true } : null);
 
   // Regla 4: las próximas salidas se calculan siempre, sin importar el estado.
@@ -105,15 +139,14 @@ export function unitStateOf(
   if (current?.status === "EN_RUTA") {
     // Regla 2: un viaje en curso gana aunque la unidad esté inactiva.
     state = "EN_RUTA";
+  } else if (current?.overdue) {
+    // Su hora ya pasó y nadie abrió el embarque, así que no está "Embarcando"
+    // aunque el worker haya cerrado el manifiesto. Está atrasada, y compromete
+    // al bus y al chofer aunque la unidad esté inactiva.
+    state = "ATRASADO";
   } else if (current?.status === "MANIFIESTO_CERRADO") {
     // Con el embarque abierto la unidad está embarcando, aunque vaya tarde.
     state = "EMBARCANDO";
-  } else if (current?.overdue) {
-    // Una PROGRAMADA cuya hora ya pasó: nadie abrió el embarque, así que no
-    // está "Embarcando" (Salidas la muestra "Programada", con "Iniciar el
-    // embarque" pendiente). Está atrasada, y compromete al bus y al chofer
-    // aunque la unidad esté inactiva, igual que un manifiesto cerrado.
-    state = "ATRASADO";
   } else if (!input.active) {
     // Regla 3: sin viaje en curso, la unidad inactiva está fuera de servicio.
     state = "FUERA_DE_SERVICIO";
@@ -225,6 +258,7 @@ export async function agencyFleetStatus(
       vehiclePlate: salida.vehicle.plate,
       driverName: salida.driver.fullName,
       departedAt: salida.tripLog?.departedAt ?? null,
+      boardingStartedAt: salida.tripLog?.boardingStartedAt ?? null,
       estimatedArrivalAt: salida.tripLog?.departedAt
         ? new Date(salida.tripLog.departedAt.getTime() + salida.route.estimatedMinutes * 60_000)
         : null,

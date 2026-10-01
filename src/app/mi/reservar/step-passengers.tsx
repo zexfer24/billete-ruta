@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
-import { DepartureRow } from "@/components/departure-row";
 import { IconCheckCircle, IconPlus, IconUser } from "@/components/icons";
 import { StickyActions } from "@/components/sticky-actions";
 import { SubmitButton } from "@/components/submit-button";
@@ -13,10 +12,10 @@ import { unirseListaEsperaAction, type WaitlistState } from "./actions";
 import {
   companionErrors,
   DOCUMENTS_RETURN_HREF,
-  toDepartureRowData,
   type CompanionForm,
   type DepartureVM,
 } from "./booking-form";
+import { ChosenDeparture } from "./chosen-departure";
 import { revealAndFocus } from "./reveal";
 
 const initialWaitlistState: WaitlistState = { error: null, success: false };
@@ -124,7 +123,7 @@ export function StepPassengers({
   if (maxPassengers === 0) {
     return (
       <section className="flex flex-col gap-4">
-        <DepartureRow departure={toDepartureRowData(departure)} now={now} selected />
+        <ChosenDeparture departure={departure} now={now} />
         <WaitlistBlock departureId={departure.id} />
         <button type="button" onClick={onChangeDeparture} className={buttonClass("secundario", "w-full")}>
           Elegir otra salida
@@ -135,16 +134,8 @@ export function StepPassengers({
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <DepartureRow departure={toDepartureRowData(departure)} now={now} selected />
-        <button
-          type="button"
-          onClick={onChangeDeparture}
-          className={buttonClass("fantasma", "-ml-2 self-start", "sm")}
-        >
-          Cambiar la salida
-        </button>
-      </div>
+      {/* Para cambiar la salida está "Atrás" en la barra de abajo: un segundo control que hace lo mismo sobra. */}
+      <ChosenDeparture departure={departure} now={now} />
 
       <Card className="flex items-center gap-3">
         <span

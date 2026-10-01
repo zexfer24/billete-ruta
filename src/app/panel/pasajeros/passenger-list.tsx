@@ -19,7 +19,8 @@ import {
 import { IconCheckCircle, IconChevronLeft, IconChevronRight, IconList, IconSearch } from "@/components/icons";
 import { countLabel } from "../_dashboard/text";
 import { afterApproval, coverageBadge } from "./proof-review";
-import { arrowRouteName, proofUrgency, tripWhenText } from "./trip-text";
+import { proofUrgency, tripWhenText } from "./trip-text";
+import { arrowRouteName } from "../_shared/route-text";
 import { lastValidPage, pasajerosUrl } from "./urls";
 import { showsUsdEquivalent } from "./money";
 import { LinkPendingIcon, LinkRow } from "./link-pending";
@@ -36,7 +37,13 @@ export const RESERVATIONS_PAGE_SIZE = 25;
 export const PROOFS_PAGE_SIZE = 15;
 
 /** Ancho mínimo del nombre de la ruta en las tablas, para que "Caracas → San Cristóbal" no se parta. */
-const ROUTE_CELL_CLASS = "block min-w-52";
+/**
+ * Anchos mínimos de las columnas de la tabla de escritorio: el nombre del
+ * pasajero cabe en un renglón (los nombres con dos apellidos se partían
+ * mientras "Viaje" sobraba) y la ruta no reserva más de lo que ocupa.
+ */
+const ROUTE_CELL_CLASS = "block min-w-40";
+const HOLDER_CELL_CLASS = "block min-w-48 font-semibold";
 
 /** Estado vacío de cada vista cuando no hay filtros activos. */
 const EMPTY_BY_VIEW: Record<Exclude<ReservationView, "por-revisar">, { title: string; description: string }> = {
@@ -208,8 +215,8 @@ function SentAmount({
         {formatMoney(amount, currency)}
       </span>
       {showsUsdEquivalent(currency) ? (
-        <span className="tabular block text-sm font-normal text-tinta-suave">
-          Equivale a <span className="whitespace-nowrap">{formatMoney(amountUsd, "USD")}</span>
+        <span className="tabular block whitespace-nowrap text-sm font-normal text-tinta-suave">
+          Equivale a {formatMoney(amountUsd, "USD")}
         </span>
       ) : null}
     </>
@@ -456,7 +463,7 @@ export async function ProofQueueList({
                   className="border-b border-borde last:border-b-0"
                 >
                   <td className={PANEL_TD_CLASS}>
-                    <span className="block font-semibold">{row.holderName}</span>
+                    <span className={HOLDER_CELL_CLASS}>{row.holderName}</span>
                     <HolderIdAndCode idNumber={row.maskedHolderIdNumber} code={row.code} />
                   </td>
                   <td className={PANEL_TD_CLASS}>
@@ -477,7 +484,8 @@ export async function ProofQueueList({
                     <StatusBadge label={badge.label} tone={badge.tone} />
                     {afterApprovalAddsInfo(row.coverage) ? (
                       <span className="tabular mt-1 block text-tinta-suave">
-                        Si lo apruebas: {lowerFirst(afterApproval(row.coverage))}
+                        Si lo apruebas:{" "}
+                        <span className="whitespace-nowrap">{lowerFirst(afterApproval(row.coverage))}</span>
                       </span>
                     ) : null}
                   </td>
@@ -653,7 +661,7 @@ export async function ReservationList({
                   className="border-b border-borde last:border-b-0"
                 >
                   <td className={PANEL_TD_CLASS}>
-                    <span className="block font-semibold">{row.holderName}</span>
+                    <span className={HOLDER_CELL_CLASS}>{row.holderName}</span>
                     <HolderIdAndCode idNumber={maskIdNumber(row.holderIdNumber)} code={row.code} />
                     {row.salesChannel === "TAQUILLA" ? (
                       <span className="block text-tinta-suave">Vendida en taquilla</span>

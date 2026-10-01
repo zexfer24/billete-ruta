@@ -1,5 +1,5 @@
-import { Skeleton, SkeletonText } from "@/components/skeleton";
-import { PANEL_TD_CLASS, PANEL_TH_CLASS, panelButtonClass } from "@/components/panel-ui";
+import { Skeleton, SkeletonButton, SkeletonText } from "@/components/skeleton";
+import { PANEL_TD_CLASS, PANEL_TH_CLASS } from "@/components/panel-ui";
 import { IconChevronRight } from "@/components/icons";
 import { TABS_CONTAINER_CLASS, tabItemLayoutClass } from "./tab-layout";
 
@@ -75,13 +75,38 @@ const ROW_LINK_LABELS: Record<ListSkeletonVariant, string | null> = {
   neutra: null,
 };
 
-/** Barras de texto de 14 px apiladas como líneas de una celda (20 px por línea). */
+/**
+ * Barras de texto de 14 px apiladas como líneas de una celda: cada barra de
+ * 16 px va centrada en un renglón de 20 px, el alto de la línea real, para que
+ * la fila mida lo mismo que la de verdad.
+ */
 function CellLines({ widths }: { widths: readonly string[] }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col">
       {widths.map((width, i) => (
-        <Skeleton key={i} className={`h-4 rounded-pastilla ${width}`} />
+        <span key={i} className="flex h-5 items-center">
+          <Skeleton className={`h-4 rounded-pastilla ${width}`} />
+        </span>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Filas de la tabla en la silueta: las de una página de "Por revisar"
+ * (`PROOFS_PAGE_SIZE` de `passenger-list.tsx`). Las otras vistas traen más por
+ * página, pero de la fila quince en adelante ya no se ve al cargar.
+ */
+const SKELETON_ROWS = 15;
+
+/** Pie de la lista: "Página 1 de 4" y el botón "Siguiente", quietos. */
+function PaginationSkeleton() {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <span className="flex h-6 items-center">
+        <Skeleton className="h-4 w-28 rounded-pastilla" />
+      </span>
+      <SkeletonButton>Siguiente</SkeletonButton>
     </div>
   );
 }
@@ -132,7 +157,7 @@ function RowStatusCells({ variant }: { variant: ListSkeletonVariant }) {
  * llegar los datos.
  */
 export function ListSkeleton({
-  rows = 8,
+  rows = SKELETON_ROWS,
   filters = false,
   variant = "neutra",
 }: {
@@ -170,14 +195,13 @@ export function ListSkeleton({
                   </td>
                   <RowStatusCells variant={variant} />
                   <td className={`${PANEL_TD_CLASS} text-right`}>
+                    {/* Quieto, con el brillo de carga en vez del borde, como el
+                        resto de los botones del panel mientras carga. Sin saber si
+                        es "Revisar" o "Ver detalle", un bloque de un ancho entre los dos. */}
                     {linkLabel ? (
-                      <span className={panelButtonClass("secundario")}>{linkLabel}</span>
+                      <SkeletonButton>{linkLabel}</SkeletonButton>
                     ) : (
-                      // Sin saber si es "Revisar" o "Ver detalle": la caja con
-                      // contorno del botón real, de un ancho entre los dos, sin relleno.
-                      <span className="ml-auto flex h-11 w-24 items-center justify-center rounded-control border border-borde">
-                        <Skeleton className="h-4 w-14 rounded-pastilla" />
-                      </span>
+                      <Skeleton className="ml-auto h-11 w-24" />
                     )}
                   </td>
                 </tr>
@@ -191,6 +215,8 @@ export function ListSkeleton({
             <CardSkeleton key={i} actionLabel={linkLabel} />
           ))}
         </div>
+
+        <PaginationSkeleton />
       </div>
     </div>
   );

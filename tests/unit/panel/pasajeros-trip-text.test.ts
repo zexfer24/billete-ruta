@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arrowRouteName, proofUrgency, tripWhenText } from "@/app/panel/pasajeros/trip-text";
+import { proofUrgency, tripWhenText } from "@/app/panel/pasajeros/trip-text";
 
 // 20:15 del 30/09 en Caracas (UTC-4).
 const NOW = new Date("2026-10-01T00:15:00Z");
@@ -38,17 +38,5 @@ describe("tripWhenText", () => {
     expect(tripWhenText(new Date("2026-10-01T01:00:00Z"), NOW)).toBe("Hoy 21:00");
     expect(tripWhenText(new Date("2026-10-01T11:00:00Z"), NOW)).toBe("Mañana 07:00");
     expect(tripWhenText(new Date("2026-10-02T23:00:00Z"), NOW)).toBe("Viernes 02/10 19:00");
-  });
-});
-
-describe("arrowRouteName", () => {
-  it("cambia el guion o la raya del nombre de la ruta por la flecha del panel", () => {
-    expect(arrowRouteName("Caracas – San Cristóbal")).toBe("Caracas → San Cristóbal");
-    expect(arrowRouteName("Caracas - Mérida")).toBe("Caracas → Mérida");
-  });
-
-  it("deja igual un nombre sin separador o con guion dentro de una palabra", () => {
-    expect(arrowRouteName("Expreso Los Llanos")).toBe("Expreso Los Llanos");
-    expect(arrowRouteName("Puerto La Cruz-Express")).toBe("Puerto La Cruz-Express");
   });
 });

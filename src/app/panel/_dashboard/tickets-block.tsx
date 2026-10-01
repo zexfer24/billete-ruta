@@ -4,7 +4,7 @@ import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/tim
 import { EmptyState, StatusBadge, panelButtonClass } from "@/components/panel-ui";
 import { DashboardSection } from "./section-card";
 import { IconTicket } from "@/components/icons";
-import { ticketsSection } from "./section-texts";
+import { TICKETS_SECTION_ID, ticketsSection } from "./section-texts";
 import { TICKET_ROW_CLASS, TICKETS_LIST_CLASS, mobileRowClass } from "./list-classes";
 
 /** Cuántos tickets muestra el tablero antes de remitir a "Pasajeros y pagos". */
@@ -37,6 +37,7 @@ export async function TicketsBlock({
 
   return (
     <DashboardSection
+      id={TICKETS_SECTION_ID}
       title={textos.title}
       description={textos.description}
       action={

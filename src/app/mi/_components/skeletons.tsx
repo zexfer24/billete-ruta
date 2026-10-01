@@ -40,8 +40,18 @@ function SkeletonPerforation() {
   );
 }
 
-/** Ticket compacto: cabecera morada de 72 px, perforación y cuerpo con la ruta, la agencia debajo y el estado. */
-export function SkeletonTicketCompact({ withAction = false }: { withAction?: boolean }) {
+/**
+ * Ticket compacto: cabecera morada de 72 px, perforación y cuerpo con la ruta,
+ * la agencia debajo y el estado. `withDeadline` agrega la línea del reloj
+ * ("Paga hoy antes de las 21:02") y `withAction` el pie con la acción.
+ */
+export function SkeletonTicketCompact({
+  withAction = false,
+  withDeadline = false,
+}: {
+  withAction?: boolean;
+  withDeadline?: boolean;
+}) {
   return (
     <div aria-hidden="true" className="overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1">
       <div className="flex items-center gap-3 bg-marca-600 p-4">
@@ -64,6 +74,12 @@ export function SkeletonTicketCompact({ withAction = false }: { withAction?: boo
           <Skeleton className="h-6 w-28 rounded-pastilla" />
           <Skeleton className="h-4 w-32 rounded-pastilla" />
         </div>
+        {withDeadline ? (
+          <div className="flex min-h-5 items-center gap-2">
+            <SkeletonCircle className="size-5" />
+            <Skeleton className="h-4 w-52 max-w-full rounded-pastilla" />
+          </div>
+        ) : null}
         {withAction ? (
           <div className="flex items-center justify-between border-t border-borde pt-3">
             <Skeleton className="h-5 w-44 rounded-pastilla" />
@@ -150,6 +166,26 @@ export function SkeletonCard({ children, className }: { children: ReactNode; cla
       className={`rounded-tarjeta border border-borde bg-superficie p-5 shadow-1 ${className ?? ""}`}
     >
       {children}
+    </div>
+  );
+}
+
+/**
+ * Tarjeta del viaje más cercano del inicio ("Tus otros viajes"): la frase de
+ * cuándo sale, la línea del plazo y el pie con el estado y la acción.
+ */
+export function SkeletonOtherTrip() {
+  return (
+    <div aria-hidden="true" className="rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
+      <Skeleton className="h-5 w-4/5 rounded-pastilla" />
+      <div className="mt-2 flex min-h-5 items-center gap-2">
+        <SkeletonCircle className="size-5" />
+        <Skeleton className="h-4 w-48 max-w-full rounded-pastilla" />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-borde pt-3">
+        <Skeleton className="h-6 w-24 rounded-pastilla" />
+        <Skeleton className="h-5 w-32 rounded-pastilla" />
+      </div>
     </div>
   );
 }

@@ -11,9 +11,12 @@ import {
   isInactiveReservation,
   noticeActionLabel,
   noticeTimeLabel,
+  otherTripDeadlineLabel,
   PASSENGER_PROOF_STATUS_LABELS,
   passengerStatusTone,
   paymentPhrase,
+  pickHeroReservation,
+  relativeDayWord,
   reservationActionLabel,
   reservationUrgency,
   whenPhrase,
@@ -42,7 +45,7 @@ describe("estados de reserva para el pasajero", () => {
   });
 
   it("la acción incluye el saldo cuando falta una parte", () => {
-    expect(reservationActionLabel("PENDIENTE_PAGO", "$ 10,00")).toBe("Pagar mi pasaje");
+    expect(reservationActionLabel("PENDIENTE_PAGO", "$ 10,00")).toBe("Pagar mi viaje");
     expect(reservationActionLabel("ABONADA", "$ 10,00")).toBe("Pagar $ 10,00 que faltan");
     expect(reservationActionLabel("PAGADA", "$ 0,00")).toBe("Ver mi ticket");
     expect(paymentPhrase("ABONADA", "$ 10,00")).toBe("Te faltan $ 10,00 para recibir tu ticket.");
@@ -163,5 +166,43 @@ describe("homeNotices", () => {
     const restantes = homeNotices(avisos, { codesOnScreen: new Set(), heroIsDocument: true });
     expect(restantes.map((aviso) => aviso.kind)).not.toContain("DOCUMENTO_FALTANTE");
     expect(restantes).toHaveLength(3);
+  });
+});
+
+describe("relativeDayWord", () => {
+  it("dice hoy o mañana, y nada en otro día", () => {
+    expect(relativeDayWord(new Date("2026-10-12T22:00:00.000Z"), AHORA)).toBe("hoy");
+    expect(relativeDayWord(new Date("2026-10-13T12:00:00.000Z"), AHORA)).toBe("mañana");
+    expect(relativeDayWord(new Date("2026-10-15T12:00:00.000Z"), AHORA)).toBeNull();
+  });
+});
+
+describe("tarjeta del viaje más cercano en el inicio", () => {
+  const HORA = 60 * 60 * 1000;
+  const en = (ms: number) => new Date(AHORA.getTime() + ms);
+
+  it("una reserva sin pago que cede el inicio conserva su hora límite", () => {
+    // La más cercana vence en 1 h 50 min; la otra, en 30 min: sube la otra.
+    const cercana = { code: "TR-1", status: "PENDIENTE_PAGO", departsAt: en(6 * HORA), expiresAt: en(110 * 60_000), reconfirmedAt: null };
+    const otra = { code: "TR-2", status: "PENDIENTE_PAGO", departsAt: en(48 * HORA), expiresAt: en(30 * 60_000), reconfirmedAt: null };
+    const eleccion = pickHeroReservation([cercana, otra], AHORA);
+    expect(eleccion?.hero.code).toBe("TR-2");
+    expect(eleccion?.soonest.code).toBe("TR-1");
+    expect(otherTripDeadlineLabel(cercana, AHORA)).toBe("Paga hoy antes de las 11:50");
+  });
+
+  it("una pagada en parte que cede el inicio dice cuánto falta en su acción", () => {
+    const cercana = { code: "TR-1", status: "ABONADA", departsAt: en(6 * HORA), expiresAt: null, reconfirmedAt: null };
+    const otra = { code: "TR-2", status: "PENDIENTE_PAGO", departsAt: en(48 * HORA), expiresAt: en(30 * 60_000), reconfirmedAt: null };
+    const eleccion = pickHeroReservation([cercana, otra], AHORA);
+    expect(eleccion?.soonest.code).toBe("TR-1");
+    expect(eleccion?.promoted).toBe(true);
+    expect(otherTripDeadlineLabel(cercana, AHORA)).toBeNull();
+    expect(reservationActionLabel("ABONADA", "$ 14,35")).toBe("Pagar $ 14,35 que faltan");
+  });
+
+  it("el plazo de la taquilla se dice aunque falten días", () => {
+    const taquilla = { status: "PAGO_EN_SITIO", departsAt: en(72 * HORA), expiresAt: null, reconfirmedAt: null };
+    expect(otherTripDeadlineLabel(taquilla, AHORA)).toBe("Paga en la taquilla el mié 14 oct antes de las 22:00");
   });
 });

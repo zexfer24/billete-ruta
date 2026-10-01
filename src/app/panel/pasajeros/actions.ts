@@ -4,9 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { Currency } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { requireAgencyScope, requirePanelUser } from "@/modules/auth";
-import { ValidationError } from "@/modules/booking";
 import { approveProof, registerCashPayment, rejectProof } from "@/modules/payments";
 import { issueTicket } from "@/modules/tickets";
 import { reservationViewFromSlug } from "@/modules/reports";
@@ -16,9 +14,6 @@ import { panelFeedbackUrl, userFacingMessage } from "../feedback";
 import { pasajerosUrl } from "./urls";
 
 const CURRENCIES = ["USD", "VES", "COP", "USDT"] as const;
-
-/** Aviso cuando se intenta cobrar una reserva que ya quedó pagada (un archivo "use server" solo exporta funciones). */
-const ALREADY_PAID_MESSAGE = "Esta reserva ya está pagada. No se registró ningún cobro.";
 
 const paginaSchema = z.coerce.number().int().min(1).catch(1);
 
@@ -59,7 +54,12 @@ function leerRetornoComun(formData: FormData): RetornoComun {
   return { vista, pagina: pagina > 1 ? pagina : undefined, salida, buscar, reservaId };
 }
 
-/** Destino común de retorno (contexto de lista más la reserva de origen, si la hay). */
+/**
+ * Destino común de retorno (contexto de lista más la reserva de origen, si la
+ * hay). Con un error se le suma el comprobante, también cuando se abrió desde
+ * una reserva: el operador sigue viendo la imagen y la decisión, y al cerrar
+ * el panel vuelve a esa reserva.
+ */
 function destinoComprobante(retorno: RetornoComun) {
   return {
     vista: retorno.vista,
@@ -98,7 +98,7 @@ export async function approveProofAction(formData: FormData): Promise<void> {
     redirect(
       pasajerosUrl({
         ...destino,
-        comprobante: retorno.reservaId ? undefined : proofId,
+        comprobante: proofId,
         error: errorMessage,
       }),
     );
@@ -131,7 +131,7 @@ export async function rejectProofAction(formData: FormData): Promise<void> {
     redirect(
       pasajerosUrl({
         ...destino,
-        comprobante: retorno.reservaId ? undefined : proofId,
+        comprobante: proofId,
         error: reasonParsed.error.issues[0]?.message ?? "Motivo inválido.",
       }),
     );
@@ -151,7 +151,7 @@ export async function rejectProofAction(formData: FormData): Promise<void> {
     redirect(
       pasajerosUrl({
         ...destino,
-        comprobante: retorno.reservaId ? undefined : proofId,
+        comprobante: proofId,
         error: errorMessage,
       }),
     );
@@ -214,19 +214,8 @@ export async function cashPaymentAction(formData: FormData): Promise<void> {
   let shouldIssueTicket = false;
   try {
     // Si otro operador ya saldó la reserva (o se envió dos veces), el dominio
-    // no registra nada: se avisa en vez de decir «Cobro registrado».
-    const actual = await prisma.reservation.findUnique({
-      where: { id: reservationId },
-      select: { status: true, departure: { select: { route: { select: { agencyId: true } } } } },
-    });
-    if (
-      actual &&
-      actual.departure.route.agencyId === agencyId &&
-      (actual.status === "PAGADA" || actual.status === "ABORDADA")
-    ) {
-      throw new ValidationError(ALREADY_PAID_MESSAGE);
-    }
-
+    // lo comprueba con la fila bloqueada y lanza un `ValidationError` con
+    // `ALREADY_PAID_CASH_MESSAGE`: se avisa en vez de decir «Cobro registrado».
     const resultado = await registerCashPayment({
       reservationId,
       panelUserId: user.id,

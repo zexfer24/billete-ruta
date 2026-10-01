@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { IconDownload } from "@/components/icons";
-import { PanelPageHeader, panelButtonClass } from "@/components/panel-ui";
+import { PanelPageHeader } from "@/components/panel-ui";
 import { listAgencies } from "@/modules/agencies";
 import { requirePanelUser } from "@/modules/auth";
 import { PeriodFilter } from "../_shared/period-filter";
 import { rangeKey, resolveAdminRange } from "../_shared/period";
 import { AgencySelect } from "./agency-select";
-import { movementsCsvHref, movementsHref, parseMovementsParams } from "./movements";
+import { movementsHref, parseMovementsParams } from "./movements";
 import { MovementsList, MovementsListSkeleton } from "./movements-list";
 import { TripDetailPanel, TripDetailPanelSkeleton } from "./trip-detail";
 
 export const metadata: Metadata = { title: "Movimientos de las agencias" };
 
 /**
- * Movimientos de todas las agencias: periodo, agencia, la lista de viajes y,
- * con `?viaje=`, el panel lateral con el detalle y los pasajeros a bordo.
+ * Movimientos de todas las agencias: periodo y agencia en una barra, la lista
+ * de viajes (con su descarga junto al total, porque baja lo filtrado) y, con
+ * `?viaje=`, el panel lateral con el detalle y los pasajeros a bordo.
  * La lista y el panel tienen su propio `<Suspense>`: abrir un viaje no vuelve
  * a cargar la lista.
  */
@@ -38,12 +38,6 @@ export default async function MovimientosAdminPage({
       <PanelPageHeader
         title="Movimientos de las agencias"
         description="Cada viaje de las agencias del terminal: cuándo embarcó, salió y llegó, y cuántos pasajeros llevó. Toca un viaje para ver quién iba a bordo."
-        actions={
-          <a href={movementsCsvHref(range, agencyId)} download className={panelButtonClass("secundario")}>
-            <IconDownload className="size-5 shrink-0" />
-            Descargar en Excel (CSV)
-          </a>
-        }
       />
 
       <PeriodFilter
@@ -52,9 +46,9 @@ export default async function MovimientosAdminPage({
         keep={{ agency: agencyId }}
         autoSubmit
         extraFields={
-          // `key`: la lista no es controlada; si la URL cambia de agencia
-          // (atrás del navegador), se vuelve a montar con la aplicada.
-          <AgencySelect key={agencyId ?? ""} agencies={agencies} value={agencyId} />
+          // Sin `key`: la lista es controlada y toma sola la agencia aplicada
+          // (atrás del navegador); volver a montarla le quitaba el foco.
+          <AgencySelect agencies={agencies} value={agencyId} />
         }
       />
 

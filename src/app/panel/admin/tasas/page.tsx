@@ -3,8 +3,8 @@ import type { Prisma } from "@prisma/client";
 import { PanelFeedback } from "@/components/panel-feedback";
 import { PanelPageHeader, SectionCard } from "@/components/panel-ui";
 import { formatMoney } from "@/lib/decimal";
-import { formatCaracasDateTime24 } from "@/lib/time";
 import { requirePanelUser } from "@/modules/auth";
+import { DatePhrase } from "../_shared/lists";
 import {
   getCurrentDepartureTax,
   getCurrentExchangeRate,
@@ -49,7 +49,9 @@ function CurrentValue({
         <>
           <p className="tabular text-3xl font-bold tracking-tight text-tinta">{value}</p>
           {since ? (
-            <p className="tabular text-sm text-tinta-suave">Desde el {formatCaracasDateTime24(since)}</p>
+            <p className="tabular text-sm text-tinta-suave">
+              <DatePhrase lead="Desde" date={since} />
+            </p>
           ) : null}
         </>
       ) : (

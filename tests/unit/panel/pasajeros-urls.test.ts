@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lastValidPage, pasajerosUrl } from "@/app/panel/pasajeros/urls";
+import { lastValidPage, pasajerosUrl, pasajerosUrlFromHidden } from "@/app/panel/pasajeros/urls";
 
 describe("pasajerosUrl", () => {
   it("sin parámetros devuelve solo la ruta", () => {
@@ -43,6 +43,21 @@ describe("pasajerosUrl", () => {
     expect(
       pasajerosUrl({ vista: "pagadas", reserva: "r-1", comprobante: "c-1", ok: "aprobado", error: "algo" }),
     ).toBe("/panel/pasajeros?vista=pagadas&reserva=r-1&comprobante=c-1&ok=aprobado&error=algo");
+  });
+});
+
+describe("pasajerosUrlFromHidden", () => {
+  it("un comprobante abierto desde el detalle conserva la reserva de origen", () => {
+    const hidden = { vista: "por-cobrar", pagina: "2", reservaId: "r-1" };
+    expect(pasajerosUrlFromHidden(hidden, { reserva: hidden.reservaId, comprobante: "c-1" })).toBe(
+      "/panel/pasajeros?vista=por-cobrar&pagina=2&reserva=r-1&comprobante=c-1",
+    );
+  });
+
+  it("no copia la reserva de los campos ocultos si no se pide", () => {
+    expect(pasajerosUrlFromHidden({ vista: "todas", reservaId: "r-1" }, { comprobante: "c-1" })).toBe(
+      "/panel/pasajeros?vista=todas&comprobante=c-1",
+    );
   });
 });
 

@@ -127,9 +127,11 @@ export function ReservationDetailPanel({
                   </div>
                 </div>
                 {/* Se decide en un solo lugar: el panel "Revisar comprobante",
-                    con la imagen a lo ancho y la barra de decisión. */}
+                    con la imagen a lo ancho y la barra de decisión. La URL
+                    conserva esta reserva: al cerrar, aprobar o rechazar se
+                    vuelve a su detalle y no a la lista. */}
                 <Link
-                  href={pasajerosUrlFromHidden(hidden, { comprobante: p.id })}
+                  href={pasajerosUrlFromHidden(hidden, { reserva: hidden.reservaId, comprobante: p.id })}
                   scroll={false}
                   className={panelButtonClass("primario", "lg", "w-full sm:w-fit")}
                 >

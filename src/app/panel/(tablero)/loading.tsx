@@ -1,8 +1,8 @@
-import { Skeleton, SkeletonScreen } from "@/components/skeleton";
-import { panelButtonClass } from "@/components/panel-ui";
+import { Skeleton, SkeletonButton, SkeletonScreen } from "@/components/skeleton";
 import { IconCash, IconRefresh, IconStore } from "@/components/icons";
 import { DASHBOARD_PERIODS, DASHBOARD_PERIOD_LABELS } from "@/lib/time";
-import { SkeletonTabs } from "@/app/panel/_shared/skeletons";
+import { PERIOD_CHIP_CLASS, PERIOD_CHIP_IDLE_CLASS, PERIOD_CHIP_LIST_CLASS } from "@/app/panel/_shared/period-chips";
+import { cx } from "@/components/ui-classes";
 import {
   AttentionSkeleton,
   CollapsibleSkeleton,
@@ -16,12 +16,16 @@ import { ACTIVITY_TITLE, QUICK_REGISTER_SECTION } from "@/app/panel/_dashboard/s
 
 /**
  * Silueta del tablero del operador mientras llega la página (spec 6.5). Los
- * textos fijos se pintan reales: los dos botones de la cabecera, las pestañas
+ * textos fijos se pintan reales: los dos botones de la cabecera, las pastillas
  * del periodo, los títulos de sección y las dos secciones plegadas. Lo que
  * depende de la persona o del periodo elegido (el nombre de la agencia, el
- * saludo, "Resumen de…", la pestaña activa y las descripciones de "Tickets
+ * saludo, "Resumen de…", la pastilla elegida y las descripciones de "Tickets
  * nuevos" y "Actividad reciente") va en barra: este archivo no recibe los `searchParams` y marcaría
  * mal el periodo al entrar directo a `/panel?periodo=7d`.
+ *
+ * Los botones van quietos (`SkeletonButton`: brillo de carga en vez del
+ * relleno morado o del borde) y «Actualizar» en tinta-suave en vez de morado:
+ * se lee qué harán, pero nadie los pulsa creyendo que ya responden.
  */
 export default function TableroLoading() {
   return (
@@ -32,14 +36,14 @@ export default function TableroLoading() {
           <Skeleton className="h-5 w-96 max-w-full rounded-pastilla" />
         </div>
         <div className="flex min-w-0 max-w-full flex-wrap gap-2">
-          <span className={panelButtonClass("primario", "lg")}>
+          <SkeletonButton size="lg" className="w-full sm:w-auto">
             <IconStore className="size-5" />
             Vender un pasaje
-          </span>
-          <span className={panelButtonClass("secundario", "lg")}>
+          </SkeletonButton>
+          <SkeletonButton size="lg" className="w-full sm:w-auto">
             <IconCash className="size-5" />
             Registrar un cobro
-          </span>
+          </SkeletonButton>
         </div>
       </div>
 
@@ -49,7 +53,7 @@ export default function TableroLoading() {
           {/* `div` y no `p`: `Skeleton` es un `div`, que no puede ir dentro de un párrafo. */}
           <div className="flex flex-wrap items-center gap-x-2 text-sm text-tinta-suave">
             <Skeleton className="h-4 w-28 rounded-pastilla" />
-            <span className="inline-flex min-h-11 items-center gap-1.5 px-2 font-semibold text-marca-700">
+            <span className="inline-flex min-h-11 select-none items-center gap-1.5 px-2 font-semibold text-tinta-suave">
               <IconRefresh className="size-4" />
               Actualizar
             </span>
@@ -62,11 +66,20 @@ export default function TableroLoading() {
       <div className="flex flex-col gap-4">
         <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <Skeleton className="h-6 w-40 rounded-pastilla" />
-          {/* Envoltorio sin ancho propio, como el `<nav>` de `PanelTabs`: así el
-              control se encoge a su contenido y queda en la misma fila que el
-              título, en vez de ocupar una fila entera y saltar al llegar la página. */}
-          <div>
-            <SkeletonTabs labels={DASHBOARD_PERIODS.map((p) => DASHBOARD_PERIOD_LABELS[p])} active={-1} />
+          {/* Las pastillas de `PeriodChips` con sus mismas clases: una fila de
+              tres en el teléfono y su ancho natural desde `sm`. Ninguna va
+              elegida: este archivo no conoce `?periodo=`. */}
+          <div className="w-full sm:w-auto">
+            <div className={PERIOD_CHIP_LIST_CLASS}>
+              {DASHBOARD_PERIODS.map((p) => (
+                <span
+                  key={p}
+                  className={cx(PERIOD_CHIP_CLASS, PERIOD_CHIP_IDLE_CLASS, "w-full justify-center sm:w-auto sm:justify-start")}
+                >
+                  {DASHBOARD_PERIOD_LABELS[p]}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
         <FiguresSkeleton />

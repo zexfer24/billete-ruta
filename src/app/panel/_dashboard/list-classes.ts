@@ -23,3 +23,13 @@ export function mobileRowClass(index: number): string {
   // La última visible en el teléfono no es `:last-child`: se le quita a mano el aire de abajo.
   return index === MAX_FILAS_MOVIL - 1 ? "max-md:pb-0" : "";
 }
+
+/** Máximo de choferes que lista "Choferes y buses" antes de remitir a la flota completa. */
+export const FLEET_MAX_FILAS = 5;
+
+/** Línea de los choferes que ya salen en "Salidas de hoy" y por eso no se listan. */
+export const FLEET_NOTE_CLASS = "text-sm leading-snug text-tinta-suave";
+
+/** Enlace "Ver los N choferes" al pie de "Choferes y buses" (y su silueta). */
+export const FLEET_MORE_LINK_CLASS =
+  "foco inline-flex min-h-11 w-fit items-center gap-1 rounded-control px-2 text-[15px] font-semibold text-marca-700 hover:bg-marca-50";

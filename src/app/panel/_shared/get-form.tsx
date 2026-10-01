@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useState,
+  type ComponentPropsWithoutRef,
   type FormEvent,
   type MouseEvent,
   type ReactNode,
@@ -40,17 +41,17 @@ function queryOf(form: HTMLFormElement): string {
   return params.toString();
 }
 
-export function GetForm({
-  action,
-  className,
-  role,
-  children,
-}: {
+/**
+ * Atributos del formulario: `action` es la ruta de destino y el resto
+ * (`aria-label`, `role`, `id`…) llega tal cual al `<form>`, así un landmark de
+ * búsqueda lleva su nombre sin un envoltorio extra. `onSubmit` es propio.
+ */
+type GetFormProps = Omit<ComponentPropsWithoutRef<"form">, "action" | "onSubmit" | "children"> & {
   action: string;
-  className?: string;
-  role?: string;
   children: ReactNode;
-}) {
+};
+
+export function GetForm({ action, children, ...formProps }: GetFormProps) {
   const current = useSearchParams().toString();
   const [submittedFrom, setSubmittedFrom] = useState<string | null>(null);
   // Llegó otra URL: la espera terminó. Se limpia al renderizar (no en un
@@ -74,7 +75,7 @@ export function GetForm({
 
   return (
     <PendingContext.Provider value={pending}>
-      <Form action={action} className={className} role={role} onSubmit={onSubmit}>
+      <Form {...formProps} action={action} onSubmit={onSubmit}>
         {children}
       </Form>
     </PendingContext.Provider>

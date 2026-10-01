@@ -1,5 +1,5 @@
-import { Skeleton, SkeletonCircle } from "@/components/skeleton";
-import { PANEL_TD_CLASS, PANEL_TH_CLASS, panelButtonClass } from "@/components/panel-ui";
+import { Skeleton, SkeletonButton, SkeletonCircle } from "@/components/skeleton";
+import { PANEL_TD_CLASS, PANEL_TH_CLASS } from "@/components/panel-ui";
 import type { ReactNode } from "react";
 import { IconBus, IconCash, IconChevronDown, IconChevronRight, IconTicket } from "@/components/icons";
 import { FIGURE_LABELS, FLEET_SECTION, TRIPS_TODAY_SECTION, ticketsSection, type SectionTexts } from "./section-texts";
@@ -7,6 +7,8 @@ import { FIGURE_CELL_CLASS, FIGURE_WIDE_CELL_CLASS, FIGURES_GRID_CLASS } from ".
 import {
   FLEET_DRIVER_ROW_CLASS,
   FLEET_LIST_CLASS,
+  FLEET_MORE_LINK_CLASS,
+  MAX_FILAS_MOVIL,
   TICKET_ROW_CLASS,
   TICKETS_LIST_CLASS,
   mobileRowClass,
@@ -125,13 +127,13 @@ function StatCardSkeleton({ label, icon, link }: { label: string; icon: ReactNod
 }
 
 /**
- * Las tres cifras en el orden y la rejilla de `FiguresBlock`. "Salidas" lleva
- * "Ver detalle" como en el periodo "hoy", el que se abre por defecto.
+ * Las tres cifras en el orden y la rejilla de `FiguresBlock`. Las tres llevan
+ * "Ver detalle", como en el periodo "hoy", el que se abre por defecto.
  */
 const FIGURE_CARDS: ReadonlyArray<{ label: string; icon: ReactNode; link: boolean; cell: string }> = [
   { label: FIGURE_LABELS.recaudado, icon: <IconCash />, link: true, cell: FIGURE_WIDE_CELL_CLASS },
   { label: FIGURE_LABELS.salidas, icon: <IconBus />, link: true, cell: FIGURE_CELL_CLASS },
-  { label: FIGURE_LABELS.tickets, icon: <IconTicket />, link: false, cell: FIGURE_CELL_CLASS },
+  { label: FIGURE_LABELS.tickets, icon: <IconTicket />, link: true, cell: FIGURE_CELL_CLASS },
 ];
 
 /** Silueta de las tres cifras del periodo. */
@@ -195,8 +197,8 @@ export function ListRowsSkeleton({ rows }: { rows: number }) {
 /**
  * Cabecera de una tarjeta de sección (`DashboardSection`) en la silueta, con
  * las mismas clases que la real: con los textos de `texts` pinta el título,
- * la descripción y el botón reales (el botón como `span`, sin foco); sin
- * ellos, barras.
+ * la descripción y el botón reales (el botón quieto, con el brillo de carga en
+ * vez del borde, para que no parezca listo); sin ellos, barras.
  */
 function SectionHeaderSkeleton({ texts }: { texts?: Partial<SectionTexts> }) {
   return (
@@ -215,7 +217,7 @@ function SectionHeaderSkeleton({ texts }: { texts?: Partial<SectionTexts> }) {
       </div>
       <div className={DASHBOARD_SECTION_ACTION_CLASS}>
         {texts?.actionLabel ? (
-          <span className={panelButtonClass("secundario")}>{texts.actionLabel}</span>
+          <SkeletonButton>{texts.actionLabel}</SkeletonButton>
         ) : (
           <Skeleton className="h-11 w-28" />
         )}
@@ -270,9 +272,12 @@ export function TicketsSkeleton({ periodPhrase }: { periodPhrase?: string }) {
 
 /**
  * Silueta de "Choferes y buses" (`FleetBlock`): los subtítulos reales «Buses»
- * y «Choferes», las pastillas del resumen de buses y tres filas de chofer con
- * el nombre y, debajo, la línea del viaje. Sin pastilla de chofer: la real
- * solo aparece cuando el estado aporta algo (en ruta, embarcando, atrasado).
+ * y «Choferes», las pastillas del resumen de buses, tres filas de chofer con
+ * el nombre y, debajo, la línea del viaje, la línea de los que ya salen en
+ * «Salidas de hoy» y el enlace a la flota completa. El bloque real lista solo
+ * a los choferes que esa tabla no muestra, así que lo común son pocas filas
+ * más esa línea: tres filas son lo que cabe también en el teléfono. Sin
+ * pastilla de chofer: la real solo aparece cuando el estado aporta algo.
  */
 export function FleetSkeleton() {
   return (
@@ -290,7 +295,7 @@ export function FleetSkeleton() {
           <div className="flex flex-col gap-2">
             <p className="text-base font-semibold text-tinta">Choferes</p>
             <div className={FLEET_LIST_CLASS}>
-              {[0, 1, 2].map((i) => (
+              {Array.from({ length: MAX_FILAS_MOVIL }, (_, i) => (
                 <div key={i} className={FLEET_DRIVER_ROW_CLASS}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="flex h-6 items-center">
@@ -301,7 +306,11 @@ export function FleetSkeleton() {
                 </div>
               ))}
             </div>
+            <TextLineBar className="w-3/4" />
           </div>
+          <span className={`${FLEET_MORE_LINK_CLASS} pointer-events-none`}>
+            <Skeleton className="h-4 w-36 rounded-pastilla" />
+          </span>
         </div>
       </div>
     </div>

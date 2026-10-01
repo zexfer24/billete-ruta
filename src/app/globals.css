@@ -206,9 +206,16 @@ html:has([data-acciones-fijas]) {
     outline-color: var(--peligro);
   }
 
-  /* Bloque de carga (spec 6.5): pista marca-100 al 60 % con un brillo que la recorre. */
+  /*
+   * Bloque de carga (spec 6.5): pista marca-100 al 60 % con un brillo que la
+   * recorre. El bloque aísla su propio contexto de apilamiento y el brillo va
+   * con `z-index: -1`: se pinta sobre la pista pero debajo de cualquier hijo,
+   * incluidos los nodos de texto sueltos. Así la etiqueta real de un botón
+   * quieto ("Entrar al panel") no queda medio lavada cada vez que pasa.
+   */
   .esqueleto {
     position: relative;
+    isolation: isolate;
     overflow: hidden;
     background-color: color-mix(in srgb, var(--marca-100) 60%, transparent);
     border-radius: var(--radio-control);
@@ -218,6 +225,7 @@ html:has([data-acciones-fijas]) {
     content: "";
     position: absolute;
     inset: 0;
+    z-index: -1;
     transform: translateX(-100%);
     background-image: linear-gradient(
       90deg,

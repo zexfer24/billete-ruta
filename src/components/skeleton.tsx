@@ -1,4 +1,11 @@
 import type { ReactNode } from "react";
+import {
+  BUTTON_SIZE_CLASSES,
+  PANEL_BUTTON_SIZE_CLASSES,
+  cx,
+  type ButtonSize,
+  type PanelButtonSize,
+} from "@/components/ui-classes";
 
 /**
  * Piezas de carga (spec 6.5). Componentes de servidor. Cada `loading.tsx`
@@ -47,6 +54,82 @@ export function SkeletonText({ lines = 3, className }: SkeletonTextProps) {
 export function SkeletonCircle({ className }: SkeletonProps) {
   return (
     <div aria-hidden="true" className={`esqueleto shrink-0 rounded-full ${className ?? "size-10"}`} />
+  );
+}
+
+/*
+ * Controles quietos. Un `loading.tsx` no debe pintar botones ni campos que se
+ * vean vivos: una persona que nunca usó un sistema los toca y no pasa nada.
+ * La convención es la de `_publico/form-skeleton.tsx` y del kit del admin
+ * (`admin/_shared/skeletons.tsx`): el control lleva el brillo de `.esqueleto`
+ * en vez de su borde o su relleno, con sus mismas medidas y radio, y el texto
+ * de un botón va real para leer qué hará. Son `span` con `aria-hidden`: no
+ * reciben foco, no cambian el cursor y no se seleccionan.
+ */
+
+type SkeletonButtonProps = {
+  children: ReactNode;
+  className?: string;
+  /**
+   * Botón sin relleno ni borde en la página real (`fantasma` o enlace de
+   * texto, como «Actualizar»): conserva su texto sin fondo, en tinta-suave en
+   * vez de morado, para que no cambie de forma al llegar la página.
+   */
+  ghost?: boolean;
+  /** Sobre la banda morada (el buscador de la portada): fondo y texto claros. */
+  onMarca?: boolean;
+} & (
+  | {
+      /** Botón del panel (`panelButtonClass`), radio de control. */
+      shape?: "control";
+      size?: PanelButtonSize;
+    }
+  | {
+      /** Botón del pasajero (`buttonClass`), forma de pastilla. */
+      shape: "pastilla";
+      size?: ButtonSize;
+    }
+);
+
+/** Botón quieto: mismas medidas que el real del mismo `shape` y `size`. */
+export function SkeletonButton({ children, className, ghost = false, onMarca = false, ...rest }: SkeletonButtonProps) {
+  const sizeClass =
+    rest.shape === "pastilla"
+      ? cx("rounded-pastilla", BUTTON_SIZE_CLASSES[rest.size ?? "md"])
+      : cx("rounded-control", PANEL_BUTTON_SIZE_CLASSES[rest.size ?? "md"]);
+  const surface = ghost
+    ? onMarca
+      ? "text-white/80"
+      : "text-tinta-suave"
+    : onMarca
+      ? "esqueleto bg-white/15 text-white"
+      : "esqueleto text-marca-700";
+  return (
+    <span
+      aria-hidden="true"
+      className={cx(
+        "inline-flex cursor-default select-none items-center justify-center gap-2 text-center font-semibold leading-tight",
+        sizeClass,
+        surface,
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Campo o lista desplegable quieto: el brillo de carga con la altura del
+ * campo real (44 px en el panel, 48 px en el pasajero) y sin el borde de
+ * control, para que nadie empiece a escribir en él.
+ */
+export function SkeletonField({ panel = true, className }: { panel?: boolean; className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cx("esqueleto block w-full rounded-control", panel ? "min-h-11" : "min-h-12", className)}
+    />
   );
 }
 

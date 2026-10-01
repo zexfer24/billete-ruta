@@ -7,6 +7,7 @@ import { IconSearch } from "@/components/icons";
 import { PANEL_LABEL_CLASS, PanelPageHeader, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { requirePanelUser } from "@/modules/auth";
 import { cleanSearch, pageFromParam } from "../_shared/format";
+import { SearchLayout } from "../_shared/search-layout";
 import { GetForm, GetSubmitButton } from "@/app/panel/_shared/get-form";
 import { SearchExamples } from "./search-examples";
 import { UsersResults, UsersResultsSkeleton } from "./users-results";
@@ -58,31 +59,40 @@ export default async function UsuariosAdminPage({
         <label htmlFor="q" className={PANEL_LABEL_CLASS}>
           Buscar por cédula, nombre o teléfono
         </label>
-        <div className="flex flex-wrap gap-2">
-          {/* `key`: el campo no es controlado; al cambiar la búsqueda de la URL
-              (por ejemplo con "Limpiar búsqueda") se vuelve a montar con su valor. */}
-          <input
-            key={query ?? ""}
-            type="search"
-            id="q"
-            name="q"
-            defaultValue={query ?? ""}
-            maxLength={80}
-            autoComplete="off"
-            aria-describedby="q-ayuda"
-            className={panelInputClass("min-w-0 flex-1 basis-60")}
-          />
-          <GetSubmitButton pendingLabel="Buscando…" className={panelButtonClass("primario", "md", "flex-1 sm:flex-none")}>
-            <IconSearch className="size-5 shrink-0" />
-            Buscar
-          </GetSubmitButton>
-          {query ? (
-            <Link href={USERS_PATH} className={panelButtonClass("fantasma", "md", "flex-1 sm:flex-none")}>
-              Limpiar búsqueda
-            </Link>
-          ) : null}
-        </div>
-        <SearchExamples id="q-ayuda" />
+        <SearchLayout
+          field={
+            // `key`: el campo no es controlado; al cambiar la búsqueda de la URL
+            // (por ejemplo con "Limpiar búsqueda") se vuelve a montar con su valor.
+            <input
+              key={query ?? ""}
+              type="search"
+              id="q"
+              name="q"
+              defaultValue={query ?? ""}
+              maxLength={80}
+              autoComplete="off"
+              aria-describedby="q-ayuda"
+              className={panelInputClass("min-w-0 flex-1")}
+            />
+          }
+          hint={<SearchExamples id="q-ayuda" />}
+          actions={
+            <>
+              <GetSubmitButton
+                pendingLabel="Buscando…"
+                className={panelButtonClass("primario", "md", "flex-1 sm:flex-none")}
+              >
+                <IconSearch className="size-5 shrink-0" />
+                Buscar
+              </GetSubmitButton>
+              {query ? (
+                <Link href={USERS_PATH} className={panelButtonClass("fantasma", "md", "flex-1 sm:flex-none")}>
+                  Limpiar búsqueda
+                </Link>
+              ) : null}
+            </>
+          }
+        />
       </GetForm>
 
       <Suspense key={`${query ?? ""}|${page}`} fallback={<UsersResultsSkeleton />}>

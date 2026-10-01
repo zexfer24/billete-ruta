@@ -9,9 +9,11 @@ import { AgencyBadge } from "./agency-badge";
 import { IconChevronRight, IconClock } from "./icons";
 import { Isotipo, LogoLockup } from "./logo";
 import {
+  capitalize,
   isInactiveReservation,
   passengerStatusTone,
   paymentPhrase,
+  relativeDayWord,
   reservationActionLabel,
   ticketDeadlineLabel,
   type PaymentDeadline,
@@ -57,6 +59,8 @@ interface TicketCardProps {
    * de un "Pagaste $ 0,00" que asusta a quien acaba de pagar.
    */
   reviewUsd?: string;
+  /** Instante de referencia para decir "hoy" o "mañana" y el plazo; por defecto, ahora. */
+  now?: Date;
   children?: ReactNode;
 }
 
@@ -113,9 +117,13 @@ export function TicketCard({
   href,
   hidePaymentPhrase = false,
   reviewUsd,
+  now = new Date(),
   children,
 }: TicketCardProps) {
   const inactive = isInactiveReservation(data.status);
+  // "Hoy" o "mañana" delante de la fecha, como dicen los avisos y el asistente:
+  // es lo que evita que una persona llegue tarde al bus.
+  const relativeDay = relativeDayWord(data.departsAt, now);
   const balance = formatUsdString(data.balanceUsd);
   // La flecha es visual; el lector de pantalla oye "Caracas a Valencia".
   const route = (
@@ -136,7 +144,7 @@ export function TicketCard({
     data.deadline && !inactive ? (
       <p className="tabular flex items-start gap-2 text-sm font-semibold text-alerta">
         <IconClock aria-hidden="true" className="mt-px size-5 shrink-0" />
-        <span>{ticketDeadlineLabel(data.status, data.deadline)}</span>
+        <span>{ticketDeadlineLabel(data.status, data.deadline, now)}</span>
       </p>
     ) : null;
 
@@ -167,7 +175,9 @@ export function TicketCard({
           </div>
           <p className="mt-5 break-words text-2xl font-bold leading-tight tracking-tight">{route}</p>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-            <p className="text-base first-letter:uppercase">{formatLongDay(data.departsAt)}</p>
+            <p className="text-base first-letter:uppercase">
+              {relativeDay ? `${capitalize(relativeDay)}, ${formatLongDay(data.departsAt)}` : formatLongDay(data.departsAt)}
+            </p>
             <p className="tabular text-3xl font-bold leading-none">
               <span className="sr-only">Sale a las </span>
               {formatHour(data.departsAt)}
@@ -204,7 +214,7 @@ export function TicketCard({
               />
               <div>
                 <p className="text-base font-semibold text-tinta">Muestra este código al abordar</p>
-                <p className="text-sm text-tinta-suave">
+                <p className="text-pretty text-sm text-tinta-suave">
                   Si el chofer no puede leerlo, sube el brillo de la pantalla.
                 </p>
               </div>
@@ -253,6 +263,7 @@ export function TicketCard({
         <div className="min-w-0 flex-1">
           <p className={cx("text-sm", headerMuted)}>Salida</p>
           <p className="tabular text-lg font-bold leading-tight first-letter:uppercase">
+            {relativeDay ? `${capitalize(relativeDay)} · ` : null}
             {formatDay(data.departsAt)} · {formatHour(data.departsAt)}
           </p>
         </div>

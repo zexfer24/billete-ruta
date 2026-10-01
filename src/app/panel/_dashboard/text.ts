@@ -32,6 +32,10 @@ export function joinPhrases(parts: ReadonlyArray<string | null | undefined | fal
  * atención": así la cifra no repite su número ("8 · 8 programadas") ni
  * contradice el aviso. En los otros periodos, las programadas de días pasados
  * no se pueden separar así, y se dice solo cuántas hay en cada estado.
+ *
+ * Si todas están en el mismo estado, la frase va sin número ("Todas por
+ * salir", "Está en ruta"): la cifra de encima ya lo dice, y "5 · 5 por salir"
+ * repetía el número.
  */
 export function departuresDetail(
   counts: { programadas: number; embarcando: number; enRuta: number; finalizadas: number },
@@ -39,18 +43,58 @@ export function departuresDetail(
 ): string {
   const atrasadas = overdueToday === null ? 0 : Math.min(Math.max(0, overdueToday), counts.programadas);
   const programadas = counts.programadas - atrasadas;
-  return (
-    joinPhrases([
-      atrasadas > 0 && countLabel(atrasadas, "atrasada", "atrasadas"),
-      programadas > 0 &&
-        (overdueToday === null
-          ? countLabel(programadas, "programada", "programadas")
-          : countLabel(programadas, "por salir", "por salir")),
-      counts.embarcando > 0 && `${counts.embarcando} embarcando`,
-      counts.enRuta > 0 && `${counts.enRuta} en ruta`,
-      counts.finalizadas > 0 && countLabel(counts.finalizadas, "finalizada", "finalizadas"),
-    ]) || "No hay salidas en este periodo"
-  );
+  // Cada estado: cuántas hay, la frase con número y la frase sin número
+  // (una sola salida o todas) para cuando es el único estado.
+  const estados: { count: number; withCount: string; one: string; all: string }[] = [
+    {
+      count: atrasadas,
+      withCount: countLabel(atrasadas, "atrasada", "atrasadas"),
+      one: "Está atrasada",
+      all: "Todas atrasadas",
+    },
+    overdueToday === null
+      ? {
+          count: programadas,
+          withCount: countLabel(programadas, "programada", "programadas"),
+          one: "Está programada",
+          all: "Todas programadas",
+        }
+      : {
+          count: programadas,
+          withCount: countLabel(programadas, "por salir", "por salir"),
+          one: "Por salir",
+          all: "Todas por salir",
+        },
+    { count: counts.embarcando, withCount: `${counts.embarcando} embarcando`, one: "Está embarcando", all: "Todas embarcando" },
+    { count: counts.enRuta, withCount: `${counts.enRuta} en ruta`, one: "Está en ruta", all: "Todas en ruta" },
+    {
+      count: counts.finalizadas,
+      withCount: countLabel(counts.finalizadas, "finalizada", "finalizadas"),
+      one: "Ya finalizó",
+      all: "Todas finalizadas",
+    },
+  ];
+  const presentes = estados.filter((estado) => estado.count > 0);
+  if (presentes.length === 0) return "No hay salidas en este periodo";
+  const [unico] = presentes;
+  if (presentes.length === 1 && unico) return unico.count === 1 ? unico.one : unico.all;
+  return joinPhrases(presentes.map((estado) => estado.withCount));
+}
+
+/**
+ * Línea de "Choferes y buses" para los choferes que no se listan porque su
+ * viaje de hoy ya está en "Salidas de hoy". Con otros choferes listados
+ * encima (`othersListed`), dice "más".
+ */
+export function todayTripsNote(count: number, othersListed: boolean): string {
+  if (othersListed) {
+    return count === 1
+      ? "1 chofer más tiene su viaje de hoy en «Salidas de hoy»."
+      : `${countLabel(count, "chofer", "choferes")} más tienen su viaje de hoy en «Salidas de hoy».`;
+  }
+  return count === 1
+    ? "El chofer tiene su viaje de hoy en «Salidas de hoy»."
+    : `Los ${countLabel(count, "chofer", "choferes")} tienen su viaje de hoy en «Salidas de hoy».`;
 }
 
 /**

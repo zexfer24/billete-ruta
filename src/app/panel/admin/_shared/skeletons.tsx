@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { IconChevronRight } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { PANEL_BUTTON_SIZE_CLASSES, cx, type PanelButtonSize } from "@/components/ui-classes";
+import { ADMIN_TD_CLASS, ADMIN_TH_CLASS } from "./lists";
 import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TABS_GRID_CLASS, ADMIN_TABS_ROW_CLASS } from "./tab-classes";
 
 /**
@@ -177,32 +178,88 @@ export function StatCardSkeleton({
 }
 
 /**
- * Formulario de filtros en una tarjeta: listas desplegables de 44 px con su
- * etiqueta real y, si la real lo lleva, el botón corto en la misma fila. El
- * filtro de agencia de movimientos se aplica al elegir y no lleva botón.
+ * Columna de la tabla en la silueta: su cabecera real y cómo es su celda, para
+ * que la tabla de carga sea un `<table>` de verdad y el navegador reparta los
+ * anchos como en la real (sin saltos al llegar los datos).
  */
-export function FilterCardSkeleton({ labels, button }: { labels: readonly string[]; button?: string }) {
-  return (
-    <div aria-hidden="true" className={`${CARD} flex flex-wrap items-end gap-3 p-4`}>
-      {labels.map((label) => (
-        <div key={label} className="flex min-w-0 flex-1 basis-40 flex-col gap-1.5 sm:flex-none">
-          <p className="text-sm font-semibold text-tinta">{label}</p>
-          <InputSkeleton className="sm:w-64" />
+export interface SkeletonColumn {
+  /** Cabecera real; vacía en la columna de la flecha o de la acción. */
+  label: string;
+  /**
+   * Ancho de cada línea de la celda (clases de Tailwind de ancho fijo, como
+   * `w-24`): la primera de 16 px y las demás de 14 px, tantas como la real.
+   */
+  lines?: readonly string[];
+  /** `chevron`: la flecha del enlace al detalle; `action`: un botón `sm` (Desactivar). */
+  kind?: "text" | "chevron" | "action";
+  /** Columna de cifras alineada a la derecha, como en la real. */
+  align?: "right";
+  /** Bloque de color de la agencia a la izquierda de las líneas. */
+  badge?: boolean;
+  /** Pastilla de estado bajo las líneas. */
+  pill?: boolean;
+}
+
+/** Une las cabeceras reales de una tabla con la descripción de sus celdas, en el mismo orden. */
+export function skeletonColumns(
+  labels: readonly string[],
+  cells: readonly Omit<SkeletonColumn, "label">[],
+): SkeletonColumn[] {
+  return labels.map((label, index) => ({ label, ...cells[index] }));
+}
+
+/** Celda de datos de la silueta, según su descripción. */
+function SkeletonCell({ column, tdClass }: { column: SkeletonColumn; tdClass: string }) {
+  if (column.kind === "chevron") {
+    return (
+      <td className={cx(tdClass, "px-2 text-right")}>
+        <span
+          className={cx(
+            "inline-flex items-center justify-center rounded-control text-marca-700",
+            PANEL_BUTTON_SIZE_CLASSES.md,
+          )}
+        >
+          <IconChevronRight className="size-5 shrink-0" />
+        </span>
+      </td>
+    );
+  }
+  if (column.kind === "action") {
+    return (
+      <td className={tdClass}>
+        <div className="flex justify-end">
+          <Skeleton className="h-10 w-28" />
         </div>
-      ))}
-      {button ? <ButtonSkeleton>{button}</ButtonSkeleton> : null}
-    </div>
+      </td>
+    );
+  }
+  const lines = column.lines ?? ["w-24"];
+  return (
+    <td className={cx(tdClass, column.align === "right" && "text-right")}>
+      <div className="flex items-start gap-3">
+        {column.badge ? <Skeleton className="h-8 w-12 shrink-0" /> : null}
+        <div className={cx("flex flex-col gap-1.5", column.align === "right" && "ml-auto items-end")}>
+          {lines.map((width, line) => (
+            <Skeleton key={line} className={cx(line === 0 ? "h-4" : "h-3.5", "rounded-pastilla", width)} />
+          ))}
+          {column.pill ? <Skeleton className="h-6 w-16 rounded-pastilla" /> : null}
+        </div>
+      </div>
+    </td>
   );
 }
 
 /**
- * Tabla del panel: en escritorio, las cabeceras reales (`columns`; un texto
- * vacío deja la columna sin título, como la de la acción) y filas en barras;
- * en móvil, tarjetas con título, datos y, si la real lo lleva, el botón o la
- * flecha de la tarjeta que es un enlace (`mobileChevron`).
+ * Tabla del panel: en escritorio, un `<table>` con las cabeceras reales y las
+ * celdas descritas por `columns` (`SkeletonColumn`), con las mismas clases de
+ * celda que la real (`thClass`, `tdClass`); en móvil, tarjetas con título,
+ * datos y, si la real lo lleva, el botón o la flecha de la tarjeta que es un
+ * enlace (`mobileChevron`).
  */
 export function TableSkeleton({
   columns,
+  thClass = ADMIN_TH_CLASS,
+  tdClass = ADMIN_TD_CLASS,
   rows = 6,
   mobileCards = 3,
   mobileDetails = 4,
@@ -212,12 +269,16 @@ export function TableSkeleton({
   mobileSubtitleLines = 1,
   mobileTextLines = 0,
   mobileChevron = false,
+  mobileMore = false,
 }: {
-  columns: readonly string[];
+  columns: readonly SkeletonColumn[];
+  /** Clases de cabecera y de celda de la tabla real (las del terminal por defecto). */
+  thClass?: string;
+  tdClass?: string;
   rows?: number;
   mobileCards?: number;
   mobileDetails?: number;
-  /** Etiquetas fijas de los datos de la tarjeta ("Registro"): se pintan reales en vez de en barra. */
+  /** Etiquetas fijas de los datos de la tarjeta: se pintan reales en vez de en barra. */
   mobileDetailLabels?: readonly string[];
   mobileStatus?: boolean;
   mobileAction?: boolean;
@@ -227,27 +288,32 @@ export function TableSkeleton({
   mobileTextLines?: number;
   /** Flecha a la derecha, centrada, como la tarjeta real que abre un detalle (movimientos). */
   mobileChevron?: boolean;
+  /** El "Ver N más" de `MobileCardList` bajo las tarjetas. */
+  mobileMore?: boolean;
 }) {
   return (
     <>
       <div aria-hidden="true" className={`${CARD} hidden overflow-hidden md:block`}>
-        <div className="flex gap-4 border-b border-borde px-4 py-3">
-          {columns.map((column, index) => (
-            <span key={index} className="flex-1 text-sm font-semibold text-tinta-suave">
-              {column}
-            </span>
-          ))}
-        </div>
-        {Array.from({ length: rows }, (_, row) => (
-          <div key={row} className="flex items-center gap-4 border-b border-borde px-4 py-4 last:border-0">
-            {columns.map((_, column) => (
-              <div key={column} className="flex flex-1 flex-col gap-1.5">
-                <Skeleton className={`h-4 rounded-pastilla ${column === 0 ? "w-4/5" : "w-3/5"}`} />
-                {column < 2 ? <Skeleton className="h-3.5 w-2/5 rounded-pastilla" /> : null}
-              </div>
+        <table className="w-full text-left">
+          <thead>
+            <tr className="border-b border-borde">
+              {columns.map((column, index) => (
+                <th key={index} className={cx(thClass, column.align === "right" && "text-right")}>
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: rows }, (_, row) => (
+              <tr key={row} className="border-b border-borde last:border-0">
+                {columns.map((column, index) => (
+                  <SkeletonCell key={index} column={column} tdClass={tdClass} />
+                ))}
+              </tr>
             ))}
-          </div>
-        ))}
+          </tbody>
+        </table>
       </div>
       <div aria-hidden="true" className="flex flex-col gap-3 md:hidden">
         {Array.from({ length: mobileCards }, (_, index) => {
@@ -300,6 +366,11 @@ export function TableSkeleton({
             </div>
           );
         })}
+        {mobileMore ? (
+          <div className="flex min-h-11 items-center">
+            <Skeleton className="h-5 w-36 rounded-pastilla" />
+          </div>
+        ) : null}
       </div>
     </>
   );

@@ -22,7 +22,7 @@ import { ProofNotFound, ProofReviewPanel } from "./proof-review";
 import { ReservationDetailPanel, ReservationNotFound } from "./reservation-detail";
 import { ProofQueueList, ReservationList } from "./passenger-list";
 import { ListSkeleton, PanelBodySkeleton } from "./skeletons";
-import { arrowRouteName } from "./trip-text";
+import { arrowRouteName } from "../_shared/route-text";
 // Formulario GET con espera (`next/form`), el mismo que el filtro de Reportes
 // (period-bar.tsx).
 import { GetForm, GetSubmitButton } from "../_shared/get-form";
@@ -32,6 +32,14 @@ import { ViewTabs } from "./view-tabs";
 import { LinkPendingIcon } from "./link-pending";
 
 export const metadata = { title: "Pasajeros y pagos" };
+
+/**
+ * Ancho de las dos acciones de la cabecera: en el teléfono bajan una debajo
+ * de la otra con el mismo ancho (si no, el relleno del botón fantasma metía
+ * la descarga hacia dentro y el bloque se veía descuadrado); desde `sm`, su
+ * ancho natural. `relative` es para el indicador de espera del cobro.
+ */
+const ACTION_WIDTH_CLASS = "relative w-full sm:w-auto";
 
 /** Traduce el código corto de `?ok=` a un texto. Un código desconocido no muestra nada. */
 const OK_LABELS: Record<string, string> = {
@@ -243,6 +251,10 @@ export default async function PasajerosPage({
   if (buscar) hiddenFiltros.buscar = buscar;
 
   const closeHref = pasajerosUrl({ vista, salida, buscar, pagina });
+  // Un comprobante abierto desde el detalle de una reserva (`?reserva=…&comprobante=…`)
+  // vuelve a esa reserva al cerrarlo, al aprobarlo o al rechazarlo.
+  const proofCloseHref = reservaId ? pasajerosUrl({ vista, salida, buscar, pagina, reserva: reservaId }) : closeHref;
+  const proofHidden = reservaId ? { ...hiddenFiltros, reservaId } : hiddenFiltros;
   const exportHref = panelFeedbackUrl("/panel/pasajeros/exportar", { vista, salida, buscar });
   const listKey = [vista, salida ?? "", buscar ?? "", pagina].join("|");
 
@@ -256,13 +268,13 @@ export default async function PasajerosPage({
             <Link
               href={pasajerosUrl({ vista, salida, buscar, pagina, registrar: "cobro" })}
               scroll={false}
-              className={panelButtonClass("secundario", "md", "relative")}
+              className={panelButtonClass("secundario", "md", ACTION_WIDTH_CLASS)}
             >
               <LinkPendingIcon icon={<IconCash className="size-5" />} />
               Registrar un cobro
             </Link>
             {/* Enlace normal (no `Link`): es una descarga y no debe precargarse. */}
-            <a href={exportHref} className={panelButtonClass("fantasma")}>
+            <a href={exportHref} className={panelButtonClass("fantasma", "md", ACTION_WIDTH_CLASS)}>
               <IconDownload className="size-5" />
               Descargar en Excel (CSV)
             </a>
@@ -311,6 +323,18 @@ export default async function PasajerosPage({
         <SidePanel title="Registrar un cobro en efectivo" closeHref={closeHref}>
           <CashPaymentForm mode="codigo" hidden={hiddenFiltros} error={error} />
         </SidePanel>
+      ) : comprobanteId ? (
+        <SidePanel title="Revisar comprobante" closeHref={proofCloseHref}>
+          <Suspense key={comprobanteId} fallback={<PanelBodySkeleton />}>
+            <ProofPanelContent
+              proofId={comprobanteId}
+              agencyId={agencyId}
+              hidden={proofHidden}
+              error={error}
+              closeHref={proofCloseHref}
+            />
+          </Suspense>
+        </SidePanel>
       ) : reservaId ? (
         <SidePanel title="Detalle de la reserva" closeHref={closeHref}>
           <Suspense key={reservaId} fallback={<PanelBodySkeleton />}>
@@ -320,18 +344,6 @@ export default async function PasajerosPage({
               hidden={hiddenFiltros}
               error={error}
               ok={ok}
-              closeHref={closeHref}
-            />
-          </Suspense>
-        </SidePanel>
-      ) : comprobanteId ? (
-        <SidePanel title="Revisar comprobante" closeHref={closeHref}>
-          <Suspense key={comprobanteId} fallback={<PanelBodySkeleton />}>
-            <ProofPanelContent
-              proofId={comprobanteId}
-              agencyId={agencyId}
-              hidden={hiddenFiltros}
-              error={error}
               closeHref={closeHref}
             />
           </Suspense>

@@ -5,6 +5,8 @@ import type { CounterHolderLookup } from "@/modules/counter";
 import { FieldError, FileField, Pill } from "@/components/ui";
 import { Alert } from "@/components/alert";
 import { IconAlertCircle, IconCheckCircle, IconUser } from "@/components/icons";
+// La misma ayuda de la cédula que ingresar, registro y el formulario de chofer.
+import { ID_NUMBER_HINT } from "@/app/registro/texts";
 import { CounterField } from "./counter-field";
 
 /** Errores de los datos de un titular nuevo, campo por campo (vacío si está bien). */
@@ -90,7 +92,7 @@ export function StepHolder({
       <CounterField
         id="taquilla-cedula"
         label="Cédula del titular"
-        hint="Con su letra y sin puntos, por ejemplo V12345678."
+        hint={ID_NUMBER_HINT}
         error={searchError ?? undefined}
         errorAfterSubmit
         autoComplete="off"

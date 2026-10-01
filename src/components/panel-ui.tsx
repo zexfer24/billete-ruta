@@ -78,8 +78,11 @@ export function PanelPageHeader({
 
 export type StatCardTone = "neutro" | "marca" | "exito" | "alerta" | "peligro";
 
-const STAT_CARD_TONE_BAR: Record<StatCardTone, string> = {
-  neutro: "bg-borde",
+/**
+ * Franja superior por tono. El tono neutro no lleva franja: una banda gris no
+ * comunica nada y, recortada por el radio, parece un borde mal pintado.
+ */
+const STAT_CARD_TONE_BAR: Record<Exclude<StatCardTone, "neutro">, string> = {
   marca: "bg-marca-600",
   exito: "bg-exito",
   alerta: "bg-alerta",
@@ -112,7 +115,9 @@ export function StatCard({
 }) {
   const contenido = (
     <>
-      <span className={`absolute inset-x-0 top-0 h-1 ${STAT_CARD_TONE_BAR[tone]}`} aria-hidden="true" />
+      {tone !== "neutro" ? (
+        <span className={`absolute inset-x-0 top-0 h-1 ${STAT_CARD_TONE_BAR[tone]}`} aria-hidden="true" />
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-semibold text-tinta-suave">{label}</p>
         {icon ? (

@@ -18,6 +18,7 @@ import { requirePanelUser } from "@/modules/auth";
 import { AdminTabs } from "../_shared/admin-tabs";
 import { MAX_SEARCH_LENGTH, cleanSearch, pageFromParam } from "../_shared/format";
 import { withQuery } from "../_shared/period";
+import { SearchLayout } from "../_shared/search-layout";
 import { MESSAGES_PATH, MESSAGE_STATUSES, messageSearchFromQuery, messageStatusFromParam } from "./messages";
 import { MessagesList, MessagesListSkeleton } from "./messages-list";
 import { MESSAGE_SEARCH_LABEL, MessageSearchExamples } from "./search-examples";
@@ -65,31 +66,40 @@ export default async function MensajesAdminPage({
       <label htmlFor="q" className={PANEL_LABEL_CLASS}>
         {MESSAGE_SEARCH_LABEL}
       </label>
-      <div className="flex flex-wrap gap-2">
-        {/* `key`: el campo no es controlado; al cambiar la búsqueda de la URL
-            (por ejemplo con "Limpiar búsqueda") se vuelve a montar con su valor. */}
-        <input
-          key={query ?? ""}
-          type="search"
-          id="q"
-          name="q"
-          defaultValue={query ?? ""}
-          maxLength={MAX_SEARCH_LENGTH}
-          autoComplete="off"
-          aria-describedby="q-ayuda"
-          className={panelInputClass("min-w-0 flex-1 basis-60")}
-        />
-        <GetSubmitButton pendingLabel="Buscando…" className={panelButtonClass("primario", "md", "flex-1 sm:flex-none")}>
-          <IconSearch className="size-5 shrink-0" />
-          Buscar
-        </GetSubmitButton>
-        {query ? (
-          <Link href={MESSAGES_PATH} className={panelButtonClass("fantasma", "md", "flex-1 sm:flex-none")}>
-            Limpiar búsqueda
-          </Link>
-        ) : null}
-      </div>
-      <MessageSearchExamples id="q-ayuda" />
+      <SearchLayout
+        field={
+          // `key`: el campo no es controlado; al cambiar la búsqueda de la URL
+          // (por ejemplo con "Limpiar búsqueda") se vuelve a montar con su valor.
+          <input
+            key={query ?? ""}
+            type="search"
+            id="q"
+            name="q"
+            defaultValue={query ?? ""}
+            maxLength={MAX_SEARCH_LENGTH}
+            autoComplete="off"
+            aria-describedby="q-ayuda"
+            className={panelInputClass("min-w-0 flex-1")}
+          />
+        }
+        hint={<MessageSearchExamples id="q-ayuda" />}
+        actions={
+          <>
+            <GetSubmitButton
+              pendingLabel="Buscando…"
+              className={panelButtonClass("primario", "md", "flex-1 sm:flex-none")}
+            >
+              <IconSearch className="size-5 shrink-0" />
+              Buscar
+            </GetSubmitButton>
+            {query ? (
+              <Link href={MESSAGES_PATH} className={panelButtonClass("fantasma", "md", "flex-1 sm:flex-none")}>
+                Limpiar búsqueda
+              </Link>
+            ) : null}
+          </>
+        }
+      />
     </GetForm>
   );
 

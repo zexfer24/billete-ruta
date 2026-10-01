@@ -33,7 +33,11 @@ function montoCsv(value: Prisma.Decimal): string {
   return value.toFixed(2).replace(".", ",");
 }
 
-/** Recaudación por ruta en el rango. */
+/**
+ * Recaudación por ruta en el rango. La columna del monto usa la misma palabra
+ * que la pantalla ("Recaudado"): esta descarga es nueva en esta rama, así que
+ * no hay hojas ni macros que lean el nombre anterior.
+ */
 export function revenueCsv(filas: readonly RouteRevenueRow[]): string {
   return toCsv([
     ["Ruta", "Origen", "Destino", "Recaudado (USD)", "Pagos"],

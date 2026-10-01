@@ -17,9 +17,12 @@ export const TRIPS_TODAY_SECTION: SectionTexts = {
 
 export const FLEET_SECTION: SectionTexts = {
   title: "Choferes y buses",
-  description: "Quién está en ruta, quién embarca y quién tiene viaje asignado.",
+  description: "Quién está en ruta o embarcando, y quién no tiene viaje hoy.",
   actionLabel: "Ver la flota",
 };
+
+/** Ancla de "Tickets nuevos": la cifra "Tickets" del resumen enlaza a esa sección. */
+export const TICKETS_SECTION_ID = "tickets-nuevos";
 
 /** "Tickets nuevos" depende del periodo: "Los últimos tickets emitidos hoy". */
 export function ticketsSection(periodPhrase: string): SectionTexts {

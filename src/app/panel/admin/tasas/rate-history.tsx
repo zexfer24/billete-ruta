@@ -1,7 +1,6 @@
 import { StatusBadge } from "@/components/panel-ui";
-import { formatCaracasDateTime24 } from "@/lib/time";
 import { formatCount } from "../_shared/format";
-import { DISCLOSURE_SUMMARY_CLASS, DisclosureChevron } from "../_shared/lists";
+import { DISCLOSURE_SUMMARY_CLASS, DatePhrase, DisclosureChevron } from "../_shared/lists";
 
 export interface RateHistoryEntry {
   id: string;
@@ -20,10 +19,15 @@ function HistoryItem({ entry, until, isCurrent }: { entry: RateHistoryEntry; unt
         <span className="tabular text-[15px] font-semibold text-tinta">{entry.amount}</span>
         {isCurrent ? <StatusBadge label="Vigente" tone="exito" /> : null}
       </span>
+      {/* La misma frase de fecha y hora de todo el terminal, cada extremo entero. */}
       <span className="tabular text-sm text-tinta-suave">
-        {until
-          ? `Del ${formatCaracasDateTime24(entry.effectiveFrom)} al ${formatCaracasDateTime24(until)}`
-          : `Desde el ${formatCaracasDateTime24(entry.effectiveFrom)}`}
+        <DatePhrase lead="Desde" date={entry.effectiveFrom} />
+        {until ? (
+          <>
+            {" "}
+            <DatePhrase lead="hasta" date={until} />
+          </>
+        ) : null}
       </span>
     </li>
   );

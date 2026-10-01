@@ -13,7 +13,7 @@ import { Alert } from "@/components/alert";
 import { ClearFeedbackParams } from "@/components/clear-feedback-params";
 import { buttonClass, Card, Pill, SectionTitle, type PillTone } from "@/components/ui";
 import { TicketCard, type TicketCardData } from "@/components/ticket-card";
-import { IconArrowLeft, IconDownload, IconMapPin, IconUser } from "@/components/icons";
+import { IconArrowLeft, IconCash, IconChevronRight, IconDownload, IconMapPin, IconUser } from "@/components/icons";
 import {
   capitalize,
   cashCounterDeadline,
@@ -230,6 +230,7 @@ export default async function DetalleReservaPage({
         qrDataUrl={qrDataUrl}
         hidePaymentPhrase={ocultarFraseDePago}
         reviewUsd={enRevisionUsd.toString()}
+        now={now}
       >
         {!inactiva && !yaSalio ? (
           <div className="flex items-start gap-3 rounded-control border border-marca-200 bg-marca-50 px-4 py-3">
@@ -316,9 +317,32 @@ export default async function DetalleReservaPage({
       <section aria-labelledby="tus-pagos" className="flex flex-col gap-3">
         <SectionTitle id="tus-pagos">Tus pagos</SectionTitle>
         {movimientos.length === 0 ? (
-          <p className="rounded-tarjeta border border-dashed border-borde bg-superficie p-4 text-tinta-suave">
-            Todavía no has registrado pagos en esta reserva.
-          </p>
+          // Estado vacío del pasajero (spec, principio 7): icono, qué significa y la salida.
+          // La acción de pagar está arriba, en "Paga lo que falta": el enlace sube a ella.
+          <div className="flex items-start gap-3 rounded-tarjeta border border-dashed border-borde bg-superficie p-4">
+            <span
+              aria-hidden="true"
+              className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600"
+            >
+              <IconCash className="size-5" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <p className="font-semibold text-tinta">
+                {inactiva ? "No registraste pagos en esta reserva" : "Todavía no hay pagos en esta reserva"}
+              </p>
+              {puedeEnviarComprobante ? (
+                <>
+                  <p className="text-pretty text-sm leading-relaxed text-tinta-suave">
+                    Cuando pagues, tu pago aparecerá aquí con su estado.
+                  </p>
+                  <a href="#accion-pago" className="foco -ml-1 inline-flex min-h-11 items-center gap-1 self-start rounded-control px-1 font-semibold text-marca-700 hover:underline">
+                    Ver cómo pagar
+                    <IconChevronRight aria-hidden="true" className="size-4 shrink-0" />
+                  </a>
+                </>
+              ) : null}
+            </div>
+          </div>
         ) : (
           <ul className="flex flex-col gap-2">
             {movimientos.map((mov) => (

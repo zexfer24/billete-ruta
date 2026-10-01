@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { listDrivers } from "@/modules/agencies";
 import { agencyFleetStatus } from "@/modules/reports";
 import { registerDeparture, startBoarding } from "@/modules/trips";
+import { runSweeps } from "@/worker/sweeps";
 import {
   createAgencyFixture,
   createDepartureFixture,
@@ -207,10 +208,56 @@ describe("agencyFleetStatus", () => {
     expect(vehiculo(enRutaVieja.vehiculo.id)?.state).toBe("EN_RUTA");
 
     // Dentro de las 12 horas la consulta sí la trae: el corte no es más
-    // estrecho en la base de datos que en la función pura.
-    expect(chofer(cerradaReciente.chofer.id)?.state).toBe("EMBARCANDO");
+    // estrecho en la base de datos que en la función pura. Nadie abrió su
+    // embarque (no tiene TripLog), así que está atrasada, no embarcando.
+    expect(chofer(cerradaReciente.chofer.id)?.state).toBe("ATRASADO");
     expect(chofer(cerradaReciente.chofer.id)?.current?.id).toBe(cerradaReciente.salida.id);
-    expect(vehiculo(cerradaReciente.vehiculo.id)?.state).toBe("EMBARCANDO");
+    expect(vehiculo(cerradaReciente.vehiculo.id)?.state).toBe("ATRASADO");
+  });
+
+  it("una salida vencida que cerró el worker sin embarque sigue atrasada; la que embarcó un operador, embarcando", async () => {
+    const agencia = await createAgencyFixture();
+    const ruta = await createRouteFixture(agencia.id);
+    const operador = await createPanelUserFixture({ agencyId: agencia.id });
+    const now = new Date();
+    const haceUnaHora = new Date(now.getTime() - 3_600_000);
+
+    async function unidadVencida() {
+      const chofer = await createDriverFixture(agencia.id);
+      const vehiculo = await createVehicleFixture(agencia.id);
+      const salida = await prisma.departure.create({
+        data: { routeId: ruta.id, vehicleId: vehiculo.id, driverId: chofer.id, departsAt: haceUnaHora, capacity: 20 },
+      });
+      return { chofer, vehiculo, salida };
+    }
+
+    const sinEmbarque = await unidadVencida();
+    const embarcando = await unidadVencida();
+    await startBoarding({ departureId: embarcando.salida.id, panelUserId: operador.id, agencyId: agencia.id });
+
+    // El barrido del worker cierra el manifiesto de la vencida sin tocar su embarque.
+    await runSweeps(now);
+    const cerrada = await prisma.departure.findUniqueOrThrow({
+      where: { id: sinEmbarque.salida.id },
+      include: { tripLog: true },
+    });
+    expect(cerrada.status).toBe("MANIFIESTO_CERRADO");
+    expect(cerrada.tripLog?.boardingStartedAt ?? null).toBeNull();
+
+    const estado = await agencyFleetStatus(agencia.id, now);
+    const chofer = (id: string) => estado.drivers.find((d) => d.id === id);
+    const vehiculo = (id: string) => estado.vehicles.find((v) => v.id === id);
+
+    expect(vehiculo(sinEmbarque.vehiculo.id)?.state).toBe("ATRASADO");
+    expect(vehiculo(sinEmbarque.vehiculo.id)?.current?.overdue).toBe(true);
+    expect(vehiculo(sinEmbarque.vehiculo.id)?.current?.boardingStartedAt).toBeNull();
+    expect(chofer(sinEmbarque.chofer.id)?.state).toBe("ATRASADO");
+    expect(estado.vehicleSummary.ATRASADO).toBe(1);
+
+    expect(vehiculo(embarcando.vehiculo.id)?.state).toBe("EMBARCANDO");
+    expect(vehiculo(embarcando.vehiculo.id)?.current?.boardingStartedAt).toBeInstanceOf(Date);
+    expect(chofer(embarcando.chofer.id)?.state).toBe("EMBARCANDO");
+    expect(estado.vehicleSummary.EMBARCANDO).toBe(1);
   });
 
   it("no incluye choferes ni vehículos de otra agencia", async () => {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { balanceUsd, getCurrentDepartureTax, listBookableDepartures } from "@/modules/catalog";
 import { requirePassenger } from "@/modules/auth";
@@ -6,20 +7,23 @@ import { listNoticesForAccount } from "@/modules/notices";
 import { prisma } from "@/lib/prisma";
 import { formatMoney, formatUsdString } from "@/lib/decimal";
 import { passengerStatusLabel } from "@/lib/labels";
-import { buttonClass, Card, SectionTitle } from "@/components/ui";
+import { buttonClass, Card, Pill, SectionTitle } from "@/components/ui";
 import { NoticeCard } from "@/components/notice-card";
 import { TicketCard, type TicketCardData } from "@/components/ticket-card";
 import { DepartureBoard, DeparturePriceNote } from "@/components/departure-board";
 import type { DepartureRowData } from "@/components/departure-row";
 import { Isotipo } from "@/components/logo";
-import { IconCamera, IconChevronRight, IconInfo, IconMapPin } from "@/components/icons";
+import { IconCamera, IconChevronRight, IconClock, IconInfo, IconMapPin } from "@/components/icons";
 import {
   heroDepartsSoon,
   heroDepartureTitle,
   homeNotices,
+  otherTripDeadlineLabel,
+  passengerStatusTone,
   pickHeroReservation,
   reservationActionLabel,
   ticketDeadline,
+  whenPhrase,
 } from "@/components/passenger-copy";
 
 export const metadata: Metadata = {
@@ -43,11 +47,6 @@ const SEIS_HORAS_MS = 6 * 60 * 60 * 1000;
  */
 const LIMITE_PROXIMAS = 12;
 
-/** "Revisando tu pago" → "revisando tu pago", para ir detrás de dos puntos. */
-function lowerFirst(text: string): string {
-  return text.length > 0 ? text[0]!.toLowerCase() + text.slice(1) : text;
-}
-
 /** Enlace de texto con área táctil de 44 px, para "Ver todos". */
 const ENLACE_SECCION =
   "foco inline-flex min-h-11 items-center gap-1 rounded-control px-1 font-semibold text-marca-700 hover:underline";
@@ -64,7 +63,8 @@ const ENLACE_SECCION =
  * mismo que el ticket muestra, así el título "Paga para no perder tu puesto"
  * siempre lleva la hora debajo); si nada apura y el viaje más cercano no pide
  * nada, sube una pagada en parte que sale dentro de 24 horas. El viaje más
- * cercano queda como enlace debajo.
+ * cercano queda debajo, en "Tus otros viajes", con cuándo sale, su estado, su
+ * plazo si lo tiene y su acción: esa tarjeta reemplaza a sus avisos.
  */
 export default async function MiInicioPage() {
   const pasajero = await requirePassenger();
@@ -155,8 +155,9 @@ export default async function MiInicioPage() {
           : "Tu próximo viaje"
     : null;
 
+  // Pagar se dice con la ruta: el botón está debajo del ticket, pero es la acción de toda la pantalla.
   const accionPrincipal = ticketData
-    ? eleccion?.promoted && ticketData.status === "PENDIENTE_PAGO"
+    ? ticketData.status === "PENDIENTE_PAGO"
       ? `Pagar mi viaje a ${ticketData.destination}`
       : reservationActionLabel(ticketData.status, formatUsdString(ticketData.balanceUsd))
     : null;
@@ -183,7 +184,7 @@ export default async function MiInicioPage() {
             <h1 id="accion-principal" className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">
               {tituloHeroe}
             </h1>
-            <TicketCard data={ticketData} size="compacta" />
+            <TicketCard data={ticketData} size="compacta" now={now} />
             {salePronto && proximaReserva ? (
               <div className="flex flex-col gap-2 text-tinta">
                 <p className="flex items-start gap-2">
@@ -209,16 +210,8 @@ export default async function MiInicioPage() {
             >
               {accionPrincipal}
             </Link>
-            {viajeMasCercano ? (
-              <Link href={`/mi/reservas/${viajeMasCercano.code}`} className={`${ENLACE_SECCION} self-center text-center`}>
-                <span>
-                  Tu viaje a {viajeMasCercano.departure.route.destination}:{" "}
-                  {lowerFirst(passengerStatusLabel(viajeMasCercano.status))}
-                </span>
-                <IconChevronRight aria-hidden="true" className="size-4 shrink-0" />
-              </Link>
-            ) : null}
-            {totalProximas > (viajeMasCercano ? 2 : 1) ? (
+            {/* Con el viaje más cercano en su propia sección, "Ver todos" va en el título de esa sección. */}
+            {!viajeMasCercano && totalProximas > 1 ? (
               <Link href="/mi/reservas" className={`${ENLACE_SECCION} self-center`}>
                 {totalViajes > 1
                   ? `Tienes ${totalViajes} viajes próximos · Ver todos`
@@ -273,6 +266,25 @@ export default async function MiInicioPage() {
           </>
         )}
       </section>
+
+      {viajeMasCercano ? (
+        <section aria-labelledby="otros-viajes" className="flex flex-col gap-3">
+          <SectionTitle
+            id="otros-viajes"
+            action={
+              totalProximas > 2 ? (
+                <Link href="/mi/reservas" className={ENLACE_SECCION}>
+                  {totalViajes > 1 ? `Ver los ${totalViajes} viajes` : `Ver las ${totalProximas} reservas`}
+                  <IconChevronRight aria-hidden="true" className="size-4" />
+                </Link>
+              ) : undefined
+            }
+          >
+            {totalProximas > 2 ? "Tus otros viajes" : "Tu otro viaje"}
+          </SectionTitle>
+          <OtroViajeCard reserva={viajeMasCercano} now={now} />
+        </section>
+      ) : null}
 
       {avisoDestacado ? (
         <section aria-labelledby="avisos-inicio" className="flex flex-col gap-3">
@@ -334,5 +346,58 @@ export default async function MiInicioPage() {
         </section>
       )}
     </div>
+  );
+}
+
+interface OtroViajeProps {
+  reserva: {
+    code: string;
+    status: string;
+    totalUsd: Prisma.Decimal;
+    paidUsd: Prisma.Decimal;
+    expiresAt: Date | null;
+    reconfirmedAt: Date | null;
+    departure: { departsAt: Date; route: { origin: string; destination: string } };
+  };
+  now: Date;
+}
+
+/**
+ * El viaje más cercano cuando otra reserva subió en grande: cuándo sale, su
+ * plazo de pago si lo tiene, su estado y su acción, con los mismos textos que
+ * su ticket en Mis viajes. Como reemplaza a los avisos de esa reserva en el
+ * inicio (`homeNotices`), nunca calla la hora límite ni lo que falta pagar.
+ */
+function OtroViajeCard({ reserva, now }: OtroViajeProps) {
+  const { departsAt, route } = reserva.departure;
+  const plazo = otherTripDeadlineLabel(
+    { status: reserva.status, departsAt, expiresAt: reserva.expiresAt, reconfirmedAt: reserva.reconfirmedAt },
+    now,
+  );
+  const saldo = formatUsdString(balanceUsd(reserva.totalUsd, reserva.paidUsd).toString());
+
+  return (
+    <Link
+      href={`/mi/reservas/${reserva.code}`}
+      className="foco block rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-shadow duration-150 ease-out hover:shadow-2 motion-reduce:transition-none"
+    >
+      <p className="text-pretty font-semibold leading-snug text-tinta">
+        Tu viaje a {route.destination} sale <span className="tabular">{whenPhrase(departsAt, now)}</span>
+        <span className="sr-only">, desde {route.origin}</span>
+      </p>
+      {plazo ? (
+        <p className="tabular mt-2 flex items-start gap-2 text-sm font-semibold text-alerta">
+          <IconClock aria-hidden="true" className="mt-px size-5 shrink-0" />
+          <span>{plazo}</span>
+        </p>
+      ) : null}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-borde pt-3">
+        <Pill tone={passengerStatusTone(reserva.status)}>{passengerStatusLabel(reserva.status)}</Pill>
+        <span className="inline-flex items-center gap-1 font-semibold text-marca-700">
+          {reservationActionLabel(reserva.status, saldo)}
+          <IconChevronRight aria-hidden="true" className="size-5 shrink-0" />
+        </span>
+      </div>
+    </Link>
   );
 }

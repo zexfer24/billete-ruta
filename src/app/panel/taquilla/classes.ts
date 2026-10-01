@@ -19,11 +19,14 @@ export const DAY_CHIP_BASE_CLASS =
 export const DAY_CHIP_IDLE_CLASS = "border-borde-control bg-superficie text-tinta";
 
 /**
- * Ficha de día elegida: como la tarjeta de salida elegida y el selector de
- * periodo del tablero (fondo lila y borde morado), no un relleno morado que
- * compita con «Continuar», la única acción principal (spec 1.1).
+ * Ficha de día elegida: fondo lila y borde morado, no un relleno morado que
+ * compita con «Continuar», la única acción principal (spec 1.1). Además lleva
+ * una barra bajo el texto, como la pestaña activa del panel: una señal de
+ * forma que no depende solo del color (WCAG 1.4.1). Una marca de verificación
+ * no cabía en las cuatro fichas por fila del teléfono.
  */
-export const DAY_CHIP_SELECTED_CLASS = "border-marca-600 bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-600";
+export const DAY_CHIP_SELECTED_CLASS =
+  "border-marca-600 bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-600 after:pointer-events-none after:absolute after:inset-x-3 after:bottom-1 after:h-[3px] after:rounded-pastilla after:bg-marca-600";
 
 /**
  * Margen de desplazamiento bajo cada tarjeta de salida, igual o mayor que el

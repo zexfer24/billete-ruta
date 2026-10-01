@@ -1,6 +1,7 @@
 import type { MessageStatus } from "@prisma/client";
 import { isValidIdNumber, isValidPhone, normalizePhone } from "@/lib/identity";
 import { MESSAGE_STATUS_LABELS } from "@/lib/labels";
+import { formatDuration } from "@/lib/time";
 
 /**
  * Reglas puras de la bandeja de mensajes del administrador: estados que se
@@ -104,4 +105,28 @@ export function messageSearchFromQuery(query: string): MessageSearch | null {
     return idNumbers.length > 0 || phones.length > 0 ? { phones, idNumbers } : null;
   }
   return isValidIdNumber(compact) ? { phones: [], idNumbers: [compact] } : null;
+}
+
+/**
+ * Atraso desde el que la bandeja dice que un mensaje salió tarde: 15 minutos,
+ * muchas veces el intervalo del barrido de envío (un minuto). Por debajo es la
+ * espera normal del worker y decirlo en cada fila era ruido.
+ */
+export const SEND_DELAY_NOTICE_MS = 15 * 60_000;
+
+/**
+ * Si un mensaje ya enviado salió con un atraso que vale la pena mostrar (el
+ * worker estuvo detenido, por ejemplo). No detecta reintentos: en cada uno el
+ * worker reescribe `scheduledFor` con la hora del reintento; esos ya se ven
+ * como "N intentos de envío".
+ */
+export function sentLate(scheduledFor: Date, sentAt: Date | null): boolean {
+  return sentAt !== null && sentAt.getTime() - scheduledFor.getTime() >= SEND_DELAY_NOTICE_MS;
+}
+
+/** "Salió con 4 h 10 min de retraso", o `null` si salió a tiempo o todavía no sale. */
+export function sendDelayText(scheduledFor: Date, sentAt: Date | null): string | null {
+  if (!sentAt || !sentLate(scheduledFor, sentAt)) return null;
+  const minutes = Math.floor((sentAt.getTime() - scheduledFor.getTime()) / 60_000);
+  return `Salió con ${formatDuration(minutes)} de retraso`;
 }

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconLock } from "@/components/icons";
 import { panelButtonClass } from "@/components/panel-ui";
-import { formatCount } from "./format";
+import { dateTimePhrase, formatCount } from "./format";
 
 /**
  * Piezas de lista compartidas por las pantallas del administrador: la lista
@@ -48,7 +48,7 @@ export function MobileCardList({
   items: ReactNode[];
   initial?: number;
   label: string;
-  /** Singular y plural de lo que se lista, para "Ver 1 recorrido más" o "Ver 12 recorridos más". */
+  /** Singular y plural de lo que se lista, para "Ver 1 viaje más" o "Ver 12 viajes más". */
   moreNoun: [string, string];
 }) {
   const cut = items.length > initial + 1 ? initial : items.length;
@@ -72,6 +72,39 @@ export function MobileCardList({
         </details>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Datos en una línea separados por " · " ("Salió 10:25 · Llegó 22:18"). El
+ * punto va pegado al dato que lo sigue (espacio de no separación): si la línea
+ * no cabe, se parte antes del punto, nunca con el punto colgando al final. Un
+ * dato de texto va entero (`whitespace-nowrap`); uno largo se pasa como nodo,
+ * con su parte indivisible marcada (`DatePhrase`), para que pueda partirse
+ * antes de ella en una columna angosta.
+ */
+export function DotParts({ parts }: { parts: readonly ReactNode[] }) {
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span key={index}>
+          {index > 0 ? " ·\u00A0" : null}
+          {typeof part === "string" ? <span className="whitespace-nowrap">{part}</span> : part}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * "Enviado el 01/10/2026 a las 02:32": la entrada en texto normal y la fecha
+ * con su hora (`dateTimePhrase`) en una sola pieza que nunca se parte.
+ */
+export function DatePhrase({ lead, date }: { lead: string; date: Date }) {
+  return (
+    <>
+      {lead} <span className="whitespace-nowrap">{dateTimePhrase(date)}</span>
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import type { DepartureStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { unitStateOf } from "@/modules/reports/fleet-status";
+import { isOverdueDeparture, unitStateOf } from "@/modules/reports/fleet-status";
 import type { UnitDeparture } from "@/modules/reports/fleet-status";
 
 const HORA = 3_600_000;
@@ -266,5 +266,120 @@ describe("unitStateOf", () => {
       expect(resultado.state).toBe("EN_RUTA");
       expect(resultado.current?.id).toBe("s1");
     });
+  });
+
+  describe("manifiesto cerrado por el worker sin embarque iniciado", () => {
+    const haceUnaHora = new Date(now.getTime() - HORA);
+
+    it("una MANIFIESTO_CERRADO vencida sin boardingStartedAt está atrasada, no embarcando", () => {
+      const cerradaPorWorker = salida({
+        id: "worker",
+        status: "MANIFIESTO_CERRADO",
+        departsAt: haceUnaHora,
+        boardingStartedAt: null,
+      });
+
+      const resultado = unitStateOf({ active: true, departures: [cerradaPorWorker] }, now);
+
+      expect(resultado.state).toBe("ATRASADO");
+      expect(resultado.current?.id).toBe("worker");
+      expect(resultado.current?.overdue).toBe(true);
+    });
+
+    it("también deja atrasada a la unidad inactiva", () => {
+      const cerradaPorWorker = salida({ id: "worker", status: "MANIFIESTO_CERRADO", departsAt: haceUnaHora });
+
+      expect(unitStateOf({ active: false, departures: [cerradaPorWorker] }, now).state).toBe("ATRASADO");
+    });
+
+    it("con el embarque iniciado sigue embarcando aunque vaya tarde", () => {
+      const embarcando = salida({
+        id: "embarcando",
+        status: "MANIFIESTO_CERRADO",
+        departsAt: haceUnaHora,
+        boardingStartedAt: new Date(now.getTime() - 2 * HORA),
+      });
+
+      const resultado = unitStateOf({ active: true, departures: [embarcando] }, now);
+
+      expect(resultado.state).toBe("EMBARCANDO");
+      expect(resultado.current?.overdue).toBeUndefined();
+    });
+
+    it("un embarque abierto gana a una salida atrasada, cerrada por el worker o todavía programada", () => {
+      const embarcando = salida({
+        id: "embarcando",
+        status: "MANIFIESTO_CERRADO",
+        departsAt: haceUnaHora,
+        boardingStartedAt: haceUnaHora,
+      });
+      const cerradaPorWorker = salida({
+        id: "worker",
+        status: "MANIFIESTO_CERRADO",
+        departsAt: new Date(now.getTime() - 3 * HORA),
+      });
+      const programada = salida({ id: "programada", status: "PROGRAMADA", departsAt: new Date(now.getTime() - 4 * HORA) });
+
+      const resultado = unitStateOf(
+        { active: true, departures: [cerradaPorWorker, programada, embarcando] },
+        now,
+      );
+
+      expect(resultado.state).toBe("EMBARCANDO");
+      expect(resultado.current?.id).toBe("embarcando");
+    });
+
+    it("entre una cerrada por el worker y una programada vencidas toma la más antigua", () => {
+      const cerradaPorWorker = salida({
+        id: "worker",
+        status: "MANIFIESTO_CERRADO",
+        departsAt: new Date(now.getTime() - 3 * HORA),
+      });
+      const programada = salida({ id: "programada", status: "PROGRAMADA", departsAt: haceUnaHora });
+
+      const resultado = unitStateOf({ active: true, departures: [programada, cerradaPorWorker] }, now);
+
+      expect(resultado.state).toBe("ATRASADO");
+      expect(resultado.current?.id).toBe("worker");
+    });
+
+    it("más de 12 horas atrás ya no decide el estado", () => {
+      const vieja = salida({
+        id: "vieja",
+        status: "MANIFIESTO_CERRADO",
+        departsAt: new Date(now.getTime() - 13 * HORA),
+      });
+
+      const resultado = unitStateOf({ active: true, departures: [vieja] }, now);
+
+      expect(resultado.state).toBe("DISPONIBLE");
+      expect(resultado.current).toBeNull();
+    });
+  });
+});
+
+describe("isOverdueDeparture", () => {
+  const now = new Date("2026-09-13T12:00:00Z");
+  const antes = new Date(now.getTime() - HORA);
+  const despues = new Date(now.getTime() + HORA);
+
+  it("PROGRAMADA vencida sí, futura no", () => {
+    expect(isOverdueDeparture({ status: "PROGRAMADA", departsAt: antes }, now)).toBe(true);
+    expect(isOverdueDeparture({ status: "PROGRAMADA", departsAt: despues }, now)).toBe(false);
+  });
+
+  it("MANIFIESTO_CERRADO vencida solo si nadie inició el embarque", () => {
+    expect(isOverdueDeparture({ status: "MANIFIESTO_CERRADO", departsAt: antes, boardingStartedAt: null }, now)).toBe(true);
+    expect(isOverdueDeparture({ status: "MANIFIESTO_CERRADO", departsAt: antes }, now)).toBe(true);
+    expect(
+      isOverdueDeparture({ status: "MANIFIESTO_CERRADO", departsAt: antes, boardingStartedAt: antes }, now),
+    ).toBe(false);
+    expect(isOverdueDeparture({ status: "MANIFIESTO_CERRADO", departsAt: despues }, now)).toBe(false);
+  });
+
+  it("EN_RUTA, FINALIZADA y CANCELADA nunca están atrasadas", () => {
+    for (const status of ["EN_RUTA", "FINALIZADA", "CANCELADA"] as const) {
+      expect(isOverdueDeparture({ status, departsAt: antes }, now)).toBe(false);
+    }
   });
 });

@@ -32,7 +32,11 @@ export const DEPARTURE_SEARCH_ID = "taquilla-buscar-salida";
 /** Por debajo de estos puestos libres, la pastilla avisa en ámbar. */
 const FEW_SEATS = 5;
 
-/** Tarjeta de una salida: radio, hora grande, ruta, puestos y precio final por persona. */
+/**
+ * Tarjeta de una salida: radio, hora grande, ruta, puestos y precio final por
+ * persona. La tasa del terminal no va en cada tarjeta: es la misma para todas
+ * y se dice una sola vez encima de la lista.
+ */
 function DepartureCard({
   departure: d,
   selected,
@@ -81,13 +85,6 @@ function DepartureCard({
             </span>
           )}
         </span>
-        {/* El total es lo que se le dice al pasajero en voz alta; la tasa va
-            aparte para que nadie tenga que sumar de cabeza. */}
-        {d.price ? (
-          <span className="tabular text-sm text-tinta-suave">
-            Incluye la tasa del terminal de {formatUsdString(d.price.taxUsd)}
-          </span>
-        ) : null}
       </span>
       {selected ? <IconCheckCircle className="size-6 shrink-0 text-marca-600" /> : null}
     </label>
@@ -131,6 +128,10 @@ export function StepDeparture({
     if (elegida) setDia(dayKey(new Date(elegida.departsAtIso)));
   }
 
+  // El total de cada tarjeta es lo que se le dice al pasajero en voz alta; la
+  // tasa (la misma en todas, la vigente del terminal) se dice una vez aquí
+  // para que nadie tenga que sumar de cabeza.
+  const taxUsd = departures.find((d) => d.price)?.price?.taxUsd;
   const termino = normalizeSearch(busqueda.trim());
   const grupos = termino
     ? groupByDay(
@@ -166,7 +167,9 @@ export function StepDeparture({
         // palabras, en vez de un número suelto en cada ficha. `relative` en el
         // grupo y en cada ficha contiene el texto `sr-only` (posición
         // absoluta), que de otro modo ensanchaba la página en el teléfono y
-        // dejaba la barra de «Continuar» fuera de la pantalla.
+        // dejaba la barra de «Continuar» fuera de la pantalla. El nombre de
+        // cada ficha para el lector de pantalla es el día completo
+        // ("Viernes 2 de octubre"), no la abreviatura que se ve.
         <div role="group" aria-label="Día de la salida" className="relative">
           <div className={DAY_CHIPS_CONTAINER_CLASS}>
             {todos.map((grupo) => {
@@ -183,8 +186,13 @@ export function StepDeparture({
                     elegido ? DAY_CHIP_SELECTED_CLASS : `${DAY_CHIP_IDLE_CLASS} hover:bg-marca-50`,
                   )}
                 >
-                  <span className="sm:hidden">{grupo.chipShortLabel}</span>
-                  <span className="hidden sm:inline">{grupo.chipLabel}</span>
+                  <span aria-hidden="true" className="sm:hidden">
+                    {grupo.chipShortLabel}
+                  </span>
+                  <span aria-hidden="true" className="hidden sm:inline">
+                    {grupo.chipLabel}
+                  </span>
+                  <span className="sr-only">{grupo.label}</span>
                 </button>
               );
             })}
@@ -207,6 +215,11 @@ export function StepDeparture({
         // por debajo de la barra superior del teléfono (ver `counter-sale-form`).
         <fieldset id={DEPARTURE_LIST_ID} className="flex scroll-mt-20 flex-col gap-6 lg:scroll-mt-4">
           <legend className="sr-only">Salidas con puestos libres</legend>
+          {taxUsd ? (
+            <p className="tabular text-sm text-tinta-suave">
+              Los precios son por persona e incluyen la tasa del terminal de {formatUsdString(taxUsd)}.
+            </p>
+          ) : null}
           {grupos.map((grupo) => (
             <div key={grupo.key} className="flex flex-col gap-3">
               <p className="text-sm font-bold text-tinta-suave">

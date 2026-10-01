@@ -1,19 +1,23 @@
 import Link from "next/link";
 import { ClickableRow } from "@/components/clickable-row";
-import { IconChevronRight, IconRoute } from "@/components/icons";
+import { IconChevronRight, IconDownload, IconRoute } from "@/components/icons";
 import { EmptyState, StatusBadge, TableShell, panelButtonClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { departureStatusLabel, departureStatusTone } from "@/lib/labels";
-import { formatCaracas, formatCaracasDate, formatCaracasTime24, formatDuration } from "@/lib/time";
+import { formatCaracasDate, formatCaracasTime24, formatDuration } from "@/lib/time";
 import { agencyMovements } from "@/modules/reports";
 import { countLabel, formatCount } from "../_shared/format";
-import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, MobileCardList, TimeCell } from "../_shared/lists";
+import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, DotParts, MobileCardList, TimeCell } from "../_shared/lists";
 import { describeAdminRange, withQuery, type AdminRange } from "../_shared/period";
-import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
-import { MOVEMENTS_PATH, hourFrom, movementsHref, tripStatus } from "./movements";
+import { ButtonSkeleton, LineSkeleton, TableSkeleton, skeletonColumns } from "../_shared/skeletons";
+import { arrivesAnotherDay, tripHoursParts } from "../_shared/trip-hours";
+import { MOVEMENTS_PATH, hourFrom, movementsCsvHref, movementsHref, tripStatus } from "./movements";
 
 /** Tope de filas de `agencyMovements`; si se alcanza, se avisa. */
 const MOVEMENTS_LIMIT = 300;
+
+/** Texto de la descarga, compartido con la silueta (glosario de la spec: "Descargar en Excel (CSV)"). */
+const DOWNLOAD_LABEL = "Descargar en Excel (CSV)";
 
 /** Texto del enlace al detalle de un viaje, el mismo en la tabla y en las tarjetas. */
 const DETAIL_LABEL = "Ver pasajeros a bordo";
@@ -36,44 +40,18 @@ function boardingText(boardingStartedAt: Date, reference: Date | null): string {
 
 type Movement = Awaited<ReturnType<typeof agencyMovements>>[number];
 
-/** ¿El viaje llegó otro día del calendario de Caracas que el de su salida? */
-function arrivesAnotherDay(m: Movement): boolean {
-  return Boolean(m.departedAt && m.arrivedAt && formatCaracasDate(m.departedAt) !== formatCaracasDate(m.arrivedAt));
-}
-
-/** "29/09 21:59": el día y la hora juntos, para un viaje que cruza de día. */
-function dayAndTime(date: Date): string {
-  return `${formatCaracas(date, "dd/MM")} ${formatCaracasTime24(date)}`;
-}
-
-/**
- * Horas del viaje en una línea para la tarjeta del teléfono: "Salió 07:55 ·
- * Llegó 16:36". Si llega otro día, cada hora lleva su fecha al lado, en orden
- * ("Salió 29/09 21:59 · Llegó 30/09 10:21"), y la línea de abajo ya no repite
- * la fecha. Sin salida, la hora del embarque.
- */
-function tripHoursLine(m: Movement): string {
-  if (!m.departedAt) {
-    return m.boardingStartedAt ? `Embarque desde ${formatCaracasTime24(m.boardingStartedAt)}` : "";
-  }
-  if (m.arrivedAt && arrivesAnotherDay(m)) {
-    return `Salió ${dayAndTime(m.departedAt)} · Llegó ${dayAndTime(m.arrivedAt)}`;
-  }
-  const parts = [`Salió ${formatCaracasTime24(m.departedAt)}`];
-  if (m.arrivedAt) parts.push(`Llegó ${formatCaracasTime24(m.arrivedAt)}`);
-  return parts.join(" · ");
-}
-
 /**
  * Tarjeta de un viaje en el teléfono: agencia, ruta, estado, las horas en una
- * línea y la fecha (si no va ya junto a las horas) con los pasajeros. Toda la tarjeta es el enlace al detalle,
+ * línea (`tripHoursParts`, la misma del tablero) y la fecha (si no va ya junto
+ * a las horas) con los pasajeros. Toda la tarjeta es el enlace al detalle,
  * como la fila de la tabla (sin un botón repetido en cada tarjeta); el
  * embarque y la duración están en el panel de detalle.
  */
 function MovementCard({ movement: m, href }: { movement: Movement; href: string }) {
   const status = tripStatus(m);
   const reference = m.departedAt ?? m.boardingStartedAt;
-  const hours = tripHoursLine(m);
+  const hours = tripHoursParts(m.departedAt, m.arrivedAt, m.boardingStartedAt);
+  const anotherDay = arrivesAnotherDay(m.departedAt, m.arrivedAt);
   return (
     <li>
       <Link
@@ -97,10 +75,18 @@ function MovementCard({ movement: m, href }: { movement: Movement; href: string 
             )}
           </span>
           <span className="flex flex-col text-[15px]">
-            {hours ? <span className="tabular font-medium text-tinta">{hours}</span> : null}
+            {hours.length > 0 ? (
+              <span className="tabular font-medium text-tinta">
+                <DotParts parts={hours} />
+              </span>
+            ) : null}
             <span className="tabular text-sm text-tinta-suave">
-              {reference && !arrivesAnotherDay(m) ? `${formatCaracasDate(reference)} · ` : ""}
-              {countLabel(m.passengerCount, "pasajero", "pasajeros")}
+              <DotParts
+                parts={[
+                  ...(reference && !anotherDay ? [formatCaracasDate(reference)] : []),
+                  countLabel(m.passengerCount, "pasajero", "pasajeros"),
+                ]}
+              />
             </span>
           </span>
         </span>
@@ -156,10 +142,23 @@ export async function MovementsList({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm font-semibold text-tinta-suave">
-        {countLabel(movements.length, "viaje", "viajes")}
-        {agencyName ? ` de ${agencyName}` : " de todas las agencias"}.
-      </p>
+      {/* La descarga va junto al total: baja justo estos viajes (el periodo y
+          la agencia elegidos), no todos. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p id="movimientos-total" className="text-sm font-semibold text-tinta-suave">
+          {countLabel(movements.length, "viaje", "viajes")}
+          {agencyName ? ` de ${agencyName}` : " de todas las agencias"}.
+        </p>
+        <a
+          href={movementsCsvHref(range, agencyId)}
+          download
+          aria-describedby="movimientos-total"
+          className={panelButtonClass("secundario")}
+        >
+          <IconDownload className="size-5 shrink-0" />
+          {DOWNLOAD_LABEL}
+        </a>
+      </div>
 
       <TableShell
         mobile={
@@ -252,7 +251,7 @@ export async function MovementsList({
                       href={href}
                       scroll={false}
                       aria-label={`${DETAIL_LABEL}: ${m.agencyName}, ${m.origin} a ${m.destination}`}
-                      className={panelButtonClass("fantasma", "sm", "px-2")}
+                      className={panelButtonClass("fantasma", "md")}
                     >
                       <IconChevronRight className="size-5 shrink-0" />
                     </Link>
@@ -274,12 +273,38 @@ export async function MovementsList({
   );
 }
 
+/**
+ * Silueta de cada columna de la tabla: cuántas líneas lleva la celda real y de
+ * qué ancho aproximado, para que la tabla de carga reparta las columnas igual
+ * que la real. La última es la flecha del detalle.
+ */
+const MOVEMENT_SKELETON_COLUMNS = skeletonColumns(MOVEMENT_COLUMNS, [
+  { lines: ["w-36", "w-44"] },
+  { lines: ["w-32", "w-16"] },
+  { lines: ["w-12", "w-20"] },
+  { lines: ["w-12", "w-24"] },
+  { lines: ["w-6"], align: "right" },
+  { kind: "chevron" },
+]);
+
 /** Silueta de la lista de movimientos: el total y la tabla con sus cabeceras reales. */
 export function MovementsListSkeleton() {
   return (
     <div className="flex flex-col gap-3">
-      <LineSkeleton className="w-60" />
-      <TableSkeleton columns={MOVEMENT_COLUMNS} rows={8} mobileDetails={0} mobileSubtitleLines={3} mobileChevron />
+      <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-3">
+        <LineSkeleton className="w-60" />
+        <ButtonSkeleton>
+          <IconDownload className="size-5 shrink-0" />
+          {DOWNLOAD_LABEL}
+        </ButtonSkeleton>
+      </div>
+      <TableSkeleton
+        columns={MOVEMENT_SKELETON_COLUMNS}
+        rows={8}
+        mobileDetails={0}
+        mobileSubtitleLines={3}
+        mobileChevron
+      />
     </div>
   );
 }

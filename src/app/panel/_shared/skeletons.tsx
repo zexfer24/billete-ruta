@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 import { IconArrowLeft, IconCalendar, IconChevronDown, IconPlus } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
-import { cx, panelButtonClass } from "@/components/ui-classes";
+import {
+  PANEL_BUTTON_SIZE_CLASSES,
+  PANEL_TAB_ACTIVE_CLASS,
+  cx,
+  type PanelButtonSize,
+} from "@/components/ui-classes";
 import { PERIOD_CHIP_ACTIVE_CLASS, PERIOD_CHIP_CLASS, PERIOD_CHIP_IDLE_CLASS, PeriodChipCheck } from "./period-chips";
 
 /**
@@ -18,9 +23,38 @@ import { PERIOD_CHIP_ACTIVE_CLASS, PERIOD_CHIP_CLASS, PERIOD_CHIP_IDLE_CLASS, Pe
  */
 
 /**
+ * Botón mientras carga: su texto real (se lee qué hará) sobre el relleno
+ * `.esqueleto`, sin el borde ni el morado del botón real, para que nadie lo
+ * pulse antes de que responda. Misma convención que el panel del terminal
+ * (`ButtonSkeleton` de `admin/_shared/skeletons.tsx`) y los mismos tamaños de
+ * `panelButtonClass`.
+ */
+export function SkeletonButton({
+  children,
+  size = "md",
+  className,
+}: {
+  children: ReactNode;
+  size?: PanelButtonSize;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cx(
+        "esqueleto inline-flex items-center justify-center gap-2 rounded-control text-center font-semibold leading-tight text-marca-700",
+        PANEL_BUTTON_SIZE_CLASSES[size],
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
  * Cabecera de página: volver, título (real o barra), frase y acción opcional.
- * `action` con texto pinta el botón principal real ("Crear salida"), que es
- * un texto fijo; `true` pinta solo una barra.
+ * `action` con texto pinta el botón principal con su texto real ("Crear
+ * salida") en `SkeletonButton`; `true` pinta solo una barra.
  */
 export function SkeletonPageHeader({
   title,
@@ -64,10 +98,10 @@ export function SkeletonPageHeader({
         {action || badge ? (
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:shrink-0">
             {typeof action === "string" ? (
-              <span className={panelButtonClass("primario")}>
+              <SkeletonButton>
                 <IconPlus className="size-5 shrink-0" />
                 {action}
-              </span>
+              </SkeletonButton>
             ) : action ? (
               <Skeleton className="h-11 w-40" />
             ) : null}
@@ -105,7 +139,9 @@ export function SkeletonTabs({
           key={label}
           className={cx(
             "inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold sm:grow-0 sm:justify-start",
-            index === active ? "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200" : "text-tinta-suave",
+            // Las mismas clases de `PanelTabs`, sin el `hover` de la inactiva:
+            // la silueta no responde al puntero.
+            index === active ? PANEL_TAB_ACTIVE_CLASS : "text-tinta-suave",
           )}
         >
           {label}

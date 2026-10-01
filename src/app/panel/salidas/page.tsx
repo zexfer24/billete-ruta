@@ -67,7 +67,7 @@ export default async function SalidasPage({
         key={historial ? "historial" : todosLosDias ? "proximas-todas" : "proximas"}
         fallback={
           <SkeletonScreen label="Cargando las salidas…">
-            <DeparturesListSkeleton />
+            <DeparturesListSkeleton moreButton={!historial && !todosLosDias} />
           </SkeletonScreen>
         }
       >

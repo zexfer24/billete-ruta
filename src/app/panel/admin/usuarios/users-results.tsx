@@ -2,12 +2,12 @@ import Link from "next/link";
 import { IconSearch, IconUsers } from "@/components/icons";
 import { EmptyState, MobileCard, TableShell, panelButtonClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
-import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
+import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { listAccounts } from "@/modules/reports";
 import { accountSearchTerm, countLabel, formatCount, formatPhone } from "../_shared/format";
-import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, Pagination, TimeCell } from "../_shared/lists";
+import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, DatePhrase, DotParts, Pagination, TimeCell } from "../_shared/lists";
 import { withQuery } from "../_shared/period";
-import { LineSkeleton, PaginationSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { LineSkeleton, PaginationSkeleton, TableSkeleton, skeletonColumns } from "../_shared/skeletons";
 
 const PAGE_SIZE = 25;
 
@@ -26,17 +26,33 @@ const USER_COLUMNS = [
 ] as const;
 const USERS_PATH = "/panel/admin/usuarios";
 
+/** Celdas de la tabla en la silueta: nombre y cédula, teléfono con su enlace, cifras y horas con su fecha. */
+const USER_SKELETON_COLUMNS = skeletonColumns(USER_COLUMNS, [
+  { lines: ["w-40", "w-20"] },
+  { lines: ["w-32", "w-28"] },
+  { lines: ["w-10"] },
+  { lines: ["w-6"], align: "right" },
+  { lines: ["w-12", "w-20"] },
+  { lines: ["w-12", "w-20"] },
+]);
+
 /**
  * Enlace a la bandeja con los mensajes que recibió esa persona, buscada por
- * su teléfono: responde "¿qué le llegó?" sin tener que copiar el número.
+ * su teléfono: responde "¿qué le llegó?" sin tener que copiar el número. El
+ * nombre va solo para el lector de pantalla ("Ver sus mensajes de María
+ * Pérez"), como "Editar" en Flota: en la lista de enlaces se sabe de quién es
+ * cada uno.
+ *
+ * El teléfono viaja en `?q=`, como la cédula o el nombre en la búsqueda de
+ * esta misma pantalla: la bandeja lo busca y deja la consulta en la bitácora.
  */
-function MessagesLink({ phone }: { phone: string }) {
+function MessagesLink({ phone, name }: { phone: string; name: string }) {
   return (
     <Link
       href={withQuery("/panel/admin/mensajes", { q: phone })}
       className="foco -ml-2 inline-flex min-h-11 items-center rounded-control px-2 text-sm font-semibold text-marca-700 transition-colors duration-150 ease-out hover:bg-marca-50 motion-reduce:transition-none"
     >
-      Ver sus mensajes
+      Ver sus mensajes<span className="sr-only"> de {name}</span>
     </Link>
   );
 }
@@ -102,16 +118,13 @@ export async function UsersResults({
     );
   }
 
-  const firstShown = (page - 1) * pageSize + 1;
-  const lastShown = firstShown + rows.length - 1;
-
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm font-semibold text-tinta-suave">
         {query
           ? `${countLabel(total, "cuenta encontrada", "cuentas encontradas")} con “${query}”`
           : `${countLabel(total, "cuenta registrada", "cuentas registradas")}, de la más reciente a la más antigua`}
-        {totalPages > 1 ? `. Estás viendo de la ${formatCount(firstShown)} a la ${formatCount(lastShown)}.` : "."}
+.
       </p>
 
       {/* Arriba también, como en Mensajes, para no tener que bajar toda la lista para cambiar de página. */}
@@ -136,23 +149,24 @@ export async function UsersResults({
                 title={r.fullName}
                 subtitle={
                   <>
-                    <span className="block">
-                      <span className="tabular whitespace-nowrap">Cédula {r.idNumber}</span> ·{" "}
-                      <span className="tabular whitespace-nowrap">{formatPhone(r.phone)}</span>
+                    {/* Cada dato entero (`DotParts`): si la línea no cabe, se parte
+                        antes de un punto, nunca a mitad de una fecha. */}
+                    <span className="tabular block">
+                      <DotParts parts={[`Cédula ${r.idNumber}`, formatPhone(r.phone)]} />
                     </span>
-                    {/* El registro es el orden de la lista: se ve en cada tarjeta. */}
-                    <span className="block">
-                      <span className="tabular whitespace-nowrap">
-                        Registro {formatCaracasDateTime24(r.createdAt)}
-                      </span>{" "}
-                      ·{" "}
-                      <span className="tabular whitespace-nowrap">
-                        {countLabel(r.paidTrips, "viaje pagado", "viajes pagados")}
-                      </span>
+                    {/* El registro es el orden de la lista: se ve en cada tarjeta,
+                        con la misma frase que en el tablero. */}
+                    <span className="tabular block">
+                      <DotParts
+                        parts={[
+                          <DatePhrase key="registro" lead="Se registró" date={r.createdAt} />,
+                          countLabel(r.paidTrips, "viaje pagado", "viajes pagados"),
+                        ]}
+                      />
                     </span>
                   </>
                 }
-                action={<MessagesLink phone={r.phone} />}
+                action={<MessagesLink phone={r.phone} name={r.fullName} />}
               />
             ))}
           </ul>
@@ -182,7 +196,7 @@ export async function UsersResults({
                 </td>
                 <td className={cx(ADMIN_TD_CLASS, "whitespace-nowrap")}>
                   <span className="tabular block">{formatPhone(r.phone)}</span>
-                  <MessagesLink phone={r.phone} />
+                  <MessagesLink phone={r.phone} name={r.fullName} />
                 </td>
                 <td className={cx(ADMIN_TD_CLASS, "tabular")}>{r.birthYear}</td>
                 <td className={cx(ADMIN_TD_CLASS, "tabular text-right")}>{formatCount(r.paidTrips)}</td>
@@ -213,7 +227,13 @@ export function UsersResultsSkeleton() {
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-80" />
       <PaginationSkeleton />
-      <TableSkeleton columns={USER_COLUMNS} rows={10} mobileDetails={0} mobileSubtitleLines={2} mobileAction />
+      <TableSkeleton
+        columns={USER_SKELETON_COLUMNS}
+        rows={10}
+        mobileDetails={0}
+        mobileSubtitleLines={2}
+        mobileAction
+      />
     </div>
   );
 }

@@ -53,8 +53,8 @@ async function ReportData({
 }
 
 /**
- * Reportes de la agencia en dos pestañas: recaudación por ruta y viajes de
- * los choferes. La cabecera, las pestañas y el periodo salen al instante; los
+ * Reportes de la agencia en dos pestañas: recaudación por ruta y movimientos
+ * (viajes) de los choferes, con la misma palabra del menú y del título. La cabecera, las pestañas y el periodo salen al instante; los
  * datos cargan dentro de un `<Suspense>` que cambia con el periodo elegido.
  */
 export default async function ReportesPage({
@@ -82,7 +82,7 @@ export default async function ReportesPage({
         label="Tipo de reporte"
         tabs={[
           { href: "/panel/reportes?vista=recaudacion", label: "Recaudación", active: vista === "recaudacion" },
-          { href: "/panel/reportes?vista=movimientos", label: "Viajes de choferes", active: vista === "movimientos" },
+          { href: "/panel/reportes?vista=movimientos", label: "Movimientos de choferes", active: vista === "movimientos" },
         ]}
       />
 

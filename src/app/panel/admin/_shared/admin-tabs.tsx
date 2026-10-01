@@ -5,7 +5,7 @@ import { IconSpinner } from "@/components/icons";
 import type { PanelTab } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { formatCount } from "./format";
-import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TABS_GRID_CLASS, ADMIN_TABS_ROW_CLASS } from "./tab-classes";
+import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TAB_INACTIVE_CLASS, ADMIN_TABS_GRID_CLASS, ADMIN_TABS_ROW_CLASS } from "./tab-classes";
 
 /**
  * Contador de la pestaña, o un indicador de espera mientras se abre. Tiene
@@ -72,7 +72,7 @@ export function AdminTabs({
             className={cx(
               ADMIN_TAB_CLASS,
               "foco transition-colors duration-150 ease-out motion-reduce:transition-none",
-              tab.active ? ADMIN_TAB_ACTIVE_CLASS : "text-tinta-suave hover:bg-lienzo hover:text-tinta",
+              tab.active ? ADMIN_TAB_ACTIVE_CLASS : ADMIN_TAB_INACTIVE_CLASS,
             )}
           >
             {tab.label}

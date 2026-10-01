@@ -45,13 +45,3 @@ export function proofUrgency(
 export function tripWhenText(departsAt: Date, now: Date): string {
   return `${caracasDayHeading(departsAt, now)} ${formatCaracasTime24(departsAt)}`;
 }
-
-/**
- * Nombre de la ruta con flecha, como en el resto del panel ("Caracas → San
- * Cristóbal"), para las filas que solo traen el nombre libre de la ruta
- * ("Caracas – San Cristóbal"): se cambia el primer guion o raya rodeado de
- * espacios por la flecha. Un nombre sin ese separador queda igual.
- */
-export function arrowRouteName(name: string): string {
-  return name.replace(/\s+[-‐‑‒–—―]\s+/, " → ");
-}

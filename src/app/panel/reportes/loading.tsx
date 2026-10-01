@@ -10,7 +10,7 @@ export default function ReportesLoading() {
         title="Recaudación y movimientos"
         description="Cuánto cobró tu agencia en cada ruta y qué viajes hicieron tus choferes."
       />
-      <SkeletonTabs labels={["Recaudación", "Viajes de choferes"]} />
+      <SkeletonTabs labels={["Recaudación", "Movimientos de choferes"]} />
       <SkeletonPeriodChips labels={["Hoy", "7 días", "30 días"]} extra="Otras fechas" />
       <ReportDataSkeleton vista="recaudacion" />
     </SkeletonScreen>

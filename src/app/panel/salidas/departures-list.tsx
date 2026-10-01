@@ -260,10 +260,11 @@ export async function DeparturesList({
               {/* Desde `xl` los anchos son fijos (`table-fixed` con `<colgroup>`):
                   así las columnas de "Hoy" y "Mañana" quedan alineadas de una
                   tabla a la otra. Por debajo, en la tableta, el ancho se reparte
-                  según el contenido, porque seis columnas fijas no caben. */}
+                  según el contenido y la hora va encima de la ruta, en la misma
+                  celda: con seis columnas la ruta se partía en dos renglones. */}
               <table className="w-full min-w-[760px] xl:table-fixed">
                 <colgroup>
-                  <col className="xl:w-20" />
+                  <col className="hidden xl:table-column xl:w-20" />
                   <col />
                   {/* Vehículo y chofer a 176 px: "Carmen Elena Duque" cabe en un
                       renglón. Los 16 px salen de la acción, no de la ruta. */}
@@ -274,8 +275,11 @@ export async function DeparturesList({
                 </colgroup>
                 <thead className="border-b border-borde bg-lienzo">
                   <tr>
-                    <th scope="col" className={cx(PANEL_TH_CLASS, "w-20")}>Hora</th>
-                    <th scope="col" className={PANEL_TH_CLASS}>Ruta</th>
+                    <th scope="col" className={cx(PANEL_TH_CLASS, "hidden w-20 xl:table-cell")}>Hora</th>
+                    <th scope="col" className={PANEL_TH_CLASS}>
+                      <span className="xl:hidden">Hora y ruta</span>
+                      <span className="hidden xl:inline">Ruta</span>
+                    </th>
                     <th scope="col" className={cx(PANEL_TH_CLASS, "min-w-40")}>Vehículo y chofer</th>
                     <th scope="col" className={cx(PANEL_TH_CLASS, "w-44")}>Puestos</th>
                     <th scope="col" className={PANEL_TH_CLASS}>Estado</th>
@@ -292,10 +296,11 @@ export async function DeparturesList({
                     const subtitulo = routeSubtitle(s.routeName, s.origin, s.destination);
                     return (
                       <tr key={s.id} className="border-b border-borde last:border-0">
-                        <td className={PANEL_TD_CLASS}>
+                        <td className={cx(PANEL_TD_CLASS, "hidden xl:table-cell")}>
                           <p className="tabular text-lg font-bold">{hora}</p>
                         </td>
                         <td className={PANEL_TD_CLASS}>
+                          <p className="tabular text-lg font-bold xl:hidden">{hora}</p>
                           <p className="font-semibold">
                             <RouteName name={s.routeName} />
                           </p>

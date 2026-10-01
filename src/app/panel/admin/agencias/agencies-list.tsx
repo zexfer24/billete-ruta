@@ -8,7 +8,7 @@ import { listAgencies } from "@/modules/agencies";
 import { OCCUPYING_STATUSES } from "@/modules/booking";
 import { countLabel, formatPhone } from "../_shared/format";
 import { ADMIN_TD_CLASS, ADMIN_TH_CLASS } from "../_shared/lists";
-import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { LineSkeleton, TableSkeleton, skeletonColumns } from "../_shared/skeletons";
 import { AgencyStatusAction } from "./agency-status-action";
 
 /**
@@ -78,21 +78,24 @@ function StaffList({ users }: { users: AgencyRow["panelUsers"] }) {
 /**
  * Reservas que siguen ocupando un puesto en salidas futuras de cada agencia
  * activa, para decir en el diálogo de desactivar cuánta gente queda por
- * atender. Una consulta por agencia activa: son pocas.
+ * atender. Una sola consulta para todas: las salidas futuras de las agencias
+ * activas con el conteo de sus reservas que ocupan puesto, sumado por agencia.
  */
 async function upcomingReservationsByAgency(agencies: AgencyRow[], now: Date): Promise<Map<string, number>> {
-  const active = agencies.filter((a) => a.active);
-  const counts = await Promise.all(
-    active.map((a) =>
-      prisma.reservation.count({
-        where: {
-          status: { in: [...OCCUPYING_STATUSES] },
-          departure: { departsAt: { gt: now }, route: { agencyId: a.id } },
-        },
-      }),
-    ),
-  );
-  return new Map(active.map((a, index) => [a.id, counts[index] ?? 0]));
+  const activeIds = agencies.filter((a) => a.active).map((a) => a.id);
+  const counts = new Map<string, number>(activeIds.map((id) => [id, 0]));
+  if (activeIds.length === 0) return counts;
+  const departures = await prisma.departure.findMany({
+    where: { departsAt: { gt: now }, route: { agencyId: { in: activeIds } } },
+    select: {
+      route: { select: { agencyId: true } },
+      _count: { select: { reservations: { where: { status: { in: [...OCCUPYING_STATUSES] } } } } },
+    },
+  });
+  for (const d of departures) {
+    counts.set(d.route.agencyId, (counts.get(d.route.agencyId) ?? 0) + d._count.reservations);
+  }
+  return counts;
 }
 
 /**
@@ -163,9 +166,13 @@ export async function AgenciesList({ registerHref }: { registerHref: string }) {
                         columna el correo no cabía y se partía a mitad del dominio. */}
                     <div className="flex flex-col gap-1">
                       <p className="text-sm text-tinta-suave">Contacto</p>
-                      <div className="flex flex-col text-[15px] font-medium text-tinta">
-                        <span className="tabular whitespace-nowrap">{formatPhone(a.contactPhone)}</span>
-                        <EmailText email={a.contactEmail} className="break-words" />
+                      {/* Como en el personal: el dato principal (el teléfono) en
+                          negrita y el correo en texto secundario. */}
+                      <div className="flex flex-col">
+                        <span className="tabular whitespace-nowrap text-[15px] font-medium text-tinta">
+                          {formatPhone(a.contactPhone)}
+                        </span>
+                        <EmailText email={a.contactEmail} className="break-words text-sm text-tinta-suave" />
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 border-t border-borde pt-3">
@@ -240,12 +247,34 @@ export async function AgenciesList({ registerHref }: { registerHref: string }) {
   );
 }
 
+/**
+ * Celdas de la tabla en la silueta: la agencia con su bloque de color, nombre,
+ * RIF y estado; el contacto en dos líneas; la flota en tres; una persona del
+ * personal con su correo; y el botón de activar o desactivar.
+ */
+const AGENCY_SKELETON_COLUMNS = skeletonColumns(AGENCY_COLUMNS, [
+  { lines: ["w-36", "w-28"], badge: true, pill: true },
+  { lines: ["w-32", "w-44"] },
+  { lines: ["w-16", "w-20", "w-20"] },
+  { lines: ["w-32", "w-44"] },
+  { kind: "action" },
+]);
+
 /** Silueta de la lista de agencias: el total y la tabla con sus cabeceras reales. */
 export function AgenciesListSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-60" />
-      <TableSkeleton columns={AGENCY_COLUMNS} rows={4} mobileCards={3} mobileDetails={0} mobileSubtitleLines={2} mobileTextLines={3} mobileStatus mobileAction />
+      <TableSkeleton
+        columns={AGENCY_SKELETON_COLUMNS}
+        rows={4}
+        mobileCards={3}
+        mobileDetails={0}
+        mobileSubtitleLines={2}
+        mobileTextLines={3}
+        mobileStatus
+        mobileAction
+      />
     </div>
   );
 }

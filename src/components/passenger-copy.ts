@@ -55,12 +55,15 @@ export function passengerStatusTone(status: string): PillTone {
 
 /**
  * Texto del botón o enlace que lleva a la acción siguiente de una reserva.
- * `balance` es el saldo ya formateado ("$ 20,00").
+ * `balance` es el saldo ya formateado ("$ 20,00"). Pagar se dice siempre con
+ * la misma raíz ("Pagar mi viaje", y "Pagar mi viaje a Barinas" donde no se ve
+ * la ruta), en el ticket, en los avisos y en el inicio, para que nadie crea
+ * que son acciones distintas.
  */
 export function reservationActionLabel(status: string, balance: string): string {
   switch (status) {
     case "PENDIENTE_PAGO":
-      return "Pagar mi pasaje";
+      return "Pagar mi viaje";
     case "ABONADA":
       return `Pagar ${balance} que faltan`;
     case "EN_VALIDACION":
@@ -197,6 +200,19 @@ export function ticketDeadlineLabel(status: string, deadline: PaymentDeadline, n
   return status === "PAGO_EN_SITIO" ? `Paga en la taquilla ${cuando}` : `Paga ${cuando}`;
 }
 
+/**
+ * Línea del plazo en la tarjeta del viaje más cercano del inicio, cuando otra
+ * reserva subió en grande: "Paga hoy antes de las 21:02" o "Paga en la
+ * taquilla el lun 12 oct antes de las 18:00". Usa el plazo completo
+ * (`paymentDeadline`), no solo el que apura, porque esa tarjeta reemplaza en
+ * el inicio a los avisos de su reserva (`homeNotices`) y no debe callar una
+ * hora límite. `null` si la reserva no tiene plazo.
+ */
+export function otherTripDeadlineLabel(reserva: DeadlineInput, now: Date): string | null {
+  const plazo = paymentDeadline(reserva, now);
+  return plazo ? ticketDeadlineLabel(reserva.status, plazo, now) : null;
+}
+
 /** Lo mínimo de una reserva próxima para elegir cuál va en grande en el inicio. */
 export interface HeroCandidate extends DeadlineInput {
   code: string;
@@ -324,6 +340,15 @@ function dayWord(date: Date, now: Date): string {
 }
 
 /**
+ * "Hoy" o "mañana" si el día lo es, para anteponerlo a una fecha escrita
+ * ("Hoy · jue 1 oct · 08:00" en el ticket); `null` en cualquier otro día.
+ */
+export function relativeDayWord(date: Date, now: Date = new Date()): "hoy" | "mañana" | null {
+  const day = dayWord(date, now);
+  return day === "hoy" || day === "mañana" ? day : null;
+}
+
+/**
  * La misma frase lista para ir detrás de un verbo o de "hasta": "hoy a las
  * 14:30", "mañana a las 08:00" o "el lun 12 oct a las 08:00".
  */
@@ -376,11 +401,12 @@ export function noticeTimeLabel(notice: { kind: NoticeKind; at: Date }, now: Dat
 }
 
 /**
- * Avisos que el inicio ya dice con la reserva en grande o con el enlace al
- * viaje más cercano: el plazo de pago (va en el ticket), el saldo pendiente
- * (la barra y el botón del ticket), el pago en revisión (la pastilla) y el
- * ticket listo (el botón). Un comprobante rechazado sí se muestra: dice algo
- * que el ticket no dice.
+ * Avisos que el inicio ya dice con la reserva en grande o con la tarjeta del
+ * viaje más cercano ("Tus otros viajes"): el plazo de pago (la línea del reloj,
+ * `otherTripDeadlineLabel` en la tarjeta), el saldo pendiente (el botón "Pagar
+ * $ N que faltan"), el pago en revisión (la pastilla) y el ticket listo (el
+ * botón "Ver mi ticket"). Un comprobante rechazado sí se muestra: dice algo
+ * que ninguna de las dos dice.
  */
 const NOTICES_SAID_BY_HERO = new Set<NoticeKind>([
   "RESERVA_POR_LIBERAR",
@@ -410,10 +436,10 @@ export function homeNotices<T extends { kind: NoticeKind; reservationCode?: stri
 
 const NOTICE_ACTIONS: Record<NoticeKind, string> = {
   DOCUMENTO_FALTANTE: "Subir la foto",
-  RESERVA_POR_LIBERAR: "Pagar ahora",
+  RESERVA_POR_LIBERAR: "Pagar mi viaje",
   COMPROBANTE_RECHAZADO: "Enviar otro comprobante",
   COMPROBANTE_EN_VALIDACION: "Ver mi viaje",
-  RECONFIRMAR_PAGO_EN_SITIO: "Ver cómo pagar",
+  RECONFIRMAR_PAGO_EN_SITIO: "Ver cómo pagar en la taquilla",
   SALDO_PENDIENTE: "Pagar lo que falta",
   TICKET_LISTO: "Ver mi ticket",
 };

@@ -163,6 +163,22 @@ function StateSummary({ counts, label }: { counts: Record<UnitState, number>; la
   );
 }
 
+/**
+ * Qué quieren decir "Asignado" y "Disponible", que no se explican solos: una
+ * unidad "Disponible" puede tener salidas mañana o más adelante, y sin esta
+ * línea parecería contradecir su propia fila. Solo se muestra si alguna
+ * unidad está en uno de esos dos estados.
+ */
+function StateLegend({ counts }: { counts: Record<UnitState, number> }) {
+  if (counts.ASIGNADO === 0 && counts.DISPONIBLE === 0) return null;
+  return (
+    <p className="text-sm leading-snug text-tinta-suave">
+      «{UNIT_STATE_LABELS.ASIGNADO}»: sale hoy o en las próximas 12 horas. «{UNIT_STATE_LABELS.DISPONIBLE}»: libre
+      por ahora, aunque tenga salidas más adelante.
+    </p>
+  );
+}
+
 function countStates(rows: ReadonlyArray<{ state: UnitState }>): Record<UnitState, number> {
   const counts: Record<UnitState, number> = {
     EN_RUTA: 0,
@@ -293,14 +309,9 @@ function DriversList({ drivers, selectedId, now }: { drivers: DriverStatusRow[];
             <MobileCard
               key={c.id}
               title={c.fullName}
-              subtitle={
-                <>
-                  <span className="tabular whitespace-nowrap">Cédula {c.idNumber}</span> ·{" "}
-                  <span className="tabular whitespace-nowrap">
-                    {c.arrivalCount === 1 ? "1 viaje completado" : `${c.arrivalCount} viajes completados`}
-                  </span>
-                </>
-              }
+              // Los viajes completados quedan solo en la tabla de escritorio: en
+              // la tarjeta sumaban un renglón que no ayuda a decidir nada.
+              subtitle={<span className="tabular whitespace-nowrap">Cédula {c.idNumber}</span>}
               status={<StatusBadge label={UNIT_STATE_LABELS[c.state]} tone={unitStateTone(c.state)} />}
               action={
                 <MobileTripAndAction
@@ -385,12 +396,16 @@ export async function FleetBody({
   vista: FleetView;
   /** Unidad en edición, para marcar su fila. */
   selectedId?: string;
-  /** Con un panel abierto, el error de `?error=` se muestra dentro del formulario. */
+  /**
+   * Con un panel abierto, el error de `?error=` se muestra dentro del
+   * formulario (o, si `?editar=` no es de nadie, en el aviso que lo explica).
+   */
   panelAbierto: boolean;
   error?: string;
   ok?: string;
 }) {
   const { fleet, now } = await fleetStatusFor(agencyId);
+  const choferesPorEstado = countStates(fleet.drivers);
 
   return (
     <div className="flex flex-col gap-6">
@@ -416,12 +431,18 @@ export async function FleetBody({
 
       {vista === "vehiculos" ? (
         <div className="flex flex-col gap-4">
-          <StateSummary counts={fleet.vehicleSummary} label="Vehículos por estado:" />
+          <div className="flex flex-col gap-2">
+            <StateSummary counts={fleet.vehicleSummary} label="Vehículos por estado:" />
+            <StateLegend counts={fleet.vehicleSummary} />
+          </div>
           <VehiclesList vehicles={fleet.vehicles} selectedId={selectedId} now={now} />
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <StateSummary counts={countStates(fleet.drivers)} label="Choferes por estado:" />
+          <div className="flex flex-col gap-2">
+            <StateSummary counts={choferesPorEstado} label="Choferes por estado:" />
+            <StateLegend counts={choferesPorEstado} />
+          </div>
           <DriversList drivers={fleet.drivers} selectedId={selectedId} now={now} />
         </div>
       )}
@@ -522,9 +543,15 @@ export async function FleetEditPanel({
     }
   }
 
+  // Un enlace viejo o manipulado no es el resultado de una acción: el aviso
+  // no interrumpe al lector de pantalla al cargar (`role="none"`). Un error
+  // de `?error=` que llegó con él se muestra aquí, porque no hay formulario.
   return (
-    <Alert tone="alerta" title={esChofer ? "No encontramos ese chofer" : "No encontramos ese vehículo"}>
-      Puede que el enlace esté incompleto. Elígelo de la lista para editarlo.
-    </Alert>
+    <div className="flex flex-col gap-3">
+      <PanelFeedback error={error} />
+      <Alert tone="alerta" role="none" title={esChofer ? "No encontramos ese chofer" : "No encontramos ese vehículo"}>
+        Puede que el enlace esté incompleto. Elígelo de la lista para editarlo.
+      </Alert>
+    </div>
   );
 }

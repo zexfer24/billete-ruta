@@ -5,6 +5,8 @@ import { FieldError, FileField } from "@/components/ui";
 import { Alert } from "@/components/alert";
 import { panelButtonClass } from "@/components/panel-ui";
 import { IconClose, IconPlus } from "@/components/icons";
+// La misma ayuda de la cédula que ingresar, registro y el formulario de chofer.
+import { ID_NUMBER_HINT } from "@/app/registro/texts";
 import { CounterField } from "./counter-field";
 
 export interface CompanionFormState {
@@ -114,7 +116,7 @@ export function StepCompanions({
                 <CounterField
                   id={`taquilla-acompanante-${i}-cedula`}
                   label="Cédula"
-                  hint="Con su letra y sin puntos, por ejemplo V12345678."
+                  hint={ID_NUMBER_HINT}
                   autoComplete="off"
                   autoCapitalize="characters"
                   spellCheck={false}

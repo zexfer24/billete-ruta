@@ -133,6 +133,21 @@ function Wizard({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
+  const barEndRef = useRef<HTMLSpanElement>(null);
+  // La barra de «Atrás / Continuar» solo se ve flotante (a todo el ancho, con
+  // sombra) mientras va pegada al pie de la pantalla. En un paso corto queda
+  // en su sitio, a media pantalla, y ahí se pinta como una tarjeta más: una
+  // barra flotante suelta parecía un elemento roto.
+  const [barStuck, setBarStuck] = useState(true);
+  useEffect(() => {
+    const marca = barEndRef.current;
+    if (!marca || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entrada]) => {
+      if (entrada) setBarStuck(!entrada.isIntersecting);
+    });
+    observer.observe(marca);
+    return () => observer.disconnect();
+  }, []);
 
   // Paso 1
   const [departureId, setDepartureId] = useState<string | null>(null);
@@ -534,7 +549,12 @@ function Wizard({
         />
       </div>
 
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 border-t border-borde bg-superficie px-4 py-3 shadow-2 sm:mx-0 sm:rounded-tarjeta sm:border">
+      <div
+        className={cx(
+          "sticky bottom-0 z-10 flex flex-col gap-3 border-borde bg-superficie px-4 py-3",
+          barStuck ? "-mx-4 border-t shadow-2 sm:mx-0 sm:rounded-tarjeta sm:border" : "rounded-tarjeta border",
+        )}
+      >
         {intentado && faltanAhora.length > 0 ? (
           <FieldError id="taquilla-faltantes" afterSubmit>
             Para continuar, {joinPhrases(faltanAhora)}.
@@ -599,6 +619,9 @@ function Wizard({
           )}
         </div>
       </div>
+      {/* Marca del sitio natural de la barra (`-mt-6` anula el hueco del `gap`):
+          si se ve, la barra no va pegada al pie. */}
+      <span ref={barEndRef} aria-hidden="true" className="-mt-6 block h-px" />
 
       {quote ? (
         <ChargeDialog

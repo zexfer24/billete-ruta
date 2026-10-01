@@ -21,11 +21,6 @@ type CashPaymentFormProps =
       currency: Currency;
       /** Titular de la reserva, para nombrarlo en la confirmación del cobro. */
       holderName?: string;
-      /**
-       * Ya no se muestra: el formulario calcula lo que falta en cada moneda con
-       * la tasa que corresponde. Se acepta para no romper a quien lo pase.
-       */
-      amountInCurrencyHint?: string;
       error?: string;
       hidden?: Record<string, string>;
     };

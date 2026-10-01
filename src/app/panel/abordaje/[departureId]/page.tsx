@@ -81,10 +81,12 @@ export default async function AbordajePage({
                 : "Este viaje ya terminó"
           }
           // Con el viaje cerrado, "Volver a la salida" de arriba ya lleva a la
-          // hoja: un segundo enlace al mismo sitio solo sobraría.
+          // hoja: un segundo enlace al mismo sitio solo sobraría. Antes del
+          // embarque, ir a iniciarlo es la única acción útil de la pantalla y
+          // va como botón principal; el de arriba es solo navegación.
           action={
             salida.status === "PROGRAMADA" ? (
-              <Link href={hojaHref} className={panelButtonClass("secundario")}>
+              <Link href={hojaHref} className={panelButtonClass("primario", "lg", "w-full sm:w-fit")}>
                 Ir a iniciar el embarque
               </Link>
             ) : undefined

@@ -54,8 +54,8 @@ const SEATS_TONE_CLASSES = {
  * Tarjeta de una salida con la misma jerarquía que el tablero de la portada
  * (`DepartureBoard`): el destino como título, debajo "Desde {origen}" y, en
  * su propia línea, la agencia (su color como pista, nunca solo), y cuándo sale en una frase que
- * se entiende sola ("Sale a las 13:00", "Mañana a las 07:00", "Jue 1 oct a
- * las 07:00", o "Sale en 15 min" resaltado si falta menos de una hora) junto
+ * se entiende sola ("Sale hoy a las 13:00", "Sale mañana a las 07:00", "Sale
+ * el jue 1 oct a las 07:00", o "Sale en 15 min" resaltado si falta menos de una hora) junto
  * a la duración. A la derecha, precio por persona y puestos libres. Sin
  * hooks: se puede importar desde componentes de cliente.
  */

@@ -10,6 +10,30 @@ import { ForbiddenError } from "@/modules/auth/permissions";
 import { NotOwnerError, ValidationError } from "@/modules/booking/errors";
 import { transitionReservation } from "@/modules/booking/transition";
 
+/** Texto del error de un cobro en efectivo sobre una reserva que ya quedó pagada. */
+export const ALREADY_PAID_CASH_MESSAGE = "Esta reserva ya está pagada. No se registró ningún cobro.";
+
+/**
+ * Bloquea la fila de la reserva hasta el fin de la transacción. Todo camino que
+ * registra o revisa un pago la toma antes de leer el saldo: dos cobros (o un
+ * cobro y una aprobación) simultáneos sobre la misma reserva se ordenan uno
+ * detrás del otro y el segundo calcula con lo que dejó el primero, en vez de
+ * pisar `paidUsd` con un valor viejo. Orden de bloqueo: primero la reserva y
+ * después la salida (si la transición vuelve a ocupar cupo).
+ */
+async function lockReservation(tx: Prisma.TransactionClient, reservationId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "Reservation" WHERE id = ${reservationId}::uuid FOR UPDATE`;
+}
+
+/** Bloquea la reserva de un comprobante. Si el comprobante no existe, lanza como `findUniqueOrThrow`. */
+async function lockProofReservation(tx: Prisma.TransactionClient, proofId: string): Promise<void> {
+  const { reservationId } = await tx.paymentProof.findUniqueOrThrow({
+    where: { id: proofId },
+    select: { reservationId: true },
+  });
+  await lockReservation(tx, reservationId);
+}
+
 /** Estados en los que el pasajero todavía puede subir un comprobante. */
 const CAN_SUBMIT_PROOF = ["PENDIENTE_PAGO", "ABONADA", "EN_VALIDACION", "PAGO_EN_SITIO"] as const;
 
@@ -69,6 +93,7 @@ export async function submitProof(input: SubmitProofInput): Promise<{ proofId: s
   }
 
   return prisma.$transaction(async (tx) => {
+    await lockReservation(tx, input.reservationId);
     const reserva = await tx.reservation.findUniqueOrThrow({
       where: { id: input.reservationId },
     });
@@ -171,6 +196,9 @@ export async function approveProof(
   const ahora = input.now ?? new Date();
 
   return prisma.$transaction(async (tx) => {
+    // El comprobante y la reserva se leen después del bloqueo: así una segunda
+    // aprobación simultánea ve el comprobante ya APROBADO y el saldo ya sumado.
+    await lockProofReservation(tx, input.proofId);
     const comprobante = await assertProofBelongsToAgency(tx, input.proofId, input.agencyId);
 
     // Aprobar dos veces el mismo comprobante no debe sumar el abono otra vez.
@@ -289,6 +317,7 @@ export async function rejectProof(input: RejectProofInput): Promise<void> {
   }
 
   await prisma.$transaction(async (tx) => {
+    await lockProofReservation(tx, input.proofId);
     const comprobante = await assertProofBelongsToAgency(tx, input.proofId, input.agencyId);
     if (comprobante.status !== "PENDIENTE") {
       throw new ValidationError("Este comprobante ya fue revisado.");
@@ -373,6 +402,9 @@ export async function registerCashPaymentInTx(
     throw new ValidationError("El monto cobrado debe ser mayor que cero.");
   }
 
+  // El saldo se lee con la fila bloqueada: un segundo cobro simultáneo espera
+  // a que este confirme y calcula sobre el `paidUsd` ya actualizado.
+  await lockReservation(tx, input.reservationId);
   const reserva = await tx.reservation.findUniqueOrThrow({
     where: { id: input.reservationId },
     include: {
@@ -383,8 +415,10 @@ export async function registerCashPaymentInTx(
   if (reserva.departure.route.agencyId !== input.agencyId) {
     throw new ForbiddenError("OPERADOR", "payments.cash");
   }
+  // El taquillero ya tiene el efectivo en la mano: se le dice claramente que
+  // no lo reciba, en vez de no registrar nada en silencio.
   if (reserva.status === "PAGADA" || reserva.status === "ABORDADA") {
-    return { shouldIssueTicket: false };
+    throw new ValidationError(ALREADY_PAID_CASH_MESSAGE);
   }
 
   const montoUsd =

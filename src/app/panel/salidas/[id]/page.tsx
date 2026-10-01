@@ -21,6 +21,7 @@ import {
   panelButtonClass,
 } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
+import { prisma } from "@/lib/prisma";
 import { errorMessage, okMessage } from "../../_dashboard/search-params";
 import { CompactFigures } from "../../_shared/compact-figures";
 import { departureWhenText, plural } from "../../_shared/day-label";
@@ -88,7 +89,10 @@ function noViajaLabel(reservationStatus: string): string {
  * bordo o por abordar), para que coincida con "pasajeros esperados" de las
  * cifras; los que no viajan se nombran aparte porque van al final.
  */
-function pasajerosDescripcion(pasajeros: ReadonlyArray<{ estado: PassengerBoardingState; code: string }>): string {
+function pasajerosDescripcion(
+  pasajeros: ReadonlyArray<{ estado: PassengerBoardingState; code: string }>,
+  embarqueIniciado: boolean,
+): string {
   const viajan = pasajeros.filter((p) => p.estado !== "no-viaja");
   const noViajan = pasajeros.length - viajan.length;
   const extra =
@@ -103,7 +107,11 @@ function pasajerosDescripcion(pasajeros: ReadonlyArray<{ estado: PassengerBoardi
       : `Nadie viaja por ahora: los ${noViajan} pasajeros de la lista no viajan.`;
   }
   const reservas = new Set(viajan.map((p) => p.code)).size;
-  return `${plural(viajan.length, "pasajero", "pasajeros")} en ${plural(reservas, "reserva", "reservas")}. Primero los que faltan por subir.${extra}`;
+  // Antes del embarque faltan todos por subir: la lista va ordenada por pago.
+  const orden = embarqueIniciado
+    ? "Primero los que faltan por subir."
+    : "Primero los que todavía deben dinero o esperan la revisión de su pago.";
+  return `${plural(viajan.length, "pasajero", "pasajeros")} en ${plural(reservas, "reserva", "reservas")}. ${orden}${extra}`;
 }
 
 /**
@@ -137,7 +145,7 @@ function atencionAccion(resumen: ManifestSummary): string {
         ? uno
           ? "Revisa su comprobante"
           : "Revisa sus comprobantes"
-        : "Atiéndelos";
+        : "Cobra lo que falta y revisa los comprobantes";
   return `${verbo} antes de registrar la salida: si no, ${uno ? "su reserva se cancela" : "sus reservas se cancelan"}.`;
 }
 
@@ -171,6 +179,9 @@ interface PasajeroFila {
   fullName: string;
   idNumber: string;
   isHolder: boolean;
+  /** Nombre del titular de su reserva, para decir con quién viaja un acompañante. */
+  holderName: string | null;
+  reservationId: string;
   code: string;
   reservationStatus: string;
   boardedAt: Date | null;
@@ -180,6 +191,7 @@ interface PasajeroFila {
 /** Pasajeros seguidos de una misma reserva y situación, para la lista del teléfono. */
 interface GrupoReserva {
   key: string;
+  reservationId: string;
   code: string;
   reservationStatus: string;
   estado: PassengerBoardingState;
@@ -200,6 +212,7 @@ function agruparPorReserva(pasajeros: readonly PasajeroFila[]): GrupoReserva[] {
     } else {
       grupos.push({
         key: `${p.code}-${p.estado}`,
+        reservationId: p.reservationId,
         code: p.code,
         reservationStatus: p.reservationStatus,
         estado: p.estado,
@@ -246,6 +259,18 @@ export default async function SalidaDetallePage({
   const ok = okMessage(OK_LABELS, query.ok);
 
   const salida = await loadManifestOrNotFound(id, agencyId);
+  // Comprobantes por revisar de esta salida (la salida ya es de la agencia de
+  // la sesión), para abrir cada uno directo desde su reserva: la cola "Por
+  // revisar" de Pasajeros y pagos es de toda la agencia.
+  const comprobantes = await prisma.paymentProof.findMany({
+    where: { status: "PENDIENTE", reservation: { departureId: salida.id, departure: { route: { agencyId } } } },
+    select: { id: true, reservationId: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const comprobantePorReserva = new Map<string, string>();
+  for (const c of comprobantes) {
+    if (!comprobantePorReserva.has(c.reservationId)) comprobantePorReserva.set(c.reservationId, c.id);
+  }
 
   const ahora = new Date();
   const boardingStartedAt = salida.tripLog?.boardingStartedAt ?? null;
@@ -277,18 +302,21 @@ export default async function SalidaDetallePage({
   });
 
   const pasajeros: PasajeroFila[] = salida.reservations
-    .flatMap((r) =>
-      r.passengers.map((p) => ({
+    .flatMap((r) => {
+      const titular = r.passengers.find((p) => p.isHolder)?.fullName ?? null;
+      return r.passengers.map((p) => ({
         id: p.id,
         fullName: p.fullName,
         idNumber: p.idNumber,
         isHolder: p.isHolder,
+        holderName: titular,
+        reservationId: r.id,
         code: r.code,
         reservationStatus: r.status,
         boardedAt: p.boardedAt,
         estado: passengerBoardingState(r.status, p.boardedAt),
-      })),
-    )
+      }));
+    })
     // Entre los que faltan, primero los que todavía deben dinero (lo que hay
     // que atender antes de la puerta); los de una misma reserva quedan juntos.
     .sort(
@@ -316,11 +344,14 @@ export default async function SalidaDetallePage({
   const esperanRevision = antesDeSalir ? resumen.reviewPassengers : 0;
   const porCobrarHref = `/panel/pasajeros?vista=por-cobrar&salida=${salida.id}`;
   const hayAvisoPago = debenDinero > 0 || esperanRevision > 0;
-  // La cola "Por revisar" es de toda la agencia (no se filtra por salida): el
-  // enlace no lleva `salida=` y el botón lo dice, para no prometer un filtro
-  // que la cola no aplica. La cola ya ordena primero la salida más próxima.
-  const porRevisarHref = "/panel/pasajeros?vista=por-revisar";
-  const atencion = atencionPartes(resumen);
+  // La cola "Por revisar" es de toda la agencia (no se filtra por salida), así
+  // que no se enlaza: con un solo comprobante el aviso lo abre directo, y con
+  // varios cada reserva de la lista lleva su enlace «Revisar comprobante».
+  // Solo mientras la salida no parte: después esas reservas ya se cancelaron.
+  const revisarDe = (g: GrupoReserva): string | undefined =>
+    antesDeSalir && g.estado === "por-abordar" ? comprobantePorReserva.get(g.reservationId) : undefined;
+  const conComprobante = new Set(gruposViajan.map(revisarDe).filter((v): v is string => v !== undefined));
+  const unicoComprobante = conComprobante.size === 1 ? [...conComprobante][0] : undefined;
   // Antes de iniciar el embarque todos están "Por abordar": la columna y las
   // pastillas no dirían nada que la cifra "Por abordar" no diga ya.
   const mostrarAbordaje = embarqueIniciado || resumen.boarded > 0;
@@ -363,15 +394,7 @@ export default async function SalidaDetallePage({
               triggerLabel="Iniciar embarque"
               triggerClassName={panelButtonClass("primario", "lg", "w-full sm:w-fit")}
               title="¿Iniciar el embarque?"
-              description={
-                <p>
-                  Se cierra la venta: ya no se podrán vender pasajes para esta salida.{" "}
-                  {resumen.expected > 0
-                    ? `Hay ${plural(resumen.expected, "pasajero", "pasajeros")} con reserva.`
-                    : "Todavía no hay pasajeros con reserva."}
-                  {atencion ? ` De ellos, ${atencion}. ${atencionAccion(resumen)}` : null}
-                </p>
-              }
+              description={<ConsecuenciasEmbarque resumen={resumen} />}
               confirmLabel="Sí, iniciar embarque"
               pendingLabel="Iniciando embarque…"
               action={startBoardingAction}
@@ -500,7 +523,7 @@ export default async function SalidaDetallePage({
 
       <SectionCard
         title="Pasajeros"
-        description={pasajeros.length > 0 ? pasajerosDescripcion(pasajeros) : undefined}
+        description={pasajeros.length > 0 ? pasajerosDescripcion(pasajeros, embarqueIniciado) : undefined}
       >
         {pasajeros.length === 0 ? (
           <EmptyState
@@ -518,38 +541,46 @@ export default async function SalidaDetallePage({
         ) : (
           <>
             {hayAvisoPago ? (
-              <Alert
-                tone="alerta"
-                role="none"
-                className="mb-5"
-                action={
-                  // La lista "Por cobrar" cuenta reservas (también las de pago
-                  // en taquilla), así que el botón nombra lo que abre.
-                  <div className="flex flex-wrap gap-2">
+              // Los botones van debajo del texto y no en `action`: al lado, en
+              // la tableta, dejaban el texto en una columna estrecha.
+              <Alert tone="alerta" role="none" className="mb-5">
+                <p>
+                  {debenDinero > 0
+                    ? debenDinero === 1
+                      ? "1 pasajero todavía debe dinero y no podrá subir hasta pagar."
+                      : `${debenDinero} pasajeros todavía deben dinero y no podrán subir hasta pagar.`
+                    : null}
+                  {debenDinero > 0 && esperanRevision > 0 ? " " : null}
+                  {esperanRevision > 0
+                    ? esperanRevision === 1
+                      ? "1 pasajero envió un comprobante que debes revisar."
+                      : `${esperanRevision} pasajeros enviaron un comprobante que debes revisar.`
+                    : null}
+                  {esperanRevision > 0 && conComprobante.size > 1
+                    ? " Ábrelos con «Revisar comprobante» en cada reserva de la lista."
+                    : null}
+                </p>
+                {debenDinero > 0 || (esperanRevision > 0 && conComprobante.size <= 1) ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {/* La lista "Por cobrar" cuenta reservas (también las de pago
+                        en taquilla), así que el botón nombra lo que abre. */}
                     {debenDinero > 0 ? (
                       <Link href={porCobrarHref} className={panelButtonClass("secundario")}>
                         Ver las reservas por cobrar
                       </Link>
                     ) : null}
-                    {esperanRevision > 0 ? (
-                      <Link href={porRevisarHref} className={panelButtonClass("secundario")}>
+                    {esperanRevision > 0 && unicoComprobante ? (
+                      <Link href={revisarHref(unicoComprobante)} className={panelButtonClass("secundario")}>
+                        Revisar el comprobante
+                      </Link>
+                    ) : esperanRevision > 0 && conComprobante.size === 0 ? (
+                      // Sin el comprobante a mano (caso raro), queda la cola de la agencia.
+                      <Link href="/panel/pasajeros?vista=por-revisar" className={panelButtonClass("secundario")}>
                         Revisar los comprobantes de la agencia
                       </Link>
                     ) : null}
                   </div>
-                }
-              >
-                {debenDinero > 0
-                  ? debenDinero === 1
-                    ? "1 pasajero todavía debe dinero y no podrá subir hasta pagar."
-                    : `${debenDinero} pasajeros todavía deben dinero y no podrán subir hasta pagar.`
-                  : null}
-                {debenDinero > 0 && esperanRevision > 0 ? " " : null}
-                {esperanRevision > 0
-                  ? esperanRevision === 1
-                    ? "1 pasajero envió un comprobante que debes revisar."
-                    : `${esperanRevision} pasajeros enviaron un comprobante que debes revisar.`
-                  : null}
+                ) : null}
               </Alert>
             ) : null}
             {/* Teléfono: una fila por reserva, separadas por líneas y sin tarjeta
@@ -565,6 +596,7 @@ export default async function SalidaDetallePage({
                       ahora={ahora}
                       embarqueIniciado={embarqueIniciado}
                       mostrarAbordaje={mostrarAbordaje}
+                      revisarProofId={revisarDe(g)}
                     />
                   ))}
                 </ul>
@@ -632,7 +664,7 @@ export default async function SalidaDetallePage({
                             >
                               <td className={PANEL_TD_CLASS}>
                                 <p className="font-semibold">{p.fullName}</p>
-                                {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
+                                <p className="text-sm text-tinta-suave">{companionText(p)}</p>
                               </td>
                               <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.idNumber}</td>
                               {/* El código y el pago van una vez por reserva; en las
@@ -640,14 +672,22 @@ export default async function SalidaDetallePage({
                               <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>
                                 {primera ? g.code : <span className="sr-only">{g.code}</span>}
                               </td>
-                              <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                              <td className={PANEL_TD_CLASS}>
                                 {primera ? (
-                                  <StatusBadge
-                                    label={reservationStatusLabel(g.reservationStatus)}
-                                    tone={reservationStatusTone(g.reservationStatus)}
-                                  />
+                                  <div className="flex flex-col items-start gap-1.5 [&>span]:whitespace-nowrap!">
+                                    <StatusBadge
+                                      label={reservationStatusLabel(g.reservationStatus)}
+                                      tone={reservationStatusTone(g.reservationStatus)}
+                                    />
+                                    <RevisarComprobanteLink proofId={revisarDe(g)} />
+                                  </div>
                                 ) : (
-                                  <span className="sr-only">{reservationStatusLabel(g.reservationStatus)}</span>
+                                  <>
+                                    <span className="sr-only">{reservationStatusLabel(g.reservationStatus)}</span>
+                                    <span aria-hidden="true" className="text-sm text-tinta-tenue">
+                                      Misma reserva
+                                    </span>
+                                  </>
                                 )}
                               </td>
                               {mostrarAbordaje ? (
@@ -721,11 +761,14 @@ function GrupoMovil({
   ahora,
   embarqueIniciado,
   mostrarAbordaje,
+  revisarProofId,
   plegado = false,
 }: {
   grupo: GrupoReserva;
   ahora: Date;
   embarqueIniciado: boolean;
+  /** Comprobante por revisar de la reserva, si lo hay: se enlaza junto a la pastilla. */
+  revisarProofId?: string;
   /** Antes del embarque no se pinta la pastilla "Por abordar" de cada pasajero. */
   mostrarAbordaje: boolean;
   plegado?: boolean;
@@ -733,14 +776,14 @@ function GrupoMovil({
   const noViaja = grupo.estado === "no-viaja";
   return (
     <li className={cx("flex flex-col gap-3 py-4", !plegado && "first:pt-0 last:pb-0")}>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      {/* La pastilla va siempre en su propio renglón bajo el código, para
+          que todas las reservas tengan la misma forma sea cual sea su largo. */}
+      <div className="flex flex-col items-start gap-2">
         <p className="min-w-0">
           <span className="block text-sm text-tinta-suave">Código de reserva</span>
           <span className="tabular block text-[15px] font-semibold text-tinta">{grupo.code}</span>
         </p>
-        {/* `ml-auto`: la pastilla queda siempre a la derecha, también cuando
-            no cabe junto al código y baja a su propio renglón. */}
-        <span className="ml-auto">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {noViaja ? (
             <StatusBadge label={noViajaLabel(grupo.reservationStatus)} tone="neutro" />
           ) : (
@@ -749,7 +792,8 @@ function GrupoMovil({
               tone={reservationStatusTone(grupo.reservationStatus)}
             />
           )}
-        </span>
+          <RevisarComprobanteLink proofId={revisarProofId} />
+        </div>
       </div>
       <ul className="flex flex-col gap-3 border-l-2 border-borde pl-3">
         {grupo.pasajeros.map((p) => (
@@ -880,5 +924,80 @@ function Paso({
         {estado === "actual" ? children : null}
       </div>
     </li>
+  );
+}
+
+/** Revisión de un comprobante en Pasajeros y pagos, en su panel lateral. */
+function revisarHref(proofId: string): string {
+  return `/panel/pasajeros?vista=por-revisar&comprobante=${proofId}`;
+}
+
+/** Enlace a la revisión del comprobante de una reserva, o nada si no tiene uno pendiente. */
+function RevisarComprobanteLink({ proofId }: { proofId: string | undefined }) {
+  if (!proofId) return null;
+  return (
+    <Link
+      href={revisarHref(proofId)}
+      className="foco inline-flex min-h-11 items-center rounded-control text-sm font-semibold text-marca-700 underline underline-offset-4 hover:text-marca-800 md:min-h-0"
+    >
+      Revisar comprobante
+    </Link>
+  );
+}
+
+/**
+ * Línea bajo el nombre en la tabla: el titular lo dice y cada acompañante
+ * dice con quién viaja, para que sus celdas de reserva vacías no se lean como
+ * "sin pago".
+ */
+function companionText(p: PasajeroFila): string {
+  if (p.isHolder) return "Titular de la reserva";
+  return p.holderName ? `Viaja con ${p.holderName}` : "Acompañante";
+}
+
+/**
+ * Qué pasa al iniciar el embarque: una frase corta y, en lista con las cifras
+ * en negrita, a quiénes hay que atender antes de registrar la salida, igual
+ * que el diálogo de registrar la salida.
+ */
+function ConsecuenciasEmbarque({ resumen }: { resumen: ManifestSummary }) {
+  const deben = resumen.owingPassengers;
+  const revisar = resumen.reviewPassengers;
+  return (
+    <div className="flex flex-col gap-2">
+      <p>Se cierra la venta de esta salida: ya no se podrán vender pasajes.</p>
+      <p>
+        {resumen.expected > 0 ? (
+          <>
+            Hay{" "}
+            <strong className="font-semibold text-tinta">
+              {plural(resumen.expected, "pasajero", "pasajeros")} con reserva
+            </strong>
+            .
+          </>
+        ) : (
+          "Todavía no hay pasajeros con reserva."
+        )}
+      </p>
+      {deben > 0 || revisar > 0 ? (
+        <>
+          <ul className="flex list-disc flex-col gap-1 pl-5">
+            {deben > 0 ? (
+              <li>
+                <strong className="font-semibold text-tinta">{plural(deben, "pasajero", "pasajeros")}</strong> todavía{" "}
+                {deben === 1 ? "debe" : "deben"} dinero.
+              </li>
+            ) : null}
+            {revisar > 0 ? (
+              <li>
+                <strong className="font-semibold text-tinta">{plural(revisar, "pasajero", "pasajeros")}</strong>{" "}
+                {revisar === 1 ? "espera" : "esperan"} la revisión de su comprobante.
+              </li>
+            ) : null}
+          </ul>
+          <p>{atencionAccion(resumen)}</p>
+        </>
+      ) : null}
+    </div>
   );
 }

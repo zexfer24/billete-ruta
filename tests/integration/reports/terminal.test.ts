@@ -120,7 +120,7 @@ async function tripDetailScenario() {
 }
 
 describe("listTerminalTrips", () => {
-  it("excluye viajes fuera de ventana o sin llegada, ordena por salida descendente y el total coincide con terminalTripCount", async () => {
+  it("excluye viajes fuera de ventana o sin llegada, ordena por llegada descendente y el total coincide con terminalTripCount", async () => {
     const from = new Date("2026-09-01T00:00:00Z");
     const to = new Date("2026-09-10T23:59:59Z");
 
@@ -151,6 +151,7 @@ describe("listTerminalTrips", () => {
       dentro1.tripLog.id,
     ]);
     expect(resultado.rows[0]).toMatchObject({
+      arrivedAt: new Date("2026-09-07T14:00:00Z"),
       origin: dentro2.ruta.origin,
       meetingPoint: dentro2.ruta.meetingPoint,
       destination: dentro2.ruta.destination,
@@ -179,6 +180,33 @@ describe("listTerminalTrips", () => {
 
     expect(resultado.total).toBe(3);
     expect(resultado.rows).toHaveLength(2);
+  });
+
+  it("el límite se aplica por llegada: un viaje largo que salió antes pero llegó último entra, uno corto que llegó antes queda fuera", async () => {
+    const from = new Date("2026-09-01T00:00:00Z");
+    const to = new Date("2026-09-10T23:59:59Z");
+
+    // Sale primero y llega último: 14 horas de corredor.
+    const largo = await tripLogFixture({
+      departedAt: new Date("2026-09-05T00:00:00Z"),
+      arrivedAt: new Date("2026-09-05T14:00:00Z"),
+    });
+    // Salen después, pero el primero llega antes que el largo.
+    const cortoTemprano = await tripLogFixture({
+      departedAt: new Date("2026-09-05T08:00:00Z"),
+      arrivedAt: new Date("2026-09-05T10:00:00Z"),
+    });
+    const cortoTarde = await tripLogFixture({
+      departedAt: new Date("2026-09-05T12:00:00Z"),
+      arrivedAt: new Date("2026-09-05T13:00:00Z"),
+    });
+
+    const resultado = await listTerminalTrips(from, to, { limit: 2 });
+
+    expect(resultado.total).toBe(3);
+    expect(resultado.rows.map((r) => r.tripLogId)).toEqual([largo.tripLog.id, cortoTarde.tripLog.id]);
+    expect(resultado.rows.map((r) => r.tripLogId)).not.toContain(cortoTemprano.tripLog.id);
+    expect(resultado.rows[0]?.arrivedAt).toEqual(new Date("2026-09-05T14:00:00Z"));
   });
 });
 

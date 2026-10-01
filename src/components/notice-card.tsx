@@ -23,7 +23,7 @@ const LEVEL_STYLES: Record<
 /**
  * Aviso del pasajero (spec 6.3 y 7.1): icono del nivel en un círculo de su
  * color, título, una o dos frases, la hora con su significado ("Vence hoy a
- * las 14:30") y, si lleva a otra pantalla, la acción escrita ("Pagar ahora").
+ * las 14:30") y, si lleva a otra pantalla, la acción escrita ("Pagar mi viaje").
  * El nivel se dice también en texto para lectores de pantalla: el color
  * nunca va solo.
  */
@@ -38,7 +38,7 @@ export function NoticeCard({ notice, now = new Date() }: NoticeCardProps) {
           <Icon className="size-5" />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="font-bold leading-snug text-tinta">
+          <p className="text-pretty font-bold leading-snug text-tinta">
             <span className="sr-only">{label}: </span>
             {notice.title}
           </p>

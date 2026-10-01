@@ -20,13 +20,15 @@ import {
 import { Skeleton } from "@/components/skeleton";
 import { cx } from "@/components/ui-classes";
 import { prisma } from "@/lib/prisma";
-import { formatCaracas, formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
+import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { departureTaxByHour, listNewAccounts, listTerminalTrips } from "@/modules/reports";
 import { countLabel, formatCount } from "../_shared/format";
 import {
   AuditNote,
+  DatePhrase,
   DISCLOSURE_SUMMARY_CLASS,
   DisclosureChevron,
+  DotParts,
   MobileCardList,
   TimeCell,
 } from "../_shared/lists";
@@ -37,7 +39,8 @@ import {
   withQuery,
   type AdminRange,
 } from "../_shared/period";
-import { ButtonSkeleton, StatCardSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { ButtonSkeleton, StatCardSkeleton, TableSkeleton, skeletonColumns } from "../_shared/skeletons";
+import { arrivesAnotherDay, tripHoursParts } from "../_shared/trip-hours";
 import { movementsHref as tripDetailHref } from "../movimientos/movements";
 import {
   CHART_CAPTION,
@@ -79,8 +82,25 @@ const MOBILE_INITIAL = 5;
 const TRIP_COLUMNS = ["Salió", "Llegó", "Ruta", "Agencia", ""] as const;
 const NEW_ACCOUNT_COLUMNS = ["Registro", "Cédula", "Primer nombre", "Primer apellido"] as const;
 
-/** Etiquetas fijas de los datos de la tarjeta de un usuario nuevo, compartidas con su silueta. */
-const NEW_ACCOUNT_MOBILE_LABELS = ["Registro"] as const;
+/**
+ * Celdas de las dos tablas en la silueta, con las líneas y anchos de las
+ * reales: la hora con su fecha, la ruta con su punto de encuentro, la agencia
+ * y la flecha del detalle; en usuarios nuevos, el registro en dos líneas y los
+ * demás datos en una.
+ */
+const TRIP_SKELETON_COLUMNS = skeletonColumns(TRIP_COLUMNS, [
+  { lines: ["w-12", "w-20"] },
+  { lines: ["w-12", "w-20"] },
+  { lines: ["w-40", "w-56"] },
+  { lines: ["w-32"] },
+  { kind: "chevron" },
+]);
+const NEW_ACCOUNT_SKELETON_COLUMNS = skeletonColumns(NEW_ACCOUNT_COLUMNS, [
+  { lines: ["w-12", "w-20"] },
+  { lines: ["w-24"] },
+  { lines: ["w-24"] },
+  { lines: ["w-24"] },
+]);
 
 /** Títulos y frases fijas de las secciones, compartidos con su silueta de carga. */
 const TRIPS_TITLE = "Últimos viajes completados";
@@ -96,21 +116,17 @@ const CHART_TITLE = "Tasa cobrada por hora del día";
 /** Texto del enlace de cada viaje a su detalle en Movimientos, como allá. */
 const TRIP_DETAIL_LABEL = "Ver pasajeros a bordo";
 
-/** "29/09 21:59": el día y la hora juntos, para la línea de horas de la tarjeta. */
-function dayAndTime(date: Date): string {
-  return `${formatCaracas(date, "dd/MM")} ${formatCaracasTime24(date)}`;
-}
-
 /**
- * Horas del viaje en una línea para la tarjeta del teléfono, como en
- * Movimientos: "Salió 29/09 13:57 · Llegó 30/09 05:04". Las dos llevan su
- * fecha: el periodo cuenta por la llegada y la salida puede caer antes.
+ * Segunda línea de la tarjeta de un viaje: el punto de encuentro y, si salió
+ * y llegó el mismo día, la fecha delante ("30/09/2026 · Terminal La Bandera,
+ * andén 8"). La línea de horas (`tripHoursParts`, la misma de Movimientos)
+ * solo lleva la hora en ese caso; el periodo puede abarcar varios días, así
+ * que la fecha tiene que verse en algún lado. Si cruzó de día, cada hora ya
+ * va con su fecha.
  */
-function tripHoursLine(departedAt: Date | null, arrivedAt: Date | null): string {
-  const parts: string[] = [];
-  if (departedAt) parts.push(`Salió ${dayAndTime(departedAt)}`);
-  if (arrivedAt) parts.push(`Llegó ${dayAndTime(arrivedAt)}`);
-  return parts.join(" · ");
+function tripPlaceParts(departedAt: Date | null, arrivedAt: Date | null, meetingPoint: string): string[] {
+  const day = arrivedAt ?? departedAt;
+  return day && !arrivesAnotherDay(departedAt, arrivedAt) ? [formatCaracasDate(day), meetingPoint] : [meetingPoint];
 }
 
 /**
@@ -170,9 +186,9 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
           cabecera de la sección de abajo, con el mismo destino. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard
-          label="Recorridos completados"
+          label="Viajes completados"
           value={formatCount(trips.total)}
-          detail="Viajes que llegaron a su destino."
+          detail="Llegaron a su destino en este periodo."
           icon={<IconBus />}
           tone="neutro"
         />
@@ -199,8 +215,8 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
         {tripRows.length === 0 ? (
           <EmptyState
             icon={<IconRoute />}
-            title="No hay recorridos completados en este periodo"
-            description="Un recorrido cuenta cuando la agencia registra la llegada del bus a su destino."
+            title="No hay viajes completados en este periodo"
+            description="Un viaje cuenta cuando la agencia registra la llegada del bus a su destino."
             action={
               wider ? (
                 <Link href={wider.href} className={panelButtonClass("secundario")}>
@@ -216,7 +232,7 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
                 <MobileCardList
                   label={TRIPS_TITLE}
                   initial={MOBILE_INITIAL}
-                  moreNoun={["recorrido", "recorridos"]}
+                  moreNoun={["viaje", "viajes"]}
                   items={tripRows.map((t) => (
                     // Toda la tarjeta abre el viaje en Movimientos, como allá.
                     <li key={t.tripLogId}>
@@ -234,9 +250,11 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
                           </span>
                           <span className="flex flex-col">
                             <span className="tabular text-[15px] font-medium text-tinta">
-                              {tripHoursLine(t.departedAt, t.arrivedAt)}
+                              <DotParts parts={tripHoursParts(t.departedAt, t.arrivedAt)} />
                             </span>
-                            <span className="text-sm text-tinta-suave">{t.meetingPoint}</span>
+                            <span className="text-sm text-tinta-suave">
+                              <DotParts parts={tripPlaceParts(t.departedAt, t.arrivedAt, t.meetingPoint)} />
+                            </span>
                           </span>
                         </span>
                         <IconChevronRight className="size-5 shrink-0 text-marca-700" />
@@ -288,7 +306,7 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
                           <Link
                             href={t.href}
                             aria-label={`${TRIP_DETAIL_LABEL}: ${t.agencyName}, ${t.origin} a ${t.destination}`}
-                            className={panelButtonClass("fantasma", "sm", "px-2")}
+                            className={panelButtonClass("fantasma", "md")}
                           >
                             <IconChevronRight className="size-5 shrink-0" />
                           </Link>
@@ -302,7 +320,7 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
             {trips.total > tripRows.length ? (
               <p className="text-sm text-tinta-suave">
                 Se muestran los {formatCount(tripRows.length)} más recientes de{" "}
-                {countLabel(trips.total, "recorrido", "recorridos")}.
+                {countLabel(trips.total, "viaje", "viajes")}.
               </p>
             ) : null}
           </div>
@@ -335,8 +353,16 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
                   <MobileCard
                     key={a.id}
                     title={`${a.firstName} ${a.firstSurname}`}
-                    subtitle={`Cédula ${a.idNumber}`}
-                    details={[{ label: NEW_ACCOUNT_MOBILE_LABELS[0], value: formatCaracasDateTime24(a.createdAt) }]}
+                    subtitle={
+                      // Como en Usuarios: la cédula y el registro en dos líneas
+                      // secundarias, sin partir la fecha de su hora.
+                      <>
+                        <span className="tabular block whitespace-nowrap">Cédula {a.idNumber}</span>
+                        <span className="tabular block">
+                          <DatePhrase lead="Se registró" date={a.createdAt} />
+                        </span>
+                      </>
+                    }
                   />
                 ))}
               />
@@ -427,7 +453,7 @@ export function PeriodDataSkeleton({ severalDays = false }: { severalDays?: bool
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <StatCardSkeleton label="Recorridos completados" icon={<IconBus />} />
+        <StatCardSkeleton label="Viajes completados" icon={<IconBus />} />
         <StatCardSkeleton label="Usuarios nuevos" icon={<IconUsers />} />
       </div>
       <SectionCardSkeleton
@@ -435,18 +461,32 @@ export function PeriodDataSkeleton({ severalDays = false }: { severalDays?: bool
         description={TRIPS_DESCRIPTION}
         action={<ButtonSkeleton>{MOVEMENTS_LINK_LABEL}</ButtonSkeleton>}
       >
-        {/* Como la tarjeta real: ruta, agencia, la línea de horas y el punto
-            de encuentro, con su flecha. */}
-        <TableSkeleton columns={TRIP_COLUMNS} rows={5} mobileDetails={0} mobileSubtitleLines={3} mobileChevron />
+        {/* Como la tarjeta real: ruta, agencia, la línea de horas y la fecha
+            con el punto de encuentro, con su flecha; tantas tarjetas como se
+            ven antes de "Ver N más". */}
+        <TableSkeleton
+          columns={TRIP_SKELETON_COLUMNS}
+          thClass={PANEL_TH_CLASS}
+          tdClass={PANEL_TD_CLASS}
+          rows={5}
+          mobileCards={MOBILE_INITIAL}
+          mobileDetails={0}
+          mobileSubtitleLines={3}
+          mobileChevron
+        />
       </SectionCardSkeleton>
       <SectionCardSkeleton title={NEW_ACCOUNTS_TITLE} description={NEW_ACCOUNTS_DESCRIPTION}>
         <div className="flex flex-col gap-3">
+          {/* Como la tarjeta real: nombre, cédula y registro, sin datos aparte. */}
           <TableSkeleton
-            columns={NEW_ACCOUNT_COLUMNS}
-            rows={4}
-            mobileCards={2}
-            mobileDetails={1}
-            mobileDetailLabels={NEW_ACCOUNT_MOBILE_LABELS}
+            columns={NEW_ACCOUNT_SKELETON_COLUMNS}
+            thClass={PANEL_TH_CLASS}
+            tdClass={PANEL_TD_CLASS}
+            rows={8}
+            mobileCards={MOBILE_INITIAL}
+            mobileDetails={0}
+            mobileSubtitleLines={2}
+            mobileMore
           />
           <AuditNote>{AUDIT_TEXT}</AuditNote>
         </div>

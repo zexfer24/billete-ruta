@@ -1,5 +1,4 @@
-import { Skeleton, SkeletonScreen } from "@/components/skeleton";
-import { panelButtonClass } from "@/components/panel-ui";
+import { Skeleton, SkeletonButton, SkeletonScreen } from "@/components/skeleton";
 import { IconCash, IconDownload } from "@/components/icons";
 import { ListSkeleton, TabsSkeleton } from "./skeletons";
 
@@ -29,14 +28,16 @@ export default function PasajerosLoading() {
           </p>
         </div>
         <div className="flex min-w-0 max-w-full flex-wrap gap-2">
-          <span className={panelButtonClass("secundario")}>
+          {/* Quietos: el cobro con el brillo de carga en vez del borde, la
+              descarga (fantasma, sin fondo) con su texto en tinta-suave. */}
+          <SkeletonButton className="w-full sm:w-auto">
             <IconCash className="size-5" />
             Registrar un cobro
-          </span>
-          <span className={panelButtonClass("fantasma")}>
+          </SkeletonButton>
+          <SkeletonButton ghost className="w-full sm:w-auto">
             <IconDownload className="size-5" />
             Descargar en Excel (CSV)
-          </span>
+          </SkeletonButton>
         </div>
       </div>
 

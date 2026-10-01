@@ -15,18 +15,21 @@ export const DASHBOARD_SECTION_ACTION_CLASS = "min-w-0 max-w-full sm:shrink-0";
 
 /** Tarjeta de sección del tablero: título `h2`, descripción, acción y cuerpo. */
 export function DashboardSection({
+  id,
   title,
   description,
   action,
   children,
 }: {
+  /** Ancla de la sección, para enlazarla desde otra parte del tablero. */
+  id?: string;
   title: string;
   description?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-tarjeta border border-borde bg-superficie shadow-1">
+    <section id={id} className="scroll-mt-6 rounded-tarjeta border border-borde bg-superficie shadow-1">
       <div className={DASHBOARD_SECTION_HEADER_CLASS}>
         <div className={DASHBOARD_SECTION_TEXT_CLASS}>
           <h2 className="text-lg font-semibold text-tinta">{title}</h2>

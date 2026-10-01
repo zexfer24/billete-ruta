@@ -129,11 +129,15 @@ function BoardItem({
 
   return (
     <>
+      {/*
+        La hora deja al menos 8 px de aire a cada lado del bloque: text-xl en
+        80 px en el teléfono y text-2xl en 96 px desde `sm`.
+      */}
       <div
-        className="flex w-20 shrink-0 flex-col items-center justify-center gap-1 px-2 py-3 text-center"
+        className="flex w-20 shrink-0 flex-col items-center justify-center gap-1 px-2 py-3 text-center sm:w-24"
         style={{ backgroundColor: color.bg, color: color.fg }}
       >
-        <span className="tabular text-2xl font-bold leading-none">
+        <span className="tabular text-xl font-bold leading-none sm:text-2xl">
           <span className="sr-only">Sale a las </span>
           {formatCaracasTime24(departure.departsAt)}
         </span>
@@ -235,7 +239,7 @@ export function DepartureBoardSkeleton({ rows = 4, hideSeats = false }: { rows?:
             hideSeats ? "min-h-24" : "min-h-28"
           }`}
         >
-          <Skeleton className="w-20 shrink-0 rounded-none" />
+          <Skeleton className="w-20 shrink-0 rounded-none sm:w-24" />
           <div className="flex min-w-0 flex-1 items-center gap-3 p-3 sm:p-4">
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <Skeleton className="h-5 w-3/5 rounded-pastilla" />

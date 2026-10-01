@@ -1,39 +1,30 @@
 import Link from "next/link";
 import type { AgencyFleetStatus, UnitDeparture } from "@/modules/reports";
-import { UNIT_STATE_LABELS, unitStateTone, type StatusTone, type UnitState } from "@/lib/labels";
-import { countLabel } from "./text";
+import { UNIT_STATE_LABELS, unitStateTone, type UnitState } from "@/lib/labels";
+import { formatCaracasDate } from "@/lib/time";
+import { countLabel, todayTripsNote } from "./text";
 import { FLEET_SECTION } from "./section-texts";
 import { EmptyState, StatusBadge, panelButtonClass } from "@/components/panel-ui";
 import { DashboardSection } from "./section-card";
-import { FLEET_DRIVER_ROW_CLASS, FLEET_LIST_CLASS, MAX_FILAS_MOVIL, mobileRowClass } from "./list-classes";
+import {
+  FLEET_DRIVER_ROW_CLASS,
+  FLEET_LIST_CLASS,
+  FLEET_MAX_FILAS,
+  FLEET_MORE_LINK_CLASS,
+  FLEET_NOTE_CLASS,
+  MAX_FILAS_MOVIL,
+  mobileRowClass,
+} from "./list-classes";
 import { IconChevronRight, IconUsers, IconWarning } from "@/components/icons";
 import { describeUnitTrip } from "../_shared/unit-trip";
 
+type Chofer = AgencyFleetStatus["drivers"][number];
+
 /**
- * Estado de una unidad tal como lo dice el tablero. Es el de `unitStateOf`
- * salvo en un caso: una salida PROGRAMADA cuya hora ya pasó (`current.overdue`)
- * deja a la unidad en EMBARCANDO, pero nadie abrió el embarque. Aquí se dice
- * "Atrasado", igual que "Salidas de hoy" y "Lo que necesita tu atención" dicen
- * "Atrasada" de esa misma salida: si no, la misma pantalla decía que el bus
- * cargaba pasajeros y que nadie lo había despachado. Con el embarque abierto
- * (MANIFIESTO_CERRADO), aunque vaya tarde, "Embarcando" es correcto.
+ * Orden por urgencia, el mismo del resumen de buses y de la pantalla de flota:
+ * lo que está pasando ahora va primero.
  */
-type DashboardUnitState = UnitState | "ATRASADO";
-
-function dashboardStateOf(unit: { state: UnitState; current: UnitDeparture | null }): DashboardUnitState {
-  return unit.current?.overdue && unit.current.status === "PROGRAMADA" ? "ATRASADO" : unit.state;
-}
-
-function stateLabel(estado: DashboardUnitState): string {
-  return estado === "ATRASADO" ? "Atrasado" : UNIT_STATE_LABELS[estado];
-}
-
-function stateTone(estado: DashboardUnitState): StatusTone {
-  return estado === "ATRASADO" ? "alerta" : unitStateTone(estado);
-}
-
-/** Orden fijo del resumen de estados de vehículos, igual que en la pantalla de flota. */
-const ORDEN_RESUMEN: readonly DashboardUnitState[] = [
+const ORDEN_ESTADOS: readonly UnitState[] = [
   "EN_RUTA",
   "ATRASADO",
   "EMBARCANDO",
@@ -43,7 +34,7 @@ const ORDEN_RESUMEN: readonly DashboardUnitState[] = [
 ];
 
 /** Cómo se dice cada estado de un bus en una frase ("3 buses con viaje asignado"). */
-const BUS_STATE_PHRASES: Record<DashboardUnitState, { singular: string; plural: string }> = {
+const BUS_STATE_PHRASES: Record<UnitState, { singular: string; plural: string }> = {
   EN_RUTA: { singular: "bus en ruta", plural: "buses en ruta" },
   ATRASADO: { singular: "bus atrasado", plural: "buses atrasados" },
   EMBARCANDO: { singular: "bus embarcando", plural: "buses embarcando" },
@@ -51,6 +42,38 @@ const BUS_STATE_PHRASES: Record<DashboardUnitState, { singular: string; plural: 
   DISPONIBLE: { singular: "bus disponible", plural: "buses disponibles" },
   FUERA_DE_SERVICIO: { singular: "bus fuera de servicio", plural: "buses fuera de servicio" },
 };
+
+/** El viaje que decide la línea del chofer: el que lleva ahora o, si no, el próximo. */
+function tripOf(chofer: Chofer): UnitDeparture | undefined {
+  return chofer.current ?? chofer.upcoming[0];
+}
+
+/**
+ * Primero por urgencia y, dentro de un mismo estado, por la hora de su viaje
+ * (los que no tienen viaje, al final); el nombre solo desempata. Así el que
+ * sale antes queda arriba, y no el que va primero en el abecedario.
+ */
+function compareByUrgency(a: Chofer, b: Chofer): number {
+  const porEstado = ORDEN_ESTADOS.indexOf(a.state) - ORDEN_ESTADOS.indexOf(b.state);
+  if (porEstado !== 0) return porEstado;
+  const horaA = tripOf(a)?.departsAt.getTime() ?? Number.POSITIVE_INFINITY;
+  const horaB = tripOf(b)?.departsAt.getTime() ?? Number.POSITIVE_INFINITY;
+  if (horaA !== horaB) return horaA < horaB ? -1 : 1;
+  return a.fullName.localeCompare(b.fullName);
+}
+
+/**
+ * Si el chofer ya aparece, con su placa, ruta y hora, en "Salidas de hoy",
+ * justo encima: no lleva ningún viaje ahora y el próximo es de hoy. Repetirlo
+ * aquí era la misma tabla dos veces. Los que están en ruta, embarcando,
+ * atrasados o fuera de servicio sí se listan (su pastilla dice algo que la
+ * tabla no dice), igual que los que no tienen viaje hoy.
+ */
+function isAlreadyInTodayTrips(chofer: Chofer, now: Date): boolean {
+  if (chofer.state !== "ASIGNADO" && chofer.state !== "DISPONIBLE") return false;
+  const viaje = tripOf(chofer);
+  return viaje !== undefined && formatCaracasDate(viaje.departsAt) === formatCaracasDate(now);
+}
 
 /**
  * La ruta como «origen → destino», igual que «Salidas de hoy» y «Lo que
@@ -71,7 +94,7 @@ function withArrowRoute(departure: UnitDeparture): UnitDeparture {
  * tono de alerta, como en la pantalla de flota.
  */
 function driverTripLine(
-  chofer: AgencyFleetStatus["drivers"][number],
+  chofer: Chofer,
   now: Date,
 ): { text: string; late: boolean } {
   const proxima = chofer.upcoming.slice(0, 1).map(withArrowRoute);
@@ -95,16 +118,16 @@ function driverTripLine(
  * ("Hoy 10:00" o "Sin viajes"), y cinco pastillas iguales no distinguían a
  * nadie.
  */
-function showsDriverBadge(estado: DashboardUnitState): boolean {
+function showsDriverBadge(estado: UnitState): boolean {
   return estado !== "ASIGNADO" && estado !== "DISPONIBLE";
 }
 
-/** Máximo de choferes que muestra la lista antes de remitir a la flota completa. */
-const MAX_FILAS = 5;
-
 /**
  * "Choferes y buses" del tablero: cuántos buses hay en cada estado y los
- * choferes con viaje en curso o próximo, cada uno en una línea.
+ * choferes que dicen algo que "Salidas de hoy" no dice (en ruta, embarcando,
+ * atrasados, fuera de servicio o sin viaje hoy), del más urgente al menos
+ * urgente. Los que solo tienen su viaje de hoy asignado se cuentan en una
+ * línea, porque ya salen en la tabla de arriba.
  */
 export async function FleetBlock({
   fleet,
@@ -117,15 +140,19 @@ export async function FleetBlock({
 }) {
   const flota = await fleet;
   const relevantes = flota.drivers.filter((chofer) => chofer.active || chofer.current);
-  const visibles = relevantes.slice(0, MAX_FILAS);
-  // El resumen se cuenta con el estado del tablero (con "Atrasado"), no con
-  // `vehicleSummary`, para que diga lo mismo que la pastilla de cada chofer.
-  const conteo = new Map<DashboardUnitState, number>();
+  const destacados = relevantes.filter((chofer) => !isAlreadyInTodayTrips(chofer, now)).sort(compareByUrgency);
+  const visibles = destacados.slice(0, FLEET_MAX_FILAS);
+  const enSalidasDeHoy = relevantes.length - destacados.length;
+  const conteo = new Map<UnitState, number>();
   for (const vehiculo of flota.vehicles) {
-    const estado = dashboardStateOf(vehiculo);
-    conteo.set(estado, (conteo.get(estado) ?? 0) + 1);
+    conteo.set(vehiculo.state, (conteo.get(vehiculo.state) ?? 0) + 1);
   }
-  const resumen = ORDEN_RESUMEN.filter((estado) => (conteo.get(estado) ?? 0) > 0);
+  const resumen = ORDEN_ESTADOS.filter((estado) => (conteo.get(estado) ?? 0) > 0);
+  // El enlace a la flota completa aparece si quedan choferes sin mostrar: en
+  // escritorio, más allá de las cinco filas o de los que están en "Salidas de
+  // hoy"; en el teléfono, que muestra tres filas, también desde el cuarto.
+  const ocultosEnEscritorio = relevantes.length > visibles.length;
+  const ocultosEnTelefono = relevantes.length > Math.min(visibles.length, MAX_FILAS_MOVIL);
 
   return (
     <DashboardSection
@@ -162,7 +189,7 @@ export async function FleetBlock({
                         BUS_STATE_PHRASES[estado].singular,
                         BUS_STATE_PHRASES[estado].plural,
                       )}
-                      tone={stateTone(estado)}
+                      tone={unitStateTone(estado)}
                     />
                   </li>
                 ))}
@@ -172,37 +199,40 @@ export async function FleetBlock({
 
           <div className="flex flex-col gap-2">
             <h3 className="text-base font-semibold text-tinta">Choferes</h3>
-            <ul className={FLEET_LIST_CLASS}>
-              {visibles.map((chofer, index) => {
-                const linea = driverTripLine(chofer, now);
-                const estado = dashboardStateOf(chofer);
-                return (
-                  <li key={chofer.id} className={`${FLEET_DRIVER_ROW_CLASS} ${mobileRowClass(index)}`}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-tinta">{chofer.fullName}</p>
-                      {showsDriverBadge(estado) ? (
-                        <StatusBadge label={stateLabel(estado)} tone={stateTone(estado)} />
-                      ) : null}
-                    </div>
-                    {linea.late ? (
-                      <p className="tabular flex items-start gap-1.5 text-sm font-semibold text-alerta">
-                        <IconWarning className="mt-0.5 size-4 shrink-0" />
-                        <span>{linea.text}</span>
-                      </p>
-                    ) : (
-                      <p className="tabular text-sm text-tinta-suave">{linea.text}</p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            {visibles.length > 0 ? (
+              <ul className={FLEET_LIST_CLASS}>
+                {visibles.map((chofer, index) => {
+                  const linea = driverTripLine(chofer, now);
+                  return (
+                    <li key={chofer.id} className={`${FLEET_DRIVER_ROW_CLASS} ${mobileRowClass(index)}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-semibold text-tinta">{chofer.fullName}</p>
+                        {showsDriverBadge(chofer.state) ? (
+                          <StatusBadge label={UNIT_STATE_LABELS[chofer.state]} tone={unitStateTone(chofer.state)} />
+                        ) : null}
+                      </div>
+                      {linea.late ? (
+                        <p className="tabular flex items-start gap-1.5 text-sm font-semibold text-alerta">
+                          <IconWarning className="mt-0.5 size-4 shrink-0" />
+                          <span>{linea.text}</span>
+                        </p>
+                      ) : (
+                        <p className="tabular text-sm text-tinta-suave">{linea.text}</p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            {enSalidasDeHoy > 0 ? (
+              <p className={FLEET_NOTE_CLASS}>{todayTripsNote(enSalidasDeHoy, visibles.length > 0)}</p>
+            ) : null}
           </div>
 
-          {/* En el teléfono se ven menos choferes: el enlace aparece desde el cuarto. */}
-          {relevantes.length > MAX_FILAS_MOVIL ? (
+          {ocultosEnTelefono ? (
             <Link
               href="/panel/flota?vista=choferes"
-              className={`foco inline-flex min-h-11 w-fit items-center gap-1 rounded-control px-2 text-[15px] font-semibold text-marca-700 hover:bg-marca-50${relevantes.length > MAX_FILAS ? "" : " md:hidden"}`}
+              className={`${FLEET_MORE_LINK_CLASS}${ocultosEnEscritorio ? "" : " md:hidden"}`}
             >
               Ver los {relevantes.length} choferes
               <IconChevronRight className="size-5" />

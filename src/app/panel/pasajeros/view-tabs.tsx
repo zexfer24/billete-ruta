@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { cx } from "@/components/ui-classes";
+import { cx, PANEL_TAB_ACTIVE_CLASS, PANEL_TAB_INACTIVE_CLASS } from "@/components/ui-classes";
 import { IconSpinner } from "@/components/icons";
 import type { PanelTab } from "@/components/panel-ui";
 import { TABS_CONTAINER_CLASS, tabItemLayoutClass } from "./tab-layout";
@@ -42,8 +42,10 @@ function TabCount({ count, active }: { count?: number; active: boolean }) {
 }
 
 /**
- * Pestañas de "Pasajeros y pagos": el mismo aspecto que `PanelTabs` (bajan
- * de fila en vez de desplazarse de lado), con la rejilla de dos columnas del
+ * Pestañas de "Pasajeros y pagos": el mismo aspecto que `PanelTabs`, con
+ * sus mismas clases de pestaña activa (fondo suave y barra inferior, una señal
+ * que no depende solo del color) e inactiva. Bajan de fila en vez de
+ * desplazarse de lado, con la rejilla de dos columnas del
  * teléfono de `tab-layout.ts`, y la pestaña pulsada responde en el mismo
  * instante. Como solo cambian los `searchParams`, el `loading.tsx` no vuelve a mostrarse y,
  * sin esto, la pantalla quedaba quieta hasta que llegaban los datos: ahora la
@@ -61,9 +63,7 @@ export function ViewTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) {
             className={cx(
               "foco relative inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none sm:grow-0 sm:justify-start",
               tabItemLayoutClass(index, tabs.length),
-              tab.active
-                ? "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200"
-                : "text-tinta-suave hover:bg-lienzo hover:text-tinta",
+              tab.active ? PANEL_TAB_ACTIVE_CLASS : PANEL_TAB_INACTIVE_CLASS,
             )}
           >
             {tab.label}

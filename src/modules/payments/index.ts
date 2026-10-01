@@ -1,4 +1,5 @@
 export {
+  ALREADY_PAID_CASH_MESSAGE,
   approveProof,
   registerCashPayment,
   registerCashPaymentInTx,

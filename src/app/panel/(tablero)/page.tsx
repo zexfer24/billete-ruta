@@ -19,7 +19,8 @@ import { SidePanel } from "@/components/side-panel";
 import { PanelFeedback } from "@/components/panel-feedback";
 import { SkeletonText } from "@/components/skeleton";
 import { IconBus, IconCalendar, IconCash, IconRefresh, IconStore, IconUsers } from "@/components/icons";
-import { PanelPageHeader, PanelTabs, panelButtonClass } from "@/components/panel-ui";
+import { PanelPageHeader, panelButtonClass } from "@/components/panel-ui";
+import { PeriodChips } from "@/app/panel/_shared/period-chips";
 import { panelFeedbackUrl } from "@/app/panel/feedback";
 import { CashPaymentForm } from "@/app/panel/_forms/cash-payment-form";
 import { DepartureForm } from "@/app/panel/_forms/departure-form";
@@ -61,6 +62,13 @@ const PERIOD_PHRASES: Record<DashboardPeriod, string> = {
   "7d": "los últimos 7 días",
   "30d": "los últimos 30 días",
 };
+
+/**
+ * Ancho de los dos botones de la cabecera: en el teléfono se apilan con el
+ * mismo ancho (cada uno con el suyo dejaba el borde derecho dentado y el
+ * secundario más ancho que el principal); desde `sm`, su ancho natural.
+ */
+const HEADER_ACTION_WIDTH_CLASS = "w-full sm:w-auto";
 
 type Registrar = "cobro" | "salida" | "vehiculo" | "chofer";
 
@@ -157,11 +165,15 @@ export default async function PanelPage({
         description={`${nombre ? `Hola, ${nombre}. ` : ""}Aquí ves lo que necesita tu atención y cómo va tu agencia.`}
         actions={
           <>
-            <Link href="/panel/taquilla" className={panelButtonClass("primario", "lg")}>
+            <Link href="/panel/taquilla" className={panelButtonClass("primario", "lg", HEADER_ACTION_WIDTH_CLASS)}>
               <IconStore className="size-5" />
               Vender un pasaje
             </Link>
-            <Link href={registrarHref("cobro")} scroll={false} className={panelButtonClass("secundario", "lg")}>
+            <Link
+              href={registrarHref("cobro")}
+              scroll={false}
+              className={panelButtonClass("secundario", "lg", HEADER_ACTION_WIDTH_CLASS)}
+            >
               <IconCash className="size-5" />
               Registrar un cobro
             </Link>
@@ -203,9 +215,14 @@ export default async function PanelPage({
           <h2 id="resumen-titulo" className="text-lg font-semibold text-tinta">
             Resumen de {periodPhrase}
           </h2>
-          <PanelTabs
-            label="Periodo del resumen"
-            tabs={DASHBOARD_PERIODS.map((p) => ({
+          {/* El mismo filtro de periodo que Reportes (`PeriodChips`): es un
+              filtro, no un cambio de vista, y así se ve igual en las dos pantallas. */}
+          <span id="periodo-resumen" className="sr-only">
+            Periodo del resumen
+          </span>
+          <PeriodChips
+            labelledBy="periodo-resumen"
+            options={DASHBOARD_PERIODS.map((p) => ({
               href: p === "hoy" ? "/panel" : `/panel?periodo=${p}`,
               label: DASHBOARD_PERIOD_LABELS[p],
               active: periodo === p,

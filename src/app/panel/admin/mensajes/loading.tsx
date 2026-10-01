@@ -1,6 +1,7 @@
 import { IconSearch } from "@/components/icons";
 import { PANEL_LABEL_CLASS } from "@/components/panel-ui";
 import { SkeletonScreen } from "@/components/skeleton";
+import { SearchLayout } from "../_shared/search-layout";
 import { ButtonSkeleton, InputSkeleton, PageHeaderSkeleton, TabsSkeleton } from "../_shared/skeletons";
 import { MESSAGE_TAB_LABELS } from "./messages";
 import { MessagesListSkeleton } from "./messages-list";
@@ -27,14 +28,16 @@ export default function MensajesAdminLoading() {
         className="flex flex-col gap-1.5 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
       >
         <p className={PANEL_LABEL_CLASS}>{MESSAGE_SEARCH_LABEL}</p>
-        <div className="flex flex-wrap gap-2">
-          <InputSkeleton className="min-w-0 flex-1 basis-60" />
-          <ButtonSkeleton className="flex-1 sm:flex-none">
-            <IconSearch className="size-5 shrink-0" />
-            Buscar
-          </ButtonSkeleton>
-        </div>
-        <MessageSearchExamples />
+        <SearchLayout
+          field={<InputSkeleton className="min-w-0 flex-1" />}
+          hint={<MessageSearchExamples />}
+          actions={
+            <ButtonSkeleton className="flex-1 sm:flex-none">
+              <IconSearch className="size-5 shrink-0" />
+              Buscar
+            </ButtonSkeleton>
+          }
+        />
       </div>
       <TabsSkeleton labels={MESSAGE_TAB_LABELS} counts />
       <MessagesListSkeleton />

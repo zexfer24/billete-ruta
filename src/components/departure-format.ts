@@ -8,7 +8,7 @@ import {
   formatRelativeDeparture,
   minutesUntil,
 } from "@/lib/time";
-import { capitalize, dayTimePhrase } from "./passenger-copy";
+import { capitalize, whenPhrase } from "./passenger-copy";
 
 /**
  * Reglas puras de presentación de una salida, compartidas por el tablero de
@@ -88,11 +88,12 @@ export function departureDayLabel(departsAt: Date, now: Date): string | null {
 
 /**
  * Cuándo sale, en una frase que se entiende sola, para las tarjetas del
- * pasajero: "Sale ahora", "Sale en 15 min", "Sale a las 13:00" (hoy),
- * "Mañana a las 07:00" o "Jue 1 oct a las 07:00", y "Salió" si ya pasó.
- * Con `dayInHeading` el día ya lo dice el título del grupo, así que para
- * otros días basta "Sale a las 07:00". El panel sigue usando
- * `formatRelativeDeparture`.
+ * pasajero: "Sale ahora", "Sale en 15 min", "Sale hoy a las 13:00", "Sale
+ * mañana a las 07:00" o "Sale el jue 1 oct a las 07:00" (hora de Caracas,
+ * 24 h), y "Salió" si ya pasó. Siempre dice el día, porque donde no hay un
+ * título de grupo "06:00" a secas puede leerse como mañana. Con
+ * `dayInHeading` el día ya lo dice el título del grupo, así que basta "Sale
+ * a las 07:00". El panel sigue usando `formatRelativeDeparture`.
  */
 export function departureWhenLabel(
   departsAt: Date,
@@ -102,10 +103,10 @@ export function departureWhenLabel(
   if (minutesUntil(departsAt, now) < URGENT_DEPARTURE_MINUTES) {
     return formatRelativeDeparture(departsAt, now);
   }
-  if (dayInHeading || formatCaracasDate(departsAt) === formatCaracasDate(now)) {
+  if (dayInHeading) {
     return `Sale a las ${formatCaracasTime24(departsAt)}`;
   }
-  return capitalize(dayTimePhrase(departsAt, now));
+  return `Sale ${whenPhrase(departsAt, now)}`;
 }
 
 /** Duración estimada con su texto, para que no quede un "9 h" suelto: "Duración: 9 h". */

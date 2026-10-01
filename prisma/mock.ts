@@ -178,6 +178,51 @@ function diaCaracas(fecha: Date): string {
   return new Date(fecha.getTime() - 4 * HORA).toISOString().slice(0, 10);
 }
 
+/** Horario de taquilla, en horas de Caracas: los cobros y las aprobaciones ocurren solo en él. */
+const TAQUILLA_ABRE = 6;
+const TAQUILLA_CIERRA = 21;
+
+/**
+ * Instante al azar entre dos fechas que cae en horario de taquilla (06:00 a
+ * 21:00, hora de Caracas), o `null` si el rango no toca ese horario. Así
+ * ningún operador cobra ni aprueba un comprobante de madrugada.
+ */
+function entreTaquilla(desde: Date, hasta: Date): Date | null {
+  const a = desde.getTime();
+  const b = hasta.getTime();
+  const tramos: [number, number][] = [];
+  // Medianoche de Caracas (04:00 UTC) del día de `desde`, y de ahí día por día.
+  for (let dia = Date.parse(`${diaCaracas(desde)}T04:00:00Z`); dia < b; dia += DIA) {
+    const inicio = Math.max(a, dia + TAQUILLA_ABRE * HORA);
+    const fin = Math.min(b, dia + TAQUILLA_CIERRA * HORA);
+    if (fin > inicio) tramos.push([inicio, fin]);
+  }
+  let resto = Math.random() * tramos.reduce((suma, [inicio, fin]) => suma + fin - inicio, 0);
+  for (const [inicio, fin] of tramos) {
+    if (resto < fin - inicio) return new Date(inicio + Math.floor(resto));
+    resto -= fin - inicio;
+  }
+  return null;
+}
+
+/** Hora de Caracas, con fracción, de un instante. */
+function horaCaracas(fecha: Date): number {
+  const local = new Date(fecha.getTime() - 4 * HORA);
+  return local.getUTCHours() + local.getUTCMinutes() / 60;
+}
+
+/**
+ * La misma fecha si cae en horario de taquilla; si no, un momento de la
+ * última hora antes del cierre anterior (21:00 de esa noche o de la víspera).
+ */
+function enHorarioDeTaquilla(fecha: Date): Date {
+  const hora = horaCaracas(fecha);
+  if (hora >= TAQUILLA_ABRE && hora < TAQUILLA_CIERRA) return fecha;
+  const medianoche = Date.parse(`${diaCaracas(fecha)}T04:00:00Z`);
+  const cierre = medianoche + (hora >= TAQUILLA_CIERRA ? 0 : -DIA) + TAQUILLA_CIERRA * HORA;
+  return new Date(cierre - entero(1, 60) * MIN);
+}
+
 /** Horas de descanso de la unidad y del chofer entre la llegada y la siguiente salida. */
 const DESCANSO_MIN = 6 * 60;
 /** La unidad debe estar en el terminal antes de que empiece el embarque. */
@@ -949,11 +994,13 @@ async function main(): Promise<void> {
         creada = masMinutos(ahora, -entero(150, 72 * 60));
       }
 
-      const cuenta = cuentaPara(creada, cuentasEnSalida);
-      cuentasEnSalida.add(cuenta.id);
+      // La venta en taquilla se cobra en el acto, así que ocurre con la taquilla abierta.
+      if (ventaEnTaquilla) creada = enHorarioDeTaquilla(creada);
 
       // --- Pagos: el comprobante llega dentro de las 2 horas de la reserva, y
       // el pago en sitio se cobra antes de que falten 12 horas para la salida.
+      // El cobro en efectivo y la aprobación del comprobante los hace un
+      // operador, siempre en horario de taquilla (06:00 a 21:00).
       const limitePago = salida.pasada
         ? masMinutos(salida.departsAt, -40)
         : masMinutos(ahora, -1);
@@ -962,19 +1009,32 @@ async function main(): Promise<void> {
       if (CON_PAGO.has(status)) {
         if (ventaEnTaquilla) {
           momentoPago = creada;
-        } else if (fisico) {
-          momentoPago = entre(masMinutos(creada, 10), minFecha(limitePago, corte12));
         } else {
-          envioComprobante = entre(
-            masMinutos(creada, 5),
-            minFecha(masMinutos(creada, 115), masMinutos(limitePago, -10)),
-          );
-          momentoPago = entre(
-            masMinutos(envioComprobante, 5),
-            minFecha(masMinutos(envioComprobante, 12 * 60), limitePago),
-          );
+          // Si la ventana del pago no toca el horario de taquilla (una reserva
+          // de madrugada con poco margen), la reserva se adelanta unas horas.
+          // Una ventana de más de 9 horas siempre lo toca, así que converge.
+          for (let intento = 0; momentoPago === null; intento += 1) {
+            if (intento > 20) throw new Error("No se encontró un momento de pago en horario de taquilla");
+            if (intento > 0) creada = masMinutos(creada, -entero(6 * 60, 18 * 60));
+            if (fisico) {
+              momentoPago = entreTaquilla(masMinutos(creada, 10), minFecha(limitePago, corte12));
+            } else {
+              envioComprobante = entre(
+                masMinutos(creada, 5),
+                minFecha(masMinutos(creada, 115), masMinutos(limitePago, -10)),
+              );
+              momentoPago = entreTaquilla(
+                masMinutos(envioComprobante, 5),
+                minFecha(masMinutos(envioComprobante, 12 * 60), limitePago),
+              );
+            }
+          }
         }
       }
+
+      const cuenta = cuentaPara(creada, cuentasEnSalida);
+      cuentasEnSalida.add(cuenta.id);
+
       const pagoCompleto = PAGO_COMPLETO.has(status);
       const paidUsd = pagoCompleto
         ? m.totalUsd

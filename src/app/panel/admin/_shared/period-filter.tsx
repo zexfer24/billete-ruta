@@ -20,9 +20,12 @@ export const FILTER_BUTTON_LABEL = "Filtrar";
  * `extraFields` agrega otros filtros al mismo formulario (por ejemplo la
  * agencia); con ellos el formulario se muestra siempre. `keep` son esos mismos
  * filtros ya aplicados, para conservarlos al cambiar de pestaña. Con
- * `autoSubmit`, esos campos se aplican solos al cambiar (como las pestañas) y
- * el botón "Filtrar" queda solo para quien navega sin JavaScript; en "Otras
- * fechas" el botón sigue visible, porque las fechas se aplican con él.
+ * `autoSubmit`, esos campos se aplican solos al cambiar, como las pestañas
+ * (cada campo navega y muestra su propia espera: ver `AgencySelect`), y van en
+ * la misma barra que las pestañas, sin tarjeta aparte: el botón "Filtrar"
+ * queda solo para quien navega sin JavaScript. En "Otras fechas" el formulario
+ * vuelve a su tarjeta bajo las pestañas, con el botón visible, porque las
+ * fechas se aplican con él.
  *
  * Con `title`, las pestañas van a la derecha de un título de sección (`h2`),
  * como "Resumen de hoy" en el tablero de la agencia, y el rango queda debajo
@@ -43,7 +46,7 @@ export function PeriodFilter({
   extraFields?: ReactNode;
   /** Los `extraFields` envían el formulario al cambiar (ver arriba). */
   autoSubmit?: boolean;
-  /** Qué abarca el periodo, por ejemplo "Recorridos, usuarios nuevos y gráfico". */
+  /** Qué abarca el periodo, por ejemplo "Viajes, usuarios nuevos y gráfico". */
   caption?: string;
   /** Título de sección con las pestañas a su derecha; `id` para `aria-labelledby`. */
   title?: { text: string; id: string };
@@ -53,6 +56,51 @@ export function PeriodFilter({
   const showForm = isCustom || Boolean(extraFields);
   // Fuera de "Otras fechas", el formulario de filtros conserva el periodo en campos ocultos.
   const hiddenPeriod = isCustom ? { periodo: "fechas" } : periodQuery(range);
+  const hiddenFields = (
+    <>
+      {Object.entries(hiddenPeriod).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
+      {!extraFields
+        ? Object.entries(keep).map(([name, value]) =>
+            value ? <input key={name} type="hidden" name={name} value={value} /> : null,
+          )
+        : null}
+    </>
+  );
+  const rangeLine = (
+    <p className="flex items-start gap-2 text-sm leading-snug text-tinta-suave">
+      <IconCalendar className="mt-px size-4 shrink-0" />
+      <span>
+        {caption ? <span className="font-semibold text-tinta">{caption}: </span> : null}
+        {describeAdminRange(range)}.
+      </span>
+    </p>
+  );
+
+  // Filtros que se aplican solos (la agencia de Movimientos): una sola barra
+  // con las pestañas a la izquierda y la lista a la derecha cuando caben; si
+  // no, la lista baja a la línea siguiente.
+  if (autoSubmit && extraFields && !isCustom && !title) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <AdminTabs label="Periodo" grid className={ADMIN_TABS_BESIDE_TITLE_CLASS} tabs={tabTargets} />
+          <GetForm action={path} className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
+            {hiddenFields}
+            {extraFields}
+            {/* Respaldo sin JavaScript: con él, la lista ya se aplica al elegir. */}
+            <noscript>
+              <button type="submit" className={panelButtonClass("secundario", "md")}>
+                {FILTER_BUTTON_LABEL}
+              </button>
+            </noscript>
+          </GetForm>
+        </div>
+        {rangeLine}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -72,14 +120,7 @@ export function PeriodFilter({
           action={path}
           className="flex flex-wrap items-end gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
         >
-          {Object.entries(hiddenPeriod).map(([name, value]) => (
-            <input key={name} type="hidden" name={name} value={value} />
-          ))}
-          {!extraFields
-            ? Object.entries(keep).map(([name, value]) =>
-                value ? <input key={name} type="hidden" name={name} value={value} /> : null,
-              )
-            : null}
+          {hiddenFields}
           {isCustom ? (
             <>
               <label className={`${PANEL_LABEL_CLASS} min-w-40 flex-1 sm:flex-none`}>
@@ -105,37 +146,22 @@ export function PeriodFilter({
             </>
           ) : null}
           {extraFields}
-          {autoSubmit && extraFields && !isCustom ? (
-            // Respaldo sin JavaScript: con él, la lista ya se aplica al elegir.
-            <noscript>
-              <button type="submit" className={panelButtonClass("secundario", "md")}>
-                {FILTER_BUTTON_LABEL}
-              </button>
-            </noscript>
-          ) : (
-            // Con un solo filtro y sin fechas, el botón corto queda en la misma
-            // fila que la lista en el teléfono, para no empujar la lista de viajes.
-            <GetSubmitButton
-              pendingLabel="Buscando…"
-              className={panelButtonClass(
-                extraFields ? "secundario" : "primario",
-                "md",
-                extraFields && !isCustom ? undefined : "w-full sm:w-auto",
-              )}
-            >
-              {extraFields ? FILTER_BUTTON_LABEL : "Ver estas fechas"}
-            </GetSubmitButton>
-          )}
+          {/* Con un solo filtro y sin fechas, el botón corto queda en la misma
+              fila que la lista en el teléfono, para no empujar la lista de viajes. */}
+          <GetSubmitButton
+            pendingLabel="Buscando…"
+            className={panelButtonClass(
+              extraFields ? "secundario" : "primario",
+              "md",
+              extraFields && !isCustom ? undefined : "w-full sm:w-auto",
+            )}
+          >
+            {extraFields ? FILTER_BUTTON_LABEL : "Ver estas fechas"}
+          </GetSubmitButton>
         </GetForm>
       ) : null}
 
-      <p className="flex items-start gap-2 text-sm leading-snug text-tinta-suave">
-        <IconCalendar className="mt-px size-4 shrink-0" />
-        <span>
-          {caption ? <span className="font-semibold text-tinta">{caption}: </span> : null}
-          {describeAdminRange(range)}.
-        </span>
-      </p>
+      {rangeLine}
     </div>
   );
 }

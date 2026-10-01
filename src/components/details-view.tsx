@@ -88,7 +88,7 @@ export function DetailsView({ value }: { value: JsonValue }) {
                 <dd
                   className={
                     copyable
-                      ? "tabular break-all text-base font-semibold text-tinta"
+                      ? "tabular break-words [overflow-wrap:anywhere] text-base font-semibold text-tinta"
                       : "break-words text-base text-tinta"
                   }
                 >

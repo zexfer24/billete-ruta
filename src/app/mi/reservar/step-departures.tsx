@@ -297,6 +297,7 @@ function DepartureOption({
               <span className="min-w-0 break-words">{agencia}</span>
             </span>
           ) : null}
+          <span className="tabular mt-0.5 block text-sm text-tinta-suave">{tripDurationLabel(d.estimatedMinutes)}</span>
         </span>
         <span className="shrink-0 text-right">
           <span className="tabular block text-lg font-bold leading-snug text-tinta">
@@ -307,19 +308,20 @@ function DepartureOption({
         </span>
       </span>
 
-      {/* "Elegir" queda siempre en la esquina de abajo a la derecha: si la hora y la duración no caben, la duración baja dentro de su columna. */}
+      {/*
+        La duración va arriba, con el origen y la agencia: así la fila de abajo
+        solo lleva la hora y "Elegir", cabe en una línea a 375 px y todas las
+        tarjetas tienen la misma forma, dure el viaje "9 h" o "5 h 30 min".
+      */}
       <span className="mt-2 flex items-end justify-between gap-3">
-        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-          <span
-            className={cx(
-              "tabular flex items-center gap-1.5 text-base",
-              urgente ? "font-bold text-alerta" : "font-semibold text-tinta",
-            )}
-          >
-            {urgente ? <IconClock aria-hidden="true" className="size-5 shrink-0" /> : null}
-            {departureWhenLabel(departsAt, now, { dayInHeading: true })}
-          </span>
-          <span className="tabular text-sm text-tinta-suave">{tripDurationLabel(d.estimatedMinutes)}</span>
+        <span
+          className={cx(
+            "tabular flex min-w-0 flex-1 items-center gap-1.5 text-base",
+            urgente ? "font-bold text-alerta" : "font-semibold text-tinta",
+          )}
+        >
+          {urgente ? <IconClock aria-hidden="true" className="size-5 shrink-0" /> : null}
+          <span className="min-w-0 break-words">{departureWhenLabel(departsAt, now, { dayInHeading: true })}</span>
         </span>
         <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-marca-700">
           {selected ? <span className="sr-only">Elegida. </span> : null}

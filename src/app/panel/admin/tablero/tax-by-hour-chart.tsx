@@ -100,13 +100,15 @@ export function TaxByHourChart({
                 aria-label={summary}
                 className="relative flex h-44 items-end gap-px border-b border-borde-control sm:gap-1"
               >
-                {/* Línea guía tenue a la altura del máximo, la del rótulo de arriba. */}
-                <span className="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-borde" />
+                {/* Línea guía tenue a la altura del máximo, la del rótulo de arriba.
+                    Va detrás de las barras (z-0 frente a z-10): encima, picaba el
+                    borde superior de la barra más alta. */}
+                <span className="pointer-events-none absolute inset-x-0 top-0 z-0 border-t border-dashed border-borde" />
                 {hours.map((h) => {
                   const value = Number(h.totalUsd);
                   const percent = value > 0 ? Math.max(3, Math.round((value / peakValue) * 100)) : 0;
                   return (
-                    <div key={h.hour} className="flex h-full min-w-0 flex-1 items-end">
+                    <div key={h.hour} className="relative z-10 flex h-full min-w-0 flex-1 items-end">
                       {percent > 0 ? (
                         <div
                           className={cx(

@@ -33,7 +33,8 @@ const CHIP_WIDTHS = [
  * al llegar. En el teléfono, la línea «Paso 1 de 4 · Salida» en vez de los
  * círculos, como la página. Debajo, el buscador por origen o destino con su ayuda y las
  * fichas de día (el caso habitual, con más de seis salidas en la semana), la
- * etiqueta del día, las tarjetas de salida y la barra de botones. En el
+ * frase de la tasa del terminal, la etiqueta del día, las tarjetas de salida
+ * y la barra de botones. En el
  * teléfono, la frase de la cabecera y la pista del paso se ocultan igual que
  * en la página.
  */
@@ -80,27 +81,33 @@ export default function TaquillaLoading() {
             ))}
           </div>
 
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-4 w-52 rounded-pastilla" />
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-tarjeta border-2 border-borde bg-superficie px-4 py-4 sm:gap-4"
-              >
-                <SkeletonCircle className="size-5" />
-                {/* `shrink-0` y `min-w-0`: en el teléfono la hora conserva su ancho y
-                    las barras se ajustan a la columna en vez de salirse de la tarjeta. */}
-                <Skeleton className="h-7 w-14 shrink-0 sm:w-16" />
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <Skeleton className="h-5 w-1/2 rounded-pastilla" />
-                  <div className="flex min-w-0 gap-2">
-                    <Skeleton className="h-6 w-2/5 max-w-28 rounded-pastilla" />
-                    <Skeleton className="h-5 w-1/2 max-w-40 rounded-pastilla" />
+          {/* La frase de la tasa del terminal (una sola vez, encima de la lista)
+              y luego el día con sus tarjetas, con el mismo espacio que la página. */}
+          <div className="flex flex-col gap-6">
+            <span className="flex h-5 items-center">
+              <Skeleton className="h-4 w-80 max-w-full rounded-pastilla" />
+            </span>
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-4 w-52 rounded-pastilla" />
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-tarjeta border-2 border-borde bg-superficie px-4 py-4 sm:gap-4"
+                >
+                  <SkeletonCircle className="size-5" />
+                  {/* `shrink-0` y `min-w-0`: en el teléfono la hora conserva su ancho y
+                      las barras se ajustan a la columna en vez de salirse de la tarjeta. */}
+                  <Skeleton className="h-7 w-14 shrink-0 sm:w-16" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <Skeleton className="h-5 w-1/2 rounded-pastilla" />
+                    <div className="flex min-w-0 gap-2">
+                      <Skeleton className="h-6 w-2/5 max-w-28 rounded-pastilla" />
+                      <Skeleton className="h-5 w-1/2 max-w-40 rounded-pastilla" />
+                    </div>
                   </div>
-                  <Skeleton className="h-4 w-3/5 max-w-56 rounded-pastilla" />
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 

@@ -1,3 +1,5 @@
+import { PANEL_TAB_ACTIVE_CLASS, PANEL_TAB_INACTIVE_CLASS } from "@/components/ui-classes";
+
 /**
  * Clases de las pestañas del administrador, compartidas por `AdminTabs`
  * (cliente) y su silueta de carga (servidor), para que las dos repartan las
@@ -22,8 +24,15 @@ export const ADMIN_TABS_GRID_CLASS =
 export const ADMIN_TAB_CLASS =
   "inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold sm:grow-0 sm:justify-start";
 
-/** Pestaña elegida. */
-export const ADMIN_TAB_ACTIVE_CLASS = "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200";
+/**
+ * Pestaña elegida: la misma de `PanelTabs` (fondo marca-50 y barra morada
+ * debajo), para que la pestaña activa no se distinga solo por color y quien
+ * conoce el panel de la agencia reconozca el del terminal.
+ */
+export const ADMIN_TAB_ACTIVE_CLASS = PANEL_TAB_ACTIVE_CLASS;
+
+/** Pestaña sin elegir: la misma de `PanelTabs`. */
+export const ADMIN_TAB_INACTIVE_CLASS = PANEL_TAB_INACTIVE_CLASS;
 
 /**
  * Pestañas de periodo a la derecha de un título de sección, como "Resumen de

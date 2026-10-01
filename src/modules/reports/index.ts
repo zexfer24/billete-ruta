@@ -13,7 +13,7 @@ export type {
 } from "./agency";
 export { agencyDashboard } from "./dashboard";
 export type { AgencyDashboard } from "./dashboard";
-export { agencyFleetStatus, unitStateOf } from "./fleet-status";
+export { agencyFleetStatus, isOverdueDeparture, unitStateOf } from "./fleet-status";
 export type {
   AgencyFleetStatus,
   DriverStatusRow,

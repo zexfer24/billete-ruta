@@ -60,10 +60,11 @@ export function registerDescription(mode: RegisterMode, next: string | null | un
 
 /**
  * Ayuda de la cédula, la misma en ingresar y en registro. "Con o sin puntos"
- * va unido con espacios que no se cortan (U+00A0), para que no quede "Con o"
- * colgando al final de la línea.
+ * y "por ejemplo V12345678." van unidos con espacios que no se cortan
+ * (U+00A0), para que no quede "Con o" colgando al final de la línea ni el
+ * ejemplo, que es lo que hay que copiar, separado de "por ejemplo".
  */
-export const ID_NUMBER_HINT = "La letra y el número, por ejemplo V12345678. Con o sin puntos.";
+export const ID_NUMBER_HINT = "La letra y el número, por ejemplo V12345678. Con o sin puntos.";
 
 /**
  * Error de la cédula vacía, el mismo en ingresar y en registro. Reemplaza a la
@@ -81,15 +82,16 @@ export const REGISTER_GROUPS = {
 /**
  * Ayudas de los campos. El ejemplo del teléfono lleva un guion que no se
  * corta (U+2011) para que "0412‑1234567" no quede partido en dos líneas, y
- * los finales de frase van unidos con espacios que no se cortan (U+00A0)
- * para que bajen enteros a la línea siguiente en vez de partirse ("Elige una
- * que / puedas recordar").
+ * los finales de frase y "por ejemplo" con su ejemplo van unidos con
+ * espacios que no se cortan (U+00A0) para que bajen enteros a la línea
+ * siguiente en vez de partirse ("Elige una que / puedas recordar", "por
+ * ejemplo / 0412‑1234567").
  */
 export const REGISTER_HINTS = {
   idNumber: ID_NUMBER_HINT,
   givenNames: "Como aparecen en tu cédula.",
   birthYear: "Solo el año, con cuatro números. Sirve para confirmar que eres tú.",
-  phone: "Con el código de área, por ejemplo 0412‑1234567. Aquí te enviaremos los avisos de tu viaje.",
+  phone: "Con el código de área, por ejemplo 0412‑1234567. Aquí te enviaremos los avisos de tu viaje.",
   password: "Mínimo 8 caracteres. Elige una que puedas recordar.",
   confirmPassword: "Escríbela otra vez, para evitar errores.",
 } as const;

@@ -1,8 +1,8 @@
 import { DepartureBoardSkeleton } from "@/components/departure-board";
-import { Skeleton, SkeletonScreen, SkeletonText } from "@/components/skeleton";
+import { Skeleton, SkeletonButton, SkeletonScreen, SkeletonText } from "@/components/skeleton";
 import { IconSearch } from "@/components/icons";
 import { SearchCardPreview } from "@/components/search-card";
-import { buttonClass, Card, SectionTitle } from "@/components/ui";
+import { Card, SectionTitle } from "@/components/ui";
 import {
   HowItWorks,
   PORTADA_COLUMN,
@@ -15,7 +15,8 @@ import {
 /**
  * Silueta de la portada (spec 6.5 y 2.2): el héroe, el logo, los textos fijos,
  * los pasos, el pie y el buscador (con sus etiquetas, sus valores iniciales y
- * el botón amarillo "Buscar salidas", quietos) se pintan reales desde el
+ * el texto del botón "Buscar salidas", quieto sobre el brillo de carga en vez
+ * del amarillo) se pintan reales desde el
  * primer instante. El acceso a la cuenta, el aviso de la cédula, el tablero
  * de salidas con su botón para ver todas y la tarjeta "¿Primera vez aquí?"
  * dependen de la sesión o de datos, así que van como bloques de carga con sus
@@ -34,10 +35,12 @@ export default function PortadaLoading() {
         <div aria-hidden="true">
           <PortadaHero action={<Skeleton className="h-11 w-28 rounded-pastilla bg-white/20" />}>
             <SearchCardPreview title={PORTADA_SEARCH_TITLE}>
-              <span className={buttonClass("acento", "w-full", "lg")}>
+              {/* Quieto sobre el morado: el brillo claro en vez del amarillo sol,
+                  para que nadie lo pulse antes de que el buscador responda. */}
+              <SkeletonButton shape="pastilla" size="lg" onMarca className="w-full">
                 <IconSearch aria-hidden="true" className="size-5" />
                 Buscar salidas
-              </span>
+              </SkeletonButton>
               {/* El aviso de la cédula ocupa dos líneas en el teléfono y una desde `sm`. */}
               <div className="flex w-full flex-col gap-1.5 py-0.5">
                 <Skeleton className="h-4 w-full rounded-pastilla bg-white/10 sm:w-4/5" />

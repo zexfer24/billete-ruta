@@ -5,29 +5,43 @@ import { EmptyState, StatusBadge, TableShell, panelButtonClass } from "@/compone
 import { cx } from "@/components/ui-classes";
 import { MESSAGE_STATUS_LABELS, messageStatusTone } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
-import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
+import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { isTemplateKey, renderStoredPreview } from "@/modules/messaging";
-import { countLabel, formatCount, formatPhone } from "../_shared/format";
+import { countLabel, formatPhone } from "../_shared/format";
 import {
   ADMIN_TD_CLASS,
   ADMIN_TH_CLASS,
   DISCLOSURE_SUMMARY_CLASS,
+  DatePhrase,
   DisclosureChevron,
+  DotParts,
   Pagination,
   TimeCell,
 } from "../_shared/lists";
 import { withQuery } from "../_shared/period";
-import { LineSkeleton, PaginationSkeleton, TableSkeleton } from "../_shared/skeletons";
-import { MESSAGES_PATH, payloadToParams, templateName } from "./messages";
+import { LineSkeleton, PaginationSkeleton, TableSkeleton, skeletonColumns } from "../_shared/skeletons";
+import { MESSAGES_PATH, payloadToParams, sendDelayText, templateName } from "./messages";
 
 /** Mensajes por página: 25, como las demás listas paginadas del panel. */
 export const MESSAGES_PAGE_SIZE = 25;
 
-/** Cabeceras de la tabla, compartidas con su silueta de carga. */
-const MESSAGE_COLUMNS = ["Para", "Mensaje", "Estado", "Enviado"] as const;
+/**
+ * Cabeceras de la tabla, compartidas con su silueta de carga. La última dice
+ * "Cuándo" y no "Enviado": en "En espera" y "No se pudo enviar" la celda dice
+ * "Todavía no" o "No salió".
+ */
+const MESSAGE_COLUMNS = ["Para", "Mensaje", "Estado", "Cuándo"] as const;
 
-/** Diferencia desde la que el envío se considera fuera de la hora programada (un reintento, por ejemplo). */
-const SCHEDULE_GAP_MS = 60_000;
+/**
+ * Celdas de la tabla en la silueta: el teléfono, el nombre con unas tres
+ * líneas de texto, la pastilla y la hora con su fecha.
+ */
+const MESSAGE_SKELETON_COLUMNS = skeletonColumns(MESSAGE_COLUMNS, [
+  { lines: ["w-32"] },
+  { lines: ["w-40", "w-96", "w-96", "w-64"] },
+  { lines: ["w-20"] },
+  { lines: ["w-12", "w-20"] },
+]);
 
 /** Códigos de reserva dentro del texto (`TR-1002-6PAX-7WQF`), que no deben partirse por el guion. */
 const RESERVATION_CODE = /(TR-[0-9A-Z]+(?:-[0-9A-Z]+)*)/;
@@ -73,11 +87,16 @@ function MessageText({ text, className }: { text: string; className?: string }) 
  * líneas por tarjeta y una página de 25 medía unas diez pantallas. Se ven las
  * tres primeras líneas y "Ver el mensaje completo" lo abre; al abrirlo, el
  * recorte se esconde (`:has(details[open])`) para no repetir el texto.
+ *
+ * El recorte no lleva `aria-hidden`: `line-clamp` solo lo recorta a la vista,
+ * así que el lector de pantalla oye el mensaje entero sin abrir nada. Cerrado,
+ * el contenido del `<details>` no se lee; abierto, el recorte queda con
+ * `display: none`: el texto nunca se oye dos veces.
  */
 function MobileMessageText({ text }: { text: string }) {
   return (
     <div className="flex flex-col gap-1 [&:has(details[open])_[data-recorte]]:hidden">
-      <div data-recorte aria-hidden="true">
+      <div data-recorte>
         <MessageText text={text} className="line-clamp-3" />
       </div>
       <details className="group">
@@ -118,50 +137,51 @@ function MessageStatusBlock({ message }: { message: MessageRow }) {
   );
 }
 
-/** Si el envío salió en otro momento que el programado (un reintento, por ejemplo). */
-function sentOffSchedule(message: MessageRow): boolean {
-  return (
-    message.sentAt !== null && Math.abs(message.sentAt.getTime() - message.scheduledFor.getTime()) >= SCHEDULE_GAP_MS
-  );
-}
-
 /**
- * Cuándo salió el mensaje, en la tabla. La hora programada solo se agrega si
- * todavía no sale o si salió en otro momento (un reintento): casi siempre
- * coinciden y repetirla en cada fila era ruido. Va como `TimeCell` (la hora y
- * debajo la fecha), igual que en las demás tablas del terminal.
+ * Cuándo salió el mensaje, en la tabla. Va como `TimeCell` (la hora y debajo
+ * la fecha), igual que en las demás tablas del terminal. La hora programada
+ * solo se dice si todavía no sale; uno que salió solo agrega su atraso cuando
+ * es de verdad (`sendDelayText`, desde 15 minutos), no la espera normal del
+ * worker.
  */
 function SendTime({ message }: { message: MessageRow }) {
-  const scheduled = formatCaracasDateTime24(message.scheduledFor);
   if (!message.sentAt) {
     return (
       <span className="flex flex-col">
         <span className="text-tinta-suave">{message.status === "FALLIDO" ? "No salió" : "Todavía no"}</span>
-        <span className="tabular text-sm text-tinta-suave">Programado para el {scheduled}</span>
+        <span className="tabular text-sm text-tinta-suave">
+          <DatePhrase lead="Programado para" date={message.scheduledFor} />
+        </span>
       </span>
     );
   }
+  const delay = sendDelayText(message.scheduledFor, message.sentAt);
   return (
     <span className="flex flex-col">
       <TimeCell time={formatCaracasTime24(message.sentAt)} date={formatCaracasDate(message.sentAt)} />
-      {sentOffSchedule(message) ? (
-        <span className="tabular text-sm text-tinta-suave">Programado para el {scheduled}</span>
-      ) : null}
+      {delay ? <span className="tabular text-sm text-tinta-suave">{delay}</span> : null}
     </span>
   );
 }
 
 /**
  * Cuándo salió el mensaje, en la tarjeta del teléfono: una línea secundaria
- * bajo el destinatario, sin etiqueta aparte, para que la tarjeta sea corta.
+ * aparte, bajo el destinatario, sin etiqueta. Cada dato va entero
+ * (`DotParts`): la fecha nunca se separa de su hora.
  */
-function sendLine(message: MessageRow): string {
-  const scheduled = formatCaracasDateTime24(message.scheduledFor);
-  if (!message.sentAt) {
-    return `${message.status === "FALLIDO" ? "No salió" : "Todavía no sale"}. Programado para el ${scheduled}`;
-  }
-  const sent = `Enviado el ${formatCaracasDateTime24(message.sentAt)}`;
-  return sentOffSchedule(message) ? `${sent}. Programado para el ${scheduled}` : sent;
+function SendLine({ message }: { message: MessageRow }) {
+  const delay = sendDelayText(message.scheduledFor, message.sentAt);
+  const parts = !message.sentAt
+    ? [
+        message.status === "FALLIDO" ? "No salió" : "Todavía no sale",
+        <DatePhrase key="programado" lead="Programado para" date={message.scheduledFor} />,
+      ]
+    : [<DatePhrase key="enviado" lead="Enviado" date={message.sentAt} />, ...(delay ? [delay] : [])];
+  return (
+    <p className="tabular text-sm text-tinta-suave">
+      <DotParts parts={parts} />
+    </p>
+  );
 }
 
 /**
@@ -274,17 +294,11 @@ export async function MessagesList({
     lastError: m.lastError,
   }));
 
-  const firstShown = (page - 1) * MESSAGES_PAGE_SIZE + 1;
-  const lastShown = firstShown + rows.length - 1;
-
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm font-semibold text-tinta-suave">
         {countLabel(total, "mensaje", "mensajes")}
-        {query ? ` para “${query}”` : ""}, del más reciente al más antiguo
-        {totalPages > 1
-          ? `. Estás viendo del ${formatCount(firstShown)} al ${formatCount(lastShown)}.`
-          : "."}
+        {query ? ` para “${query}”` : ""}, del más reciente al más antiguo.
       </p>
 
       {/* Arriba también, para no tener que bajar toda la lista para cambiar de página. */}
@@ -304,15 +318,9 @@ export async function MessagesList({
                   <div className="min-w-0 flex-1">
                     <p className="break-words text-base font-semibold text-tinta">{m.name}</p>
                     <p className="tabular text-sm text-tinta-suave">
-                      <span className="whitespace-nowrap">Para {m.phone}</span>
-                      {m.code ? (
-                        <>
-                          {" "}
-                          · <span className="whitespace-nowrap">Reserva {m.code}</span>
-                        </>
-                      ) : null}
+                      <DotParts parts={m.code ? [`Para ${m.phone}`, `Reserva ${m.code}`] : [`Para ${m.phone}`]} />
                     </p>
-                    <p className="tabular text-sm text-tinta-suave">{sendLine(m)}</p>
+                    <SendLine message={m} />
                   </div>
                   <div className="max-w-[55%] shrink-0">
                     <MessageStatusBlock message={m} />
@@ -369,7 +377,7 @@ export function MessagesListSkeleton() {
       <LineSkeleton className="w-72" />
       <PaginationSkeleton />
       <TableSkeleton
-        columns={MESSAGE_COLUMNS}
+        columns={MESSAGE_SKELETON_COLUMNS}
         rows={8}
         mobileStatus
         mobileDetails={0}

@@ -4,6 +4,8 @@
  * Funciones puras, probadas en tests/unit/panel/admin-format.test.ts.
  */
 
+import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
+
 const NUMBER_FORMAT = new Intl.NumberFormat("es-VE", { maximumFractionDigits: 0 });
 
 /** Un entero con punto de miles, como se escribe en Venezuela: 1.234. */
@@ -14,6 +16,16 @@ export function formatCount(value: number): string {
 /** "1 reserva pagada", "3 reservas pagadas", "0 reservas pagadas". */
 export function countLabel(value: number, singular: string, plural: string): string {
   return `${formatCount(value)} ${value === 1 ? singular : plural}`;
+}
+
+/**
+ * Fecha y hora dentro de una frase, siempre igual en todo el terminal: "el
+ * 30/09/2026 a las 01:12" ("Desde el 30/09/2026 a las 01:12", "Enviado el
+ * 01/10/2026 a las 02:32"). Las celdas de tabla no la usan: allí va la hora
+ * arriba y la fecha debajo (`TimeCell`).
+ */
+export function dateTimePhrase(date: Date): string {
+  return `el ${formatCaracasDate(date)} a las ${formatCaracasTime24(date)}`;
 }
 
 /** Máximo de caracteres que se aceptan en una búsqueda por URL. */

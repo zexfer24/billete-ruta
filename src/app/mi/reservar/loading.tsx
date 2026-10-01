@@ -3,7 +3,7 @@ import { Skeleton, SkeletonScreen } from "@/components/skeleton";
 import { Stepper } from "@/components/stepper";
 import { SkeletonPageTitle } from "../_components/skeletons";
 
-/** Tarjeta de salida del paso 1: destino, origen y agencia, precio y puestos, y la hora con "Elegir". */
+/** Tarjeta de salida del paso 1: destino, origen, agencia y duración, precio y puestos, y la hora con "Elegir". */
 function DepartureOptionSkeleton() {
   return (
     <div aria-hidden="true" className="rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
@@ -12,6 +12,7 @@ function DepartureOptionSkeleton() {
           <Skeleton className="h-5 w-2/5 rounded-pastilla" />
           <Skeleton className="h-4 w-1/3 rounded-pastilla" />
           <Skeleton className="h-4 w-1/2 rounded-pastilla" />
+          <Skeleton className="h-4 w-2/5 rounded-pastilla" />
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 pt-1">
           <Skeleton className="h-5 w-20 rounded-pastilla" />

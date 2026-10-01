@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Tablero del terminal" };
 /**
  * Inicio del administrador. Arriba, lo que no depende del periodo: la tasa de
  * salida cobrada en vivo (últimas 24 horas), destacada, y los usuarios
- * recurrentes. Debajo, el periodo elegido con sus cifras, los recorridos
+ * recurrentes. Debajo, el periodo elegido con sus cifras, los viajes
  * completados, los usuarios nuevos y el gráfico por hora.
  *
  * Ninguna consulta se espera antes de pintar la página: la de la tasa se

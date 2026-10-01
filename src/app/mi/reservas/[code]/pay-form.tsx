@@ -177,12 +177,22 @@ function UploadForm({
           hint="También puedes pagar una parte."
           required
         />
+        {/*
+          Solo escribe la cifra en el campo: la etiqueta dice eso y con qué
+          monto, para que nadie crea que ya avisó el pago. El foco vuelve al
+          campo, así el lector de pantalla lee el monto nuevo. `-ml-4` cancela
+          el relleno de `sm` para que el texto arranque en la línea de las
+          etiquetas.
+        */}
         <button
           type="button"
-          onClick={() => setAmount(metodo.balanceInput)}
-          className={buttonClass("fantasma", "self-start -ml-2", "sm")}
+          onClick={() => {
+            setAmount(metodo.balanceInput);
+            document.getElementById("amount")?.focus();
+          }}
+          className={buttonClass("fantasma", "self-start -ml-4 text-left", "sm")}
         >
-          Pagué todo lo que falta
+          <span className="tabular">Usar el monto completo: {metodo.balanceLabel}</span>
         </button>
       </div>
 

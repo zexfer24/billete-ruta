@@ -53,13 +53,21 @@ export async function terminalTripCount(from: Date, to: Date): Promise<number> {
 export interface TerminalTripRow {
   tripLogId: string;
   departedAt: Date | null;
+  /** Nunca nulo: la consulta solo trae viajes que llegaron dentro del periodo. */
+  arrivedAt: Date;
   origin: string;
   meetingPoint: string;
   destination: string;
   agencyName: string;
 }
 
-/** Lista de recorridos completados en el terminal, para el tablero del admin. */
+/**
+ * Lista de recorridos completados en el terminal, para el tablero del admin.
+ * El periodo cuenta por la llegada, y por la llegada se ordena y se recorta
+ * (la más reciente primero): así los `limit` viajes devueltos son de verdad
+ * los que llegaron más recientemente, aunque un viaje largo haya salido antes
+ * que muchos cortos.
+ */
 export async function listTerminalTrips(
   from: Date,
   to: Date,
@@ -72,21 +80,29 @@ export async function listTerminalTrips(
     prisma.tripLog.findMany({
       where,
       include: { departure: { include: { route: { include: { agency: true } } } } },
-      orderBy: { departedAt: "desc" },
+      orderBy: [{ arrivedAt: "desc" }, { id: "desc" }],
       take: limit,
     }),
     prisma.tripLog.count({ where }),
   ]);
 
   return {
-    rows: registros.map((r) => ({
-      tripLogId: r.id,
-      departedAt: r.departedAt,
-      origin: r.departure.route.origin,
-      meetingPoint: r.departure.route.meetingPoint,
-      destination: r.departure.route.destination,
-      agencyName: r.departure.route.agency.name,
-    })),
+    rows: registros.flatMap((r) =>
+      // El `where` exige la llegada; el filtro solo se lo dice al tipo.
+      r.arrivedAt === null
+        ? []
+        : [
+            {
+              tripLogId: r.id,
+              departedAt: r.departedAt,
+              arrivedAt: r.arrivedAt,
+              origin: r.departure.route.origin,
+              meetingPoint: r.departure.route.meetingPoint,
+              destination: r.departure.route.destination,
+              agencyName: r.departure.route.agency.name,
+            },
+          ],
+    ),
     total,
   };
 }

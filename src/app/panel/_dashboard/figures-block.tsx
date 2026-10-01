@@ -7,7 +7,7 @@ import { StatCard } from "@/components/panel-ui";
 import { IconBus, IconCash, IconChevronRight, IconTicket } from "@/components/icons";
 import { countLabel, departuresDetail, porCobrarNowText } from "./text";
 import { isOverdue } from "./attention";
-import { FIGURE_LABELS } from "./section-texts";
+import { FIGURE_LABELS, TICKETS_SECTION_ID } from "./section-texts";
 import { FIGURE_CELL_CLASS, FIGURE_WIDE_CELL_CLASS, FIGURES_GRID_CLASS } from "./figure-classes";
 
 /**
@@ -18,9 +18,10 @@ import { FIGURE_CELL_CLASS, FIGURE_WIDE_CELL_CLASS, FIGURES_GRID_CLASS } from ".
  * cifra quieta bajo "Resumen de…". Solo enlazan a su detalle cuando ese
  * detalle muestra la misma cifra: "Recaudado" abre Reportes con el mismo
  * periodo y "Salidas" abre la lista de salidas solo en "hoy" (esa lista no
- * filtra por 7 o 30 días). "Tickets emitidos" no enlaza: "Pagadas" cuenta
- * todas las fechas, y los últimos tickets del periodo ya están en "Tickets
- * nuevos", justo debajo.
+ * filtra por 7 o 30 días). "Tickets" no abre "Pagadas", que cuenta todas las
+ * fechas: baja a "Tickets nuevos" de este mismo tablero, que muestra los
+ * últimos del mismo periodo. Así las tarjetas que se pueden tocar se ven
+ * iguales y ninguna queda con un hueco abajo.
  */
 export async function FiguresBlock({
   summary,
@@ -78,7 +79,13 @@ export async function FiguresBlock({
         />
       </div>
       <div className={FIGURE_CELL_CLASS}>
-        <StatCard label={FIGURE_LABELS.tickets} value={emitidos.total} detail={detalleTickets} icon={<IconTicket />} />
+        <StatCard
+          label={FIGURE_LABELS.tickets}
+          value={emitidos.total}
+          detail={detalleTickets}
+          href={`#${TICKETS_SECTION_ID}`}
+          icon={<IconTicket />}
+        />
       </div>
     </div>
   );

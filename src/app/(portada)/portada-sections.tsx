@@ -28,7 +28,7 @@ export function PortadaHero({ action, children }: { action?: ReactNode; children
         <h1 className="mt-5 text-2xl font-bold tracking-tight text-white sm:text-3xl">
           Compra tu pasaje sin hacer cola
         </h1>
-        <p className="mt-2 text-base leading-relaxed text-white/85">
+        <p className="mt-2 text-pretty text-base leading-relaxed text-white/85">
           Elige tu salida, paga desde tu teléfono o en la taquilla y muestra tu ticket al subir al
           autobús.
         </p>
@@ -93,7 +93,8 @@ export function PortadaFooter() {
   return (
     <footer className={`${PORTADA_COLUMN} pb-[max(2rem,env(safe-area-inset-bottom))]`}>
       <div className="flex flex-col items-center gap-3 border-t border-borde pt-6 text-center">
-        <LogoLockup tone="marca" label="Terminal de pasajeros" />
+        {/* text-left: el nombre y la etiqueta se alinean junto al isotipo; el conjunto sigue centrado. */}
+        <LogoLockup tone="marca" label="Terminal de pasajeros" className="text-left" />
         <p className="text-sm text-tinta-suave">Las horas se muestran en hora de Venezuela.</p>
         <Link
           href="/panel/ingresar"

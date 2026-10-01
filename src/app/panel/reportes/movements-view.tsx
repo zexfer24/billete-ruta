@@ -41,6 +41,28 @@ function promedioMinutos(movimientos: readonly DriverMovementRow[]): number | nu
 }
 
 /**
+ * Salida del estado vacío: el periodo siguiente que todavía no se eligió
+ * (con "Hoy", los 7 días; con 7 días, los 30), y no el mismo que ya ofrecen
+ * las pastillas de arriba. Con 30 días o fechas propias, lo que viene está en
+ * Salidas.
+ */
+function EmptyAction({ preset }: { preset: ReportRange["preset"] }) {
+  const siguiente = preset === "hoy" ? "7d" : preset === "7d" ? "30d" : null;
+  if (siguiente) {
+    return (
+      <Link href={`/panel/reportes?vista=movimientos&periodo=${siguiente}`} className={panelButtonClass("secundario")}>
+        {siguiente === "7d" ? "Ver los últimos 7 días" : "Ver los últimos 30 días"}
+      </Link>
+    );
+  }
+  return (
+    <Link href="/panel/salidas" className={panelButtonClass("secundario")}>
+      Ver las próximas salidas
+    </Link>
+  );
+}
+
+/**
  * Viajes de los choferes en el periodo: tres cifras (viajes, pasajeros y
  * duración promedio) y una fila por viaje con la fecha una sola vez y las
  * horas de salida y llegada.
@@ -61,14 +83,12 @@ export function MovementsView({
         <EmptyState
           icon={<IconBus />}
           title="No hubo viajes en este periodo"
-          description="Aquí aparece cada viaje que inició el embarque, con sus horas de salida y llegada. Prueba con un periodo más largo."
-          action={
-            range.preset !== "30d" ? (
-              <Link href="/panel/reportes?vista=movimientos&periodo=30d" className={panelButtonClass("secundario")}>
-                Ver los últimos 30 días
-              </Link>
-            ) : undefined
-          }
+          description={`Aquí aparece cada viaje que inició el embarque, con sus horas de salida y llegada. ${
+            range.preset === "hoy" || range.preset === "7d"
+              ? "Prueba con un periodo más largo."
+              : "Mira en Salidas los viajes que vienen."
+          }`}
+          action={<EmptyAction preset={range.preset} />}
         />
       </div>
     );

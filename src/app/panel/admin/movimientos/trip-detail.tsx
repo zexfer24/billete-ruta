@@ -6,7 +6,7 @@ import { Skeleton, SkeletonText } from "@/components/skeleton";
 import { departureStatusLabel, departureStatusTone } from "@/lib/labels";
 import { formatCaracasDateTime24, formatCaracasTime24, formatDuration } from "@/lib/time";
 import { getTripDetail } from "@/modules/reports";
-import { formatCount } from "../_shared/format";
+import { dateTimePhrase, formatCount } from "../_shared/format";
 import { AuditNote } from "../_shared/lists";
 import { tripStatus } from "./movements";
 
@@ -55,7 +55,7 @@ export async function TripDetailPanel({
   return (
     <SidePanel
       title={`${detail.origin} → ${detail.destination}`}
-      subtitle={`${detail.agencyName} · salida programada el ${formatCaracasDateTime24(detail.departsAt)}`}
+      subtitle={`${detail.agencyName} · salida programada ${dateTimePhrase(detail.departsAt)}`}
       closeHref={closeHref}
     >
       <div className="flex flex-col gap-6">

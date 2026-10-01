@@ -186,7 +186,9 @@ async function ListaViajes({ vista }: { vista: Vista }) {
           } a ${masUrgente.destination} ${deadlineBeforePhrase(masUrgente.deadline, now)}`}
           action={
             <Link href={`/mi/reservas/${masUrgente.code}`} className={buttonClass("primario", undefined, "sm")}>
-              {masUrgente.status === "PAGO_EN_SITIO" ? "Ver cómo pagar" : "Pagar ahora"}
+              {masUrgente.status === "PAGO_EN_SITIO"
+                ? "Ver cómo pagar en la taquilla"
+                : `Pagar mi viaje a ${masUrgente.destination}`}
             </Link>
           }
         >
@@ -198,7 +200,7 @@ async function ListaViajes({ vista }: { vista: Vista }) {
       <ul className="flex flex-col gap-4">
         {datos.map((data) => (
           <li key={data.code}>
-            <TicketCard data={data} size="compacta" href={`/mi/reservas/${data.code}`} />
+            <TicketCard data={data} size="compacta" href={`/mi/reservas/${data.code}`} now={now} />
           </li>
         ))}
       </ul>

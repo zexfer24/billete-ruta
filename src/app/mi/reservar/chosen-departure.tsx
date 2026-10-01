@@ -6,12 +6,12 @@ import { whenPhrase } from "@/components/passenger-copy";
 import type { DepartureVM } from "./booking-form";
 
 /**
- * La salida ya elegida, en los pasos 3 y 4: destino, origen con la agencia y
- * cuándo sale, con la misma jerarquía y el mismo marco de "elegida" que
+ * La salida ya elegida, en los pasos 2, 3 y 4: destino, origen con la agencia
+ * y cuándo sale, con la misma jerarquía y el mismo marco de "elegida" que
  * `DepartureRow`. Sin precio ni puestos libres: el costo ya lo dicen el
- * resumen de abajo y el recibo, y los puestos dejaron de importar al elegir
- * quiénes viajan. Así el precio por persona, sin la tasa, no se confunde con
- * el total. Aquí no hay encabezado de día, así que la hora siempre lleva el
+ * resumen de abajo y el recibo, y los puestos los dice el paso 2 en palabras
+ * ("pueden viajar hasta N personas" o la lista de espera). Así el precio por
+ * persona, sin la tasa, no se confunde con el total. Aquí no hay encabezado de día, así que la hora siempre lleva el
  * día ("Sale hoy a las 06:00"), salvo que salga en minutos ("Sale en 15
  * min"). Sin hooks: se usa desde componentes de cliente.
  */
