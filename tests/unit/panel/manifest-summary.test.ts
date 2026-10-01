@@ -60,6 +60,8 @@ describe("manifestSummary", () => {
     });
     // PAGO_EN_SITIO sí puede subir (el escáner lo deja pasar), así que no cuenta.
     expect(resumen).toMatchObject({ pending: 7, unpaidPassengers: 4 });
+    // Quien está en validación espera que revisen su comprobante, no que le cobren.
+    expect(resumen).toMatchObject({ owingPassengers: 3, reviewPassengers: 1 });
   });
 
   it("los puestos libres nunca bajan de cero", () => {

@@ -47,11 +47,22 @@ function TabStatus({ count, active }: { count?: number; active: boolean }) {
  * zona de datos: ahora la pestaña muestra un indicador de espera.
  *
  * `grid` reparte las pestañas en dos columnas en el teléfono (las cuatro del
- * periodo quedan en 2 × 2).
+ * periodo quedan en 2 × 2). `className` va en el `nav`, por ejemplo para que
+ * ocupe solo su ancho junto a un título.
  */
-export function AdminTabs({ label, tabs, grid = false }: { label: string; tabs: PanelTab[]; grid?: boolean }) {
+export function AdminTabs({
+  label,
+  tabs,
+  grid = false,
+  className,
+}: {
+  label: string;
+  tabs: PanelTab[];
+  grid?: boolean;
+  className?: string;
+}) {
   return (
-    <nav aria-label={label}>
+    <nav aria-label={label} className={className}>
       <div className={grid ? ADMIN_TABS_GRID_CLASS : ADMIN_TABS_ROW_CLASS}>
         {tabs.map((tab) => (
           <Link

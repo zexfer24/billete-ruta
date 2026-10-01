@@ -42,6 +42,10 @@ export function DisclosureChevron() {
  * `initial` y guarda el resto detrás de "Ver N más", para no obligar a
  * desplazarse por cien tarjetas. Si sobra una sola, se muestra: un botón
  * casi tan alto como la tarjeta que esconde solo agrega un toque.
+ *
+ * Solo para listas sin paginación del servidor (tablero, movimientos). Una
+ * lista paginada muestra su página entera: plegarla esconde filas que
+ * "Siguiente" se salta.
  */
 export function MobileCardList({
   items,

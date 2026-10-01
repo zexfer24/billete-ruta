@@ -5,7 +5,7 @@
  * componentes de servidor y de cliente.
  */
 
-import { withNext } from "../_publico/links";
+import { isBookingNext, withNext } from "../_publico/links";
 
 /**
  * La misma pantalla crea una cuenta nueva o activa la que se creó en la
@@ -46,14 +46,17 @@ export function activateHref(next?: string | null): string {
 }
 
 /**
- * Nota de una línea para quien fue registrado en la taquilla y llegó a crear
- * cuenta sin pasar por "Activar mi cuenta". Va al pie, junto a "¿Ya tienes
- * cuenta?": es un caso minoritario y no debe empujar el formulario hacia
- * abajo (spec 1.3). Si los datos no coinciden, el error del registro ya
- * explica qué hacer.
+ * Frase de la tarjeta de crear cuenta cuando se llega desde "Buscar salidas"
+ * sin sesión: dice por qué se pide la cuenta. Activar no cambia, porque su
+ * frase explica cómo escribir los datos de la taquilla.
  */
-export const COUNTER_NOTICE_TEXT =
-  "¿Te registraron en la taquilla? Usa aquí la misma cédula, teléfono y año de nacimiento que diste allí.";
+export const REGISTER_BOOKING_DESCRIPTION = "Crea tu cuenta para ver las salidas y reservar tu puesto.";
+
+/** Frase de la tarjeta del registro según el modo y la ruta de retorno `next`. */
+export function registerDescription(mode: RegisterMode, next: string | null | undefined): string {
+  if (mode === "crear" && isBookingNext(next)) return REGISTER_BOOKING_DESCRIPTION;
+  return REGISTER_TEXTS[mode].description;
+}
 
 /** Ayuda de la cédula, la misma en ingresar y en registro. */
 export const ID_NUMBER_HINT = "La letra y el número, por ejemplo V12345678. Con o sin puntos.";

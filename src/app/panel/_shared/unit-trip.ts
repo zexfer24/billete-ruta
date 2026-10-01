@@ -111,3 +111,16 @@ export function describeUnitTrip(
 
   return null;
 }
+
+/**
+ * Id de la salida que `describeUnitTrip` muestra cuando es un viaje que pide
+ * atención o seguimiento (en ruta, embarcando o atrasado), para enlazar a su
+ * hoja desde la flota. `null` si lo mostrado es solo una próxima salida o no
+ * hay viaje: ahí no hay nada que resolver.
+ */
+export function activeTripDepartureId(unit: { current: UnitDeparture | null }): string | null {
+  const { current } = unit;
+  if (!current) return null;
+  if (current.status === "EN_RUTA" || current.status === "MANIFIESTO_CERRADO") return current.id;
+  return current.overdue ? current.id : null;
+}

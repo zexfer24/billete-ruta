@@ -38,7 +38,11 @@ export default function PortadaLoading() {
                 <IconSearch aria-hidden="true" className="size-5" />
                 Buscar salidas
               </span>
-              <Skeleton className="h-5 w-4/5 rounded-pastilla bg-white/10" />
+              {/* El aviso de la cédula ocupa dos líneas en el teléfono y una desde `sm`. */}
+              <div className="flex w-full flex-col gap-1.5 py-0.5">
+                <Skeleton className="h-4 w-full rounded-pastilla bg-white/10 sm:w-4/5" />
+                <Skeleton className="h-4 w-2/5 rounded-pastilla bg-white/10 sm:hidden" />
+              </div>
             </SearchCardPreview>
           </PortadaHero>
 
@@ -49,6 +53,10 @@ export default function PortadaLoading() {
               <div className="flex flex-col gap-1">
                 <SectionTitle>Próximas salidas</SectionTitle>
                 <p className="text-sm text-tinta-suave">{PORTADA_UPCOMING_HINT}</p>
+                {/* La nota del precio lleva la tasa vigente, que llega con los datos. */}
+                <div className="flex h-5 items-center">
+                  <Skeleton className="h-4 w-64 max-w-full rounded-pastilla" />
+                </div>
               </div>
               <DepartureBoardSkeleton rows={4} />
               <Skeleton className="h-12 w-full rounded-pastilla sm:w-56" />

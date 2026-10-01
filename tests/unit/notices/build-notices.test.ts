@@ -50,6 +50,35 @@ describe("buildNotices", () => {
     expect(avisos[0]?.href).toBe("/mi/reservas/TR-0913-1PAX-AAAA");
   });
 
+  it("si el bus sale en 39 min, el plazo es la salida y no las 2 horas de la reserva", () => {
+    const departsAt = new Date(AHORA.getTime() + 39 * 60_000);
+    const expiresAt = new Date(AHORA.getTime() + 2 * 3_600_000);
+    const [aviso, ...resto] = buildNotices(
+      { hasIdDocument: true, reservations: [reserva({ status: "PENDIENTE_PAGO", departsAt, expiresAt })] },
+      AHORA,
+    );
+    expect(resto).toEqual([]);
+    expect(aviso).toMatchObject({ kind: "RESERVA_POR_LIBERAR", level: "alerta", at: departsAt });
+    expect(aviso?.title).toBe("Paga antes de que salga tu bus");
+    // AHORA es 08:00 en Caracas.
+    expect(aviso?.body).toBe(
+      "Tu viaje Caracas → Maracaibo sale hoy a las 08:39, en 39 min. Paga antes de esa hora para no perder el viaje.",
+    );
+    expect(aviso?.body).not.toContain("2 h");
+  });
+
+  it("si el bus sale en 10 horas, el plazo sigue siendo el de la reserva", () => {
+    const departsAt = new Date(AHORA.getTime() + 10 * 3_600_000);
+    const expiresAt = new Date(AHORA.getTime() + 2 * 3_600_000);
+    const [aviso] = buildNotices(
+      { hasIdDocument: true, reservations: [reserva({ status: "PENDIENTE_PAGO", departsAt, expiresAt })] },
+      AHORA,
+    );
+    expect(aviso).toMatchObject({ kind: "RESERVA_POR_LIBERAR", at: expiresAt });
+    expect(aviso?.title).toBe("Paga pronto para no perder tu puesto");
+    expect(aviso?.body).toContain("para pagar tu viaje Caracas → Maracaibo. Si no pagas, tu puesto queda libre");
+  });
+
   it("avisa el comprobante rechazado con el motivo en el cuerpo", () => {
     const createdAt = new Date(AHORA.getTime() - 10 * 60_000);
     const avisos = buildNotices(
@@ -142,7 +171,7 @@ describe("buildNotices", () => {
     expect(avisos).toEqual([]);
   });
 
-  it("pago en sitio a treinta horas de la salida no avisa todavía", () => {
+  it("pago en sitio a treinta horas de la salida: el plazo vence en 18 horas y ya es alerta", () => {
     const departsAt = new Date(AHORA.getTime() + 30 * 3_600_000);
     const avisos = buildNotices(
       {
@@ -151,7 +180,76 @@ describe("buildNotices", () => {
       },
       AHORA,
     );
-    expect(avisos).toEqual([]);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toMatchObject({
+      kind: "RECONFIRMAR_PAGO_EN_SITIO",
+      level: "alerta",
+      at: new Date(AHORA.getTime() + 18 * 3_600_000),
+    });
+  });
+
+  it("pago en sitio a tres días avisa desde ya, en tono informativo y con la hora exacta", () => {
+    // Sale el miércoles 16 a las 08:00 en Caracas; el plazo vence el martes 15 a las 20:00.
+    const departsAt = new Date(AHORA.getTime() + 72 * 3_600_000);
+    const avisos = buildNotices(
+      {
+        hasIdDocument: true,
+        reservations: [reserva({ status: "PAGO_EN_SITIO", departsAt, reconfirmedAt: null })],
+      },
+      AHORA,
+    );
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toMatchObject({
+      kind: "RECONFIRMAR_PAGO_EN_SITIO",
+      level: "info",
+      at: new Date(AHORA.getTime() + 60 * 3_600_000),
+    });
+    expect(avisos[0]?.title).toBe("Recuerda pagar en la taquilla");
+    expect(avisos[0]?.body).toBe(
+      "Tu viaje Caracas → Maracaibo sale el mié 16 sep a las 08:00. Tienes hasta el mar 15 sep a las 20:00 para pagar en la taquilla; si no, tu puesto quedará libre.",
+    );
+  });
+
+  it("pagada en parte y lejos de la salida: aviso informativo con lo que falta", () => {
+    const avisos = buildNotices(
+      { hasIdDocument: true, reservations: [reserva({ status: "ABONADA", balance: "$ 14,35" })] },
+      AHORA,
+    );
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toMatchObject({
+      kind: "SALDO_PENDIENTE",
+      level: "info",
+      href: "/mi/reservas/TR-0913-1PAX-AAAA",
+    });
+    expect(avisos[0]?.body).toBe(
+      "Te faltan $ 14,35 para recibir tu ticket del viaje Caracas → Maracaibo, que sale el mar 15 sep a las 08:00.",
+    );
+    // Una reserva pagada en parte nunca pierde el puesto: el aviso no lo amenaza.
+    expect(`${avisos[0]?.title} ${avisos[0]?.body}`).not.toContain("libre");
+  });
+
+  it("pagada en parte a menos de 24 horas de la salida: el aviso de saldo es alerta", () => {
+    const departsAt = new Date(AHORA.getTime() + 20 * 3_600_000);
+    const avisos = buildNotices(
+      { hasIdDocument: true, reservations: [reserva({ status: "ABONADA", departsAt, balance: "$ 14,35" })] },
+      AHORA,
+    );
+    expect(avisos[0]).toMatchObject({ kind: "SALDO_PENDIENTE", level: "alerta", at: departsAt });
+    expect(avisos[0]?.body).toContain("que sale mañana a las 04:00");
+  });
+
+  it("pagada en parte sin el saldo calculado no inventa una cifra", () => {
+    const [aviso] = buildNotices({ hasIdDocument: true, reservations: [reserva({ status: "ABONADA" })] }, AHORA);
+    expect(aviso?.kind).toBe("SALDO_PENDIENTE");
+    expect(aviso?.body).toContain("Te falta una parte del pago");
+    expect(aviso?.body).not.toContain("$");
+  });
+
+  it("no hay aviso de saldo si el viaje ya salió ni si la reserva está pagada", () => {
+    const yaSalio = reserva({ status: "ABONADA", balance: "$ 5,00", departsAt: new Date(AHORA.getTime() - 60_000) });
+    const pagada = reserva({ code: "TR-0913-1PAX-ZZZZ", status: "PAGADA", balance: "$ 5,00" });
+    const avisos = buildNotices({ hasIdDocument: true, reservations: [yaSalio, pagada] }, AHORA);
+    expect(avisos.filter((a) => a.kind === "SALDO_PENDIENTE")).toEqual([]);
   });
 
   it("pago en sitio ya reconfirmado no avisa", () => {
@@ -312,11 +410,12 @@ describe("buildNotices", () => {
             departsAt: new Date(AHORA.getTime() + 20 * 3_600_000),
           }),
           reserva({ code: "TR-0913-1PAX-HHHH", status: "PAGADA", hasTicket: true }),
+          reserva({ code: "TR-0913-1PAX-JJJJ", status: "ABONADA", balance: "$ 14,35" }),
         ],
       },
       AHORA,
     );
-    expect(new Set(avisos.map((a) => a.kind)).size).toBe(6);
+    expect(new Set(avisos.map((a) => a.kind)).size).toBe(7);
     for (const aviso of avisos) {
       const texto = `${aviso.title} ${aviso.body}`.toLowerCase();
       for (const jerga of ["cupo", "en sitio", "validación", "validar", "reconfirma", "serial"]) {

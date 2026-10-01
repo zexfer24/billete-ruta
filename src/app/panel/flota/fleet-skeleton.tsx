@@ -5,7 +5,10 @@ import type { FleetView } from "./fleet-body";
  * Silueta del cuerpo de flota: pestañas y la tabla de la pestaña activa. El
  * resumen por estado no se dibuja porque solo aparece cuando hay unidades en
  * más de un estado. Sin `vista` (el `loading.tsx`, que no sabe si se entró
- * con `?vista=choferes`) ninguna pestaña va marcada.
+ * con `?vista=choferes`) ninguna pestaña va marcada y las cabeceras de la
+ * tabla van como barras, para no mostrar las de vehículos y cambiarlas luego
+ * por las de choferes. En el teléfono, cada tarjeta lleva una cifra, el viaje
+ * a todo el ancho y el botón de editar.
  */
 export function FleetBodySkeleton({ vista }: { vista?: FleetView }) {
   return (
@@ -23,6 +26,9 @@ export function FleetBodySkeleton({ vista }: { vista?: FleetView }) {
               : ["Chofer", "Estado", "Viaje en curso o próximo", "Viajes completados", ""]
           }
           rows={6}
+          headerBars={vista === undefined}
+          cardDetails={1}
+          cardWideDetail
         />
       </div>
     </div>

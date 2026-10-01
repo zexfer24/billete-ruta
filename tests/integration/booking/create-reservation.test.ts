@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
+import { formatCaracasDateTime24 } from "@/lib/time";
 import {
   DepartureClosedError,
   MissingDocumentsError,
@@ -52,6 +53,29 @@ describe("createReservation", () => {
     expect(reserva.passengers.filter((p) => p.isHolder)).toHaveLength(1);
     expect(reserva.expiresAt).not.toBeNull();
     expect(reserva.messages.map((m) => m.templateKey)).toEqual(["solicitud_recibida"]);
+  });
+
+  it("si el bus sale antes de las 2 horas, el mensaje da la salida como hora límite", async () => {
+    const { salida, ruta } = await createDepartureFixture({ hoursFromNow: 39 / 60 });
+    const metodo = await createPaymentMethodFixture({ kind: "DIGITAL", currency: "USD" });
+    const cuenta = await createAccountFixture();
+
+    const resultado = await createReservation({
+      accountId: cuenta.id,
+      departureId: salida.id,
+      paymentMethodId: metodo.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+
+    const [mensaje] = await prisma.outboundMessage.findMany({ where: { reservationId: resultado.reservationId } });
+    const payload = mensaje?.payload as Record<string, string>;
+    expect(payload.ruta).toBe(`${ruta.origin} → ${ruta.destination}`);
+    expect(payload.limite).toBe(formatCaracasDateTime24(salida.departsAt));
+    expect(payload.limite).toBe(payload.salida);
+    // Se guarda el texto exacto que se envía.
+    expect(payload._texto).toContain(`en el viaje ${ruta.origin} → ${ruta.destination}`);
+    expect(payload._texto).not.toContain("próximas 2 horas");
   });
 
   it("separa tarifa y tasa de salida, y las congela en la reserva", async () => {

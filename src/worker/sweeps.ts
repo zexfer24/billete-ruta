@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/decimal";
 import { formatCaracasDateTime24 } from "@/lib/time";
-import { enqueueMessage } from "@/modules/messaging";
+import { enqueueMessage, messageRoute } from "@/modules/messaging";
 import {
+  cashCounterDeadline,
   dueForConfirmation2h,
   dueForReminder24h,
   dueForRelease12h,
@@ -26,7 +27,7 @@ export interface SweepResult {
 async function sweepExpireUnpaid(now: Date): Promise<number> {
   const vencidas = await prisma.reservation.findMany({
     where: { status: "PENDIENTE_PAGO", expiresAt: { lte: now } },
-    include: { account: true },
+    include: { account: true, departure: { include: { route: true } } },
   });
 
   let liberadas = 0;
@@ -43,7 +44,11 @@ async function sweepExpireUnpaid(now: Date): Promise<number> {
         reservationId: reserva.id,
         phone: reserva.account.phone,
         templateKey: "reserva_liberada",
-        payload: { nombre: reserva.account.fullName, serial: reserva.code },
+        payload: {
+          nombre: reserva.account.fullName,
+          serial: reserva.code,
+          ruta: messageRoute(reserva.departure.route),
+        },
       }),
     );
     await processWaitlist(reserva.departureId, now);
@@ -74,8 +79,11 @@ async function sweepReminder24h(now: Date): Promise<number> {
           payload: {
             nombre: reserva.account.fullName,
             serial: reserva.code,
+            ruta: messageRoute(reserva.departure.route),
             salida: formatCaracasDateTime24(reserva.departure.departsAt),
             monto: formatMoney(reserva.amountInCurrency, reserva.currency),
+            // La misma hora límite que muestra la app y que usa la liberación.
+            limite: formatCaracasDateTime24(cashCounterDeadline(reserva.departure.departsAt, now)),
           },
         });
       } else {
@@ -86,6 +94,7 @@ async function sweepReminder24h(now: Date): Promise<number> {
           payload: {
             nombre: reserva.account.fullName,
             serial: reserva.code,
+            ruta: messageRoute(reserva.departure.route),
             salida: formatCaracasDateTime24(reserva.departure.departsAt),
             punto: reserva.departure.route.meetingPoint,
             recomendaciones:
@@ -112,7 +121,7 @@ async function sweepRelease12h(now: Date): Promise<number> {
       reconfirmedAt: null,
       departure: { departsAt: { lte: corte }, status: { in: ["PROGRAMADA", "MANIFIESTO_CERRADO"] } },
     },
-    include: { account: true },
+    include: { account: true, departure: { include: { route: true } } },
   });
 
   let liberadas = 0;
@@ -129,7 +138,11 @@ async function sweepRelease12h(now: Date): Promise<number> {
         reservationId: reserva.id,
         phone: reserva.account.phone,
         templateKey: "reserva_liberada",
-        payload: { nombre: reserva.account.fullName, serial: reserva.code },
+        payload: {
+          nombre: reserva.account.fullName,
+          serial: reserva.code,
+          ruta: messageRoute(reserva.departure.route),
+        },
       }),
     );
     await processWaitlist(reserva.departureId, now);
@@ -138,7 +151,7 @@ async function sweepRelease12h(now: Date): Promise<number> {
   return liberadas;
 }
 
-/** Confirmación de asistencia dos horas antes de la salida. */
+/** Recordatorio dos horas antes de la salida, con la hora y el punto de encuentro. */
 async function sweepConfirmation2h(now: Date): Promise<number> {
   const { from, to } = dueForConfirmation2h(now);
   const reservas = await prisma.reservation.findMany({
@@ -149,7 +162,7 @@ async function sweepConfirmation2h(now: Date): Promise<number> {
       ],
       departure: { departsAt: { gte: from, lte: to } },
     },
-    include: { account: true },
+    include: { account: true, departure: { include: { route: true } } },
   });
 
   let encolados = 0;
@@ -159,7 +172,13 @@ async function sweepConfirmation2h(now: Date): Promise<number> {
         reservationId: reserva.id,
         phone: reserva.account.phone,
         templateKey: "confirmacion_2h",
-        payload: { nombre: reserva.account.fullName, serial: reserva.code },
+        payload: {
+          nombre: reserva.account.fullName,
+          serial: reserva.code,
+          ruta: messageRoute(reserva.departure.route),
+          salida: formatCaracasDateTime24(reserva.departure.departsAt),
+          punto: reserva.departure.route.meetingPoint,
+        },
       }),
     );
     encolados += 1;

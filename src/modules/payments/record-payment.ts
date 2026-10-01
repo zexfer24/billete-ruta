@@ -5,7 +5,7 @@ import { formatCaracasDateTime24 } from "@/lib/time";
 import { writeAudit } from "@/modules/audit";
 import { balanceUsd, statusAfterPayment, toUsd } from "@/modules/catalog/pricing";
 import { getCurrentExchangeRate, missingExchangeRateMessage } from "@/modules/catalog/rates";
-import { enqueueMessage } from "@/modules/messaging";
+import { enqueueMessage, messageRoute } from "@/modules/messaging";
 import { ForbiddenError } from "@/modules/auth/permissions";
 import { NotOwnerError, ValidationError } from "@/modules/booking/errors";
 import { transitionReservation } from "@/modules/booking/transition";
@@ -245,6 +245,7 @@ export async function approveProof(
         payload: {
           nombre: reserva.account.fullName,
           serial: reserva.code,
+          ruta: messageRoute(reserva.departure.route),
           abonado: formatMoney(comprobante.amountUsd, "USD"),
           saldo: formatMoney(saldo, "USD"),
         },
@@ -258,6 +259,7 @@ export async function approveProof(
         payload: {
           nombre: reserva.account.fullName,
           serial: reserva.code,
+          ruta: messageRoute(reserva.departure.route),
           salida: formatCaracasDateTime24(reserva.departure.departsAt),
           punto: reserva.departure.route.meetingPoint,
         },
@@ -337,6 +339,7 @@ export async function rejectProof(input: RejectProofInput): Promise<void> {
       payload: {
         nombre: reserva.account.fullName,
         serial: reserva.code,
+        ruta: messageRoute(reserva.departure.route),
         motivo: input.reason.trim(),
       },
     });
@@ -447,6 +450,7 @@ export async function registerCashPaymentInTx(
       payload: {
         nombre: reserva.account.fullName,
         serial: reserva.code,
+        ruta: messageRoute(reserva.departure.route),
         salida: formatCaracasDateTime24(reserva.departure.departsAt),
         punto: reserva.departure.route.meetingPoint,
       },

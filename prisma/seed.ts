@@ -3,7 +3,7 @@ import argon2 from "argon2";
 
 const prisma = new PrismaClient();
 
-const ADMIN = { email: "admin@ticketruta.test", password: "Admin.2026", name: "Dirección del Terminal" };
+const ADMIN = { email: "admin@ticketruta.test", password: "Admin.2026", name: "Luisa Fernández" };
 const OPERADORES = [
   { email: "andes@ticketruta.test", password: "Operador.2026", name: "María Fernanda Rojas" },
   { email: "caribe@ticketruta.test", password: "Operador.2026", name: "Carlos Eduardo Salazar" },

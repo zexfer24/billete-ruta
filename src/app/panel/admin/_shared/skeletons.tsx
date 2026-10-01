@@ -100,6 +100,22 @@ export function LineSkeleton({ className = "w-72" }: { className?: string }) {
 }
 
 /**
+ * Paginación de arriba de una lista paginada (`Pagination`): la posición en
+ * barra y el botón "Siguiente" real, quieto, como en la primera página.
+ */
+export function PaginationSkeleton() {
+  return (
+    <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-3">
+      <LineSkeleton className="w-28" />
+      <span className={panelButtonClass("secundario")}>
+        Siguiente
+        <IconChevronRight className="size-5 shrink-0" />
+      </span>
+    </div>
+  );
+}
+
+/**
  * Tarjeta de cifra (`StatCard`): la etiqueta y el icono reales (son fijos,
  * como en el kit del panel de agencia), la cifra y el detalle en barras y, si
  * la tarjeta real es un enlace, su "Ver detalle".
@@ -116,8 +132,9 @@ export function StatCardSkeleton({
 }) {
   return (
     <div aria-hidden="true" className={`${CARD} relative flex flex-col overflow-hidden p-5`}>
-      {/* La barra de color de las tarjetas del terminal, que siempre van en tono de marca. */}
-      <span className="absolute inset-x-0 top-0 h-1 bg-marca-600" />
+      {/* La barra neutra de las tarjetas de cifra del terminal: como en el panel
+          de agencia, el morado queda solo para la tarjeta en vivo. */}
+      <span className="absolute inset-x-0 top-0 h-1 bg-borde" />
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-semibold text-tinta-suave">{label}</p>
         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600 [&>svg]:size-5">
@@ -158,7 +175,8 @@ export function FilterCardSkeleton({ labels, button }: { labels: readonly string
 /**
  * Tabla del panel: en escritorio, las cabeceras reales (`columns`; un texto
  * vacío deja la columna sin título, como la de la acción) y filas en barras;
- * en móvil, tarjetas con título, datos y, si la real lo lleva, el botón.
+ * en móvil, tarjetas con título, datos y, si la real lo lleva, el botón o la
+ * flecha de la tarjeta que es un enlace (`mobileChevron`).
  */
 export function TableSkeleton({
   columns,
@@ -169,6 +187,7 @@ export function TableSkeleton({
   mobileAction = false,
   mobileSubtitleLines = 1,
   mobileTextLines = 0,
+  mobileChevron = false,
 }: {
   columns: readonly string[];
   rows?: number;
@@ -180,6 +199,8 @@ export function TableSkeleton({
   mobileSubtitleLines?: number;
   /** Líneas de un párrafo de texto corrido bajo la cabecera de la tarjeta (el texto de un mensaje). */
   mobileTextLines?: number;
+  /** Flecha a la derecha, centrada, como la tarjeta real que abre un detalle (movimientos). */
+  mobileChevron?: boolean;
 }) {
   return (
     <>
@@ -203,40 +224,52 @@ export function TableSkeleton({
         ))}
       </div>
       <div aria-hidden="true" className="flex flex-col gap-3 md:hidden">
-        {Array.from({ length: mobileCards }, (_, index) => (
-          <div key={index} className={`${CARD} flex flex-col gap-3 p-4`}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Skeleton className="h-5 w-3/5 rounded-pastilla" />
-                {Array.from({ length: mobileSubtitleLines }, (_, line) => (
-                  <Skeleton key={line} className={`h-4 rounded-pastilla ${line === 0 ? "w-2/5" : "w-3/5"}`} />
-                ))}
+        {Array.from({ length: mobileCards }, (_, index) => {
+          const body = (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-5 w-3/5 rounded-pastilla" />
+                  {Array.from({ length: mobileSubtitleLines }, (_, line) => (
+                    <Skeleton key={line} className={`h-4 rounded-pastilla ${line === 0 ? "w-2/5" : "w-3/5"}`} />
+                  ))}
+                </div>
+                {mobileStatus ? <Skeleton className="h-6 w-20 rounded-pastilla" /> : null}
               </div>
-              {mobileStatus ? <Skeleton className="h-6 w-20 rounded-pastilla" /> : null}
+              {mobileTextLines > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {Array.from({ length: mobileTextLines }, (_, line) => (
+                    <Skeleton
+                      key={line}
+                      className={`h-3.5 rounded-pastilla ${line === mobileTextLines - 1 ? "w-3/5" : "w-full"}`}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {mobileDetails > 0 ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  {Array.from({ length: mobileDetails }, (_, detail) => (
+                    <div key={detail} className="flex flex-col gap-1">
+                      <Skeleton className="h-3.5 w-16 rounded-pastilla" />
+                      <Skeleton className="h-4 w-24 rounded-pastilla" />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {mobileAction ? <Skeleton className="h-11 w-full" /> : null}
+            </>
+          );
+          return mobileChevron ? (
+            <div key={index} className={`${CARD} flex items-center gap-3 p-4`}>
+              <div className="flex min-w-0 flex-1 flex-col gap-3">{body}</div>
+              <IconChevronRight className="size-5 shrink-0 text-marca-700" />
             </div>
-            {mobileTextLines > 0 ? (
-              <div className="flex flex-col gap-2">
-                {Array.from({ length: mobileTextLines }, (_, line) => (
-                  <Skeleton
-                    key={line}
-                    className={`h-3.5 rounded-pastilla ${line === mobileTextLines - 1 ? "w-3/5" : "w-full"}`}
-                  />
-                ))}
-              </div>
-            ) : null}
-            {mobileDetails > 0 ? (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                {Array.from({ length: mobileDetails }, (_, detail) => (
-                  <div key={detail} className="flex flex-col gap-1">
-                    <Skeleton className="h-3.5 w-16 rounded-pastilla" />
-                    <Skeleton className="h-4 w-24 rounded-pastilla" />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {mobileAction ? <Skeleton className="h-11 w-full" /> : null}
-          </div>
-        ))}
+          ) : (
+            <div key={index} className={`${CARD} flex flex-col gap-3 p-4`}>
+              {body}
+            </div>
+          );
+        })}
       </div>
     </>
   );

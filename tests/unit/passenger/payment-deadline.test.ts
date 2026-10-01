@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   deadlinePhrase,
   estimatedOnlineDeadline,
+  heroDepartsSoon,
+  heroDepartureTitle,
   paymentDeadline,
   pickHeroReservation,
   ticketDeadline,
@@ -110,10 +112,47 @@ describe("pickHeroReservation", () => {
     expect(pickHeroReservation([otra, merida], AHORA)).toEqual({ hero: merida, soonest: merida, promoted: false });
   });
 
+  it("un viaje en revisión que sale dentro de 3 horas no cede su lugar", () => {
+    const pronto: HeroCandidate = { ...merida, departsAt: en(34 * MIN) };
+    expect(pickHeroReservation([barinas, pronto], AHORA)).toEqual({ hero: pronto, soonest: pronto, promoted: false });
+  });
+
+  it("un pago en la taquilla que vence en más de 24 horas no sube", () => {
+    const taquilla: HeroCandidate = { code: "TR-C", status: "PAGO_EN_SITIO", departsAt: en(84 * HORA), expiresAt: null };
+    expect(pickHeroReservation([merida, taquilla], AHORA)).toEqual({ hero: merida, soonest: merida, promoted: false });
+  });
+
+  it("sin plazos que apuren, sube la pagada en parte que sale dentro de 24 horas", () => {
+    const abonada: HeroCandidate = { code: "TR-E", status: "ABONADA", departsAt: en(22 * HORA), expiresAt: null };
+    expect(pickHeroReservation([merida, abonada], AHORA)).toEqual({ hero: abonada, soonest: merida, promoted: true });
+    const lejana: HeroCandidate = { ...abonada, departsAt: en(30 * HORA) };
+    expect(pickHeroReservation([merida, lejana], AHORA)?.promoted).toBe(false);
+  });
+
+  it("un plazo de pago sube antes que una pagada en parte", () => {
+    const abonada: HeroCandidate = { code: "TR-E", status: "ABONADA", departsAt: en(6 * HORA), expiresAt: null };
+    expect(pickHeroReservation([merida, abonada, barinas], AHORA)?.hero).toBe(barinas);
+  });
+
   it("en una misma salida va la más urgente y, a igual urgencia, la de código menor", () => {
     const a: HeroCandidate = { code: "TR-2", status: "PAGADA", departsAt: en(HORA), expiresAt: null };
     const b: HeroCandidate = { code: "TR-1", status: "ABONADA", departsAt: en(HORA), expiresAt: null };
     const c: HeroCandidate = { code: "TR-0", status: "ABONADA", departsAt: en(HORA), expiresAt: null };
     expect(pickHeroReservation([a, b, c], AHORA)?.hero).toBe(c);
+  });
+});
+
+describe("heroDepartureTitle", () => {
+  it("dice cuánto falta para salir, en minutos o con la hora", () => {
+    expect(heroDepartureTitle(en(34 * MIN), AHORA)).toBe("Tu viaje sale en 34 min");
+    expect(heroDepartureTitle(en(30 * 1000), AHORA)).toBe("Tu viaje sale ahora");
+    expect(heroDepartureTitle(en(2 * HORA), AHORA)).toBe("Tu viaje sale hoy a las 22:19");
+    expect(heroDepartureTitle(en(4 * HORA), AHORA)).toBe("Tu viaje sale mañana a las 00:19");
+  });
+
+  it("solo cuenta como pronto lo que sale dentro de 3 horas", () => {
+    expect(heroDepartsSoon(en(3 * HORA), AHORA)).toBe(true);
+    expect(heroDepartsSoon(en(3 * HORA + MIN), AHORA)).toBe(false);
+    expect(heroDepartsSoon(en(-MIN), AHORA)).toBe(false);
   });
 });

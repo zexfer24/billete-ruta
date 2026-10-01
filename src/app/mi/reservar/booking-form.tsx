@@ -173,6 +173,7 @@ export default function BookingForm({
   // El borrador se lee una sola vez al montar; hasta el render siguiente no se escribe encima.
   const [draftReady, setDraftReady] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const stepperRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const lastStep = useRef<Step>(step);
   const restoredStep = useRef<Step | null>(null);
@@ -220,7 +221,8 @@ export default function BookingForm({
     selectedPaymentMethodId,
   ]);
 
-  // Al cambiar de paso, la vista vuelve arriba y el foco va al título del paso nuevo.
+  // Al cambiar de paso, la vista vuelve arriba y el foco va al título del paso nuevo. En el paso 1 el
+  // título es solo para lectores de pantalla: el foco va a los pasos, que se ven y lo usan de nombre.
   useEffect(() => {
     if (lastStep.current === step) return;
     lastStep.current = step;
@@ -229,7 +231,7 @@ export default function BookingForm({
       return;
     }
     topRef.current?.scrollIntoView({ block: "start" });
-    headingRef.current?.focus({ preventScroll: true });
+    (step === 1 ? stepperRef.current : headingRef.current)?.focus({ preventScroll: true });
   }, [step]);
 
   const selectedDeparture = departures.find((d) => d.id === selectedDepartureId) ?? null;
@@ -325,9 +327,18 @@ export default function BookingForm({
   ) : null;
 
   return (
-    // El relleno de abajo deja sitio a la barra fija de los pasos 2 a 4; el paso 1 no la tiene.
-    <div ref={topRef} className={`flex scroll-mt-4 flex-col ${step > 1 ? "gap-6 pb-40" : "gap-4"}`}>
-      <Stepper steps={STEP_LABELS} current={step} label="Pasos para reservar" />
+    // En los pasos 2 a 4 la barra de navegación se oculta y su sitio en <main> (7rem) lo ocupa la barra
+    // de acciones; este relleno extra cubre lo que esa barra mide de más cuando el resumen ocupa dos líneas.
+    <div ref={topRef} className={`flex scroll-mt-4 flex-col ${step > 1 ? "gap-6 pb-10" : "gap-4"}`}>
+      <div
+        ref={stepperRef}
+        tabIndex={step === 1 ? -1 : undefined}
+        role={step === 1 ? "group" : undefined}
+        aria-labelledby={step === 1 ? "paso-titulo" : undefined}
+        className="foco rounded-control outline-none"
+      >
+        <Stepper steps={STEP_LABELS} current={step} label="Pasos para reservar" />
+      </div>
 
       {restored ? (
         <Alert
@@ -361,9 +372,11 @@ export default function BookingForm({
       {/*
         En el paso 1 el título queda solo para lectores de pantalla: el Stepper ya
         dice "Salida" y así la primera salida, con su "Elegir", cabe en la
-        primera pantalla. Sigue siendo el destino del foco al cambiar de paso.
+        primera pantalla. Al volver al paso 1, el foco va a los pasos (visibles),
+        que toman este título como nombre.
       */}
       <h2
+        id="paso-titulo"
         ref={headingRef}
         tabIndex={-1}
         className={step === 1 ? "sr-only" : "text-lg font-semibold text-tinta outline-none"}

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { IconCalendar } from "@/components/icons";
 import { PANEL_LABEL_CLASS, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { AdminTabs } from "./admin-tabs";
+import { ADMIN_TABS_BESIDE_TITLE_CLASS, ADMIN_TITLE_ROW_CLASS } from "./tab-classes";
 import { GetForm, GetSubmitButton } from "./get-form";
 import { describeAdminRange, periodQuery, periodTabs, type AdminRange } from "./period";
 
@@ -19,6 +20,10 @@ export const FILTER_BUTTON_LABEL = "Filtrar";
  * `extraFields` agrega otros filtros al mismo formulario (por ejemplo la
  * agencia); con ellos el formulario se muestra siempre. `keep` son esos mismos
  * filtros ya aplicados, para conservarlos al cambiar de pestaña.
+ *
+ * Con `title`, las pestañas van a la derecha de un título de sección (`h2`),
+ * como "Resumen de hoy" en el tablero de la agencia, y el rango queda debajo
+ * como detalle.
  */
 export function PeriodFilter({
   path,
@@ -26,6 +31,7 @@ export function PeriodFilter({
   keep = {},
   extraFields,
   caption,
+  title,
 }: {
   path: string;
   range: AdminRange;
@@ -33,8 +39,10 @@ export function PeriodFilter({
   extraFields?: ReactNode;
   /** Qué abarca el periodo, por ejemplo "Recorridos, usuarios nuevos y gráfico". */
   caption?: string;
+  /** Título de sección con las pestañas a su derecha; `id` para `aria-labelledby`. */
+  title?: { text: string; id: string };
 }) {
-  const tabs = periodTabs(path, range, keep);
+  const tabTargets = periodTabs(path, range, keep).map(({ href, label, active }) => ({ href, label, active }));
   const isCustom = range.period === "fechas";
   const showForm = isCustom || Boolean(extraFields);
   // Fuera de "Otras fechas", el formulario de filtros conserva el periodo en campos ocultos.
@@ -42,7 +50,16 @@ export function PeriodFilter({
 
   return (
     <div className="flex flex-col gap-3">
-      <AdminTabs label="Periodo" grid tabs={tabs.map(({ href, label, active }) => ({ href, label, active }))} />
+      {title ? (
+        <div className={ADMIN_TITLE_ROW_CLASS}>
+          <h2 id={title.id} className="text-lg font-semibold text-tinta">
+            {title.text}
+          </h2>
+          <AdminTabs label="Periodo" grid className={ADMIN_TABS_BESIDE_TITLE_CLASS} tabs={tabTargets} />
+        </div>
+      ) : (
+        <AdminTabs label="Periodo" grid tabs={tabTargets} />
+      )}
 
       {showForm ? (
         <GetForm

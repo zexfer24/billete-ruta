@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { writeAudit } from "@/modules/audit";
-import { enqueueMessage } from "@/modules/messaging";
+import { enqueueMessage, messageRoute } from "@/modules/messaging";
 import { WAITLIST_CLAIM_HOURS, WAITLIST_MIN_LEAD_HOURS } from "@/modules/scheduler";
 import { getAvailability } from "./availability";
 import { ValidationError } from "./errors";
@@ -106,6 +106,7 @@ export async function processWaitlist(
       templateKey: "cupo_disponible_lista_espera",
       payload: {
         nombre: elegible.account.fullName,
+        ruta: messageRoute(salida.route),
         salida: formatCaracasDateTime24(salida.departsAt),
         enlace: `${getEnv().PUBLIC_BASE_URL}/lista-espera/${claimToken}`,
         vigencia: `${WAITLIST_CLAIM_HOURS} horas`,

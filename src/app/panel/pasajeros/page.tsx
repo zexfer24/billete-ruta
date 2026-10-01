@@ -22,6 +22,10 @@ import { ProofNotFound, ProofReviewPanel } from "./proof-review";
 import { ReservationDetailPanel, ReservationNotFound } from "./reservation-detail";
 import { ProofQueueList, ReservationList } from "./passenger-list";
 import { ListSkeleton, PanelBodySkeleton } from "./skeletons";
+import { arrowRouteName } from "./trip-text";
+// Formulario GET con espera (`next/form`): vive en la carpeta del admin, como
+// en el filtro de Reportes (period-bar.tsx).
+import { GetForm, GetSubmitButton } from "../admin/_shared/get-form";
 import { parsePasajerosFilters, uuidParam } from "./filters";
 import { pasajerosUrl } from "./urls";
 import { ViewTabs } from "./view-tabs";
@@ -51,7 +55,7 @@ const VIEW_TAB_LABELS: Record<ReservationView, string> = {
 
 /** Qué muestra cada pestaña, en una frase, debajo de las pestañas. */
 const VIEW_DESCRIPTIONS: Record<ReservationView, string> = {
-  "por-revisar": "Comprobantes de pago que enviaron los pasajeros, del más antiguo al más nuevo.",
+  "por-revisar": "Comprobantes de pago que enviaron los pasajeros, primero los de la salida más próxima.",
   "por-cobrar": "Reservas que todavía deben dinero, ordenadas por la salida más próxima.",
   pagadas: "Reservas pagadas por completo, con su ticket emitido.",
   "sin-efecto": "Reservas liberadas, canceladas o de pasajeros que no se presentaron.",
@@ -79,10 +83,9 @@ async function ReservationFilters({
   const hayFiltros = Boolean(salida || buscar);
 
   return (
-    <form
-      method="get"
+    <GetForm
+      action="/panel/pasajeros"
       role="search"
-      aria-label="Filtrar reservas"
       className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 md:flex-row md:flex-wrap md:items-end"
     >
       <input type="hidden" name="vista" value={vista} />
@@ -98,7 +101,7 @@ async function ReservationFilters({
             {salidaFueraDeLista ? <option value={salida}>La salida elegida en el enlace</option> : null}
             {salidas.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.routeName} · {formatCaracasDateTime24(d.departsAt)}
+                {arrowRouteName(d.routeName)} · {formatCaracasDateTime24(d.departsAt)}
               </option>
             ))}
           </select>
@@ -117,17 +120,17 @@ async function ReservationFilters({
         />
       </label>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className={panelButtonClass("secundario")}>
+        <GetSubmitButton pendingLabel="Buscando…" className={panelButtonClass("secundario")}>
           <IconSearch className="size-5" />
           Buscar
-        </button>
+        </GetSubmitButton>
         {hayFiltros ? (
           <Link href={pasajerosUrl({ vista })} className={panelButtonClass("fantasma")}>
             Quitar los filtros
           </Link>
         ) : null}
       </div>
-    </form>
+    </GetForm>
   );
 }
 

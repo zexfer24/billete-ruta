@@ -17,7 +17,7 @@ import {
   TimeCell,
 } from "../_shared/lists";
 import { withQuery } from "../_shared/period";
-import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { LineSkeleton, PaginationSkeleton, TableSkeleton } from "../_shared/skeletons";
 import { MESSAGES_PATH, payloadToParams, templateName } from "./messages";
 
 /** Mensajes por página: 25, como las demás listas paginadas del panel. */
@@ -298,11 +298,12 @@ export async function MessagesList({
   );
 }
 
-/** Silueta de la lista de mensajes: línea del total y la tabla con sus cabeceras reales. */
+/** Silueta de la lista de mensajes: línea del total, la paginación de arriba y la tabla con sus cabeceras reales. */
 export function MessagesListSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-72" />
+      <PaginationSkeleton />
       <TableSkeleton
         columns={MESSAGE_COLUMNS}
         rows={8}

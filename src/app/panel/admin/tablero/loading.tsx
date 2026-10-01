@@ -1,7 +1,8 @@
 import { SkeletonScreen } from "@/components/skeleton";
 import { ADMIN_PERIOD_TAB_LABELS } from "../_shared/period";
 import { LineSkeleton, PageHeaderSkeleton, TabsSkeleton } from "../_shared/skeletons";
-import { PeriodDataSkeleton } from "./period-data";
+import { ADMIN_TABS_BESIDE_TITLE_CLASS, ADMIN_TITLE_ROW_CLASS } from "../_shared/tab-classes";
+import { PERIOD_TITLE, PeriodDataSkeleton } from "./period-data";
 import { LiveTaxSkeleton, RecurringCardSkeleton } from "./top-cards";
 
 /**
@@ -26,7 +27,12 @@ export default function TableroAdminLoading() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <TabsSkeleton labels={ADMIN_PERIOD_TAB_LABELS} grid />
+        <div aria-hidden="true" className={ADMIN_TITLE_ROW_CLASS}>
+          <p className="text-lg font-semibold text-tinta">{PERIOD_TITLE.text}</p>
+          <div className={ADMIN_TABS_BESIDE_TITLE_CLASS}>
+            <TabsSkeleton labels={ADMIN_PERIOD_TAB_LABELS} grid />
+          </div>
+        </div>
         <LineSkeleton />
       </div>
 

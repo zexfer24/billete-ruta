@@ -122,7 +122,8 @@ export default async function DocumentosPage({
       <DocumentoCard
         tipo="CEDULA"
         titulo="Foto de tu cédula"
-        descripcion="Obligatoria para confirmar cualquier reserva. Toma la foto del frente, con buena luz y sin reflejos."
+        descripcion="Obligatoria para confirmar cualquier reserva."
+        consejoFoto="Toma la foto del frente, con buena luz y sin reflejos."
         obligatorio
         documento={cedula}
         volver={params.volver}
@@ -134,6 +135,7 @@ export default async function DocumentosPage({
         tipo="PERMISO_VIAJE"
         titulo="Permiso de viaje"
         descripcion="Solo hace falta si en tu grupo viaja un menor de edad."
+        consejoFoto="Que se lean bien los datos."
         obligatorio={false}
         documento={permiso}
         volver={params.volver}
@@ -187,6 +189,8 @@ interface DocumentoCardProps {
   tipo: "CEDULA" | "PERMISO_VIAJE";
   titulo: string;
   descripcion: string;
+  /** Cómo tomar la foto: va con el campo de subida, no a la vista cuando el documento ya está guardado. */
+  consejoFoto: string;
   obligatorio: boolean;
   documento: Documento | null;
   volver: DocumentosVolver;
@@ -200,7 +204,8 @@ interface DocumentoCardProps {
 
 /**
  * Tarjeta de un documento: estado, foto vigente y formulario para subirla o
- * cambiarla. El formulario va abierto solo si el documento es obligatorio y
+ * cambiarla. Las indicaciones para tomar la foto van con el campo de subida:
+ * con el documento guardado solo se ven al desplegar "Cambiar la foto". El formulario va abierto solo si el documento es obligatorio y
  * falta; si no, se despliega con "Cambiar la foto" o "Subir el permiso de
  * viaje" (un `<details>` nativo: sin JavaScript y con teclado).
  */
@@ -208,6 +213,7 @@ function DocumentoCard({
   tipo,
   titulo,
   descripcion,
+  consejoFoto,
   obligatorio,
   documento,
   volver,
@@ -222,6 +228,8 @@ function DocumentoCard({
   const fileId = `archivo-${tipo.toLowerCase()}`;
   const nombreCorto = tipo === "CEDULA" ? "de la cédula" : "del permiso";
   const plegado = cargado || !obligatorio;
+  // Con la cédula guardada, "Obligatoria para…" ya no dice nada: la tarjeta dice que está lista.
+  const muestraDescripcion = !cargado || !obligatorio;
 
   const formulario = (
     <form action={subirDocumentoAction} className="flex flex-col gap-4">
@@ -234,7 +242,7 @@ function DocumentoCard({
         buttonLabel={cargado ? "Tomar o elegir otra foto" : "Tomar o elegir la foto"}
         maxSizeMb={5}
         accept="image/jpeg,image/png,image/webp"
-        hint="Que se lean bien los datos. JPG, PNG o WebP de hasta 5 MB."
+        hint={`${consejoFoto} JPG, PNG o WebP de hasta 5 MB.`}
         required
       />
       <SubmitButton
@@ -263,7 +271,7 @@ function DocumentoCard({
               </h2>
               <Pill tone={tono}>{estado}</Pill>
             </div>
-            <p className="leading-relaxed text-tinta-suave">{descripcion}</p>
+            {muestraDescripcion ? <p className="leading-relaxed text-tinta-suave">{descripcion}</p> : null}
           </div>
         </div>
 

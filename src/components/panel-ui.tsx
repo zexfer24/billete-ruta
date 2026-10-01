@@ -59,7 +59,7 @@ export function PanelPageHeader({
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 max-w-3xl">
-          <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">{title}</h1>
+          <h1 className="text-balance text-2xl font-bold tracking-tight text-tinta sm:text-3xl">{title}</h1>
           {description ? (
             <p className="mt-1.5 text-base leading-relaxed text-tinta-suave">{description}</p>
           ) : null}
@@ -170,6 +170,9 @@ export interface PanelTab {
  * siempre, sin depender de adivinar que la tira se desliza. En el teléfono
  * cada fila se reparte el ancho para que el control se lea como un bloque.
  */
+/** Contadores de pestaña con separador de miles es-VE (1.234), como `ViewTabs` de pasajeros. */
+const COUNT_FORMAT = new Intl.NumberFormat("es-VE", { maximumFractionDigits: 0 });
+
 export function PanelTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) {
   return (
     <nav aria-label={label}>
@@ -194,7 +197,7 @@ export function PanelTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) 
                   tab.active ? "bg-marca-600 text-white" : "bg-lienzo text-tinta-suave",
                 )}
               >
-                {tab.count}
+                {COUNT_FORMAT.format(tab.count)}
               </span>
             ) : null}
           </Link>

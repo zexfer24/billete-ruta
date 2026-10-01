@@ -20,7 +20,7 @@ import type { ProgressTone } from "@/components/ui-classes";
 import { cx } from "@/components/ui-classes";
 import { DepartureForm } from "../_forms/departure-form";
 import { groupByCaracasDay, plural } from "../_shared/day-label";
-import { departureNotice } from "../_shared/departure-notice";
+import { departureNotice, noticeTextNoBreak, type DepartureNotice } from "../_shared/departure-notice";
 import { DepartureNoticeText } from "../_shared/departure-notice-text";
 import { routeSubtitle } from "../_shared/route-text";
 import { inTodayOrTomorrow, proximasHref } from "./links";
@@ -73,10 +73,36 @@ function RouteName({ name }: { name: string }) {
 }
 
 /**
+ * Pastilla de estado de una salida en la lista, solo cuando dice algo: una
+ * salida atrasada lleva "Atrasada" (y no "Programada" junto a "Debía
+ * salir…", que se contradicen) y el estado por defecto, "Programada", no
+ * lleva pastilla, para que lo excepcional (atrasada, embarcando, sale pronto)
+ * no se pierda entre doce pastillas iguales.
+ */
+function StateBadge({ status, aviso }: { status: string; aviso: DepartureNotice | null }) {
+  if (aviso?.kind === "atrasada") return <StatusBadge label="Atrasada" tone="alerta" />;
+  if (status === "PROGRAMADA") return null;
+  return <StatusBadge label={departureStatusLabel(status)} tone={departureStatusTone(status)} />;
+}
+
+/**
+ * Aviso de tiempo bajo la pastilla: en una atrasada, la hora a la que debía
+ * salir en texto secundario (la pastilla ya avisa en ámbar); si sale pronto,
+ * el aviso con icono de reloj.
+ */
+function StateNotice({ aviso }: { aviso: DepartureNotice | null }) {
+  if (!aviso) return null;
+  if (aviso.kind === "atrasada") {
+    return <p className="tabular text-sm text-tinta-suave">{noticeTextNoBreak(aviso.text)}</p>;
+  }
+  return <DepartureNoticeText aviso={aviso} />;
+}
+
+/**
  * Tarjeta de una salida en el teléfono: toda la tarjeta abre la hoja de la
  * salida. Forma fija para todas las tarjetas de la lista: la hora y la
- * pastilla de estado en la primera fila, el aviso de tiempo (si hay) y la
- * ruta debajo, sin importar lo largo que sea el nombre de la ruta.
+ * pastilla de estado (si hay) en la primera fila, el aviso de tiempo (si hay)
+ * y la ruta debajo, sin importar lo largo que sea el nombre de la ruta.
  */
 function DepartureCard({ s, ahora }: { s: AgencyDepartureRow; ahora: Date }) {
   const hora = formatCaracasTime24(s.departsAt);
@@ -92,9 +118,9 @@ function DepartureCard({ s, ahora }: { s: AgencyDepartureRow; ahora: Date }) {
         <div className="flex flex-col gap-1">
           <div className="flex items-start justify-between gap-3">
             <p className="tabular text-lg font-bold text-tinta">{hora}</p>
-            <StatusBadge label={departureStatusLabel(s.status)} tone={departureStatusTone(s.status)} />
+            <StateBadge status={s.status} aviso={aviso} />
           </div>
-          {aviso ? <DepartureNoticeText aviso={aviso} /> : null}
+          <StateNotice aviso={aviso} />
           <p className="text-base font-semibold text-tinta">
             <RouteName name={s.routeName} />
           </p>
@@ -238,10 +264,12 @@ export async function DeparturesList({
                 <colgroup>
                   <col className="xl:w-20" />
                   <col />
-                  <col className="xl:w-40" />
+                  {/* Vehículo y chofer a 176 px: "Carmen Elena Duque" cabe en un
+                      renglón. Los 16 px salen de la acción, no de la ruta. */}
                   <col className="xl:w-44" />
                   <col className="xl:w-44" />
-                  <col className="xl:w-36" />
+                  <col className="xl:w-44" />
+                  <col className="xl:w-32" />
                 </colgroup>
                 <thead className="border-b border-borde bg-lienzo">
                   <tr>
@@ -283,8 +311,13 @@ export async function DeparturesList({
                         </td>
                         <td className={PANEL_TD_CLASS}>
                           <div className="flex flex-col items-start gap-1">
-                            <StatusBadge label={departureStatusLabel(s.status)} tone={departureStatusTone(s.status)} />
-                            {aviso ? <DepartureNoticeText aviso={aviso} /> : null}
+                            {s.status === "PROGRAMADA" && !aviso ? (
+                              // El estado por defecto va en texto, sin pastilla.
+                              <p className="text-sm text-tinta-suave">{departureStatusLabel(s.status)}</p>
+                            ) : (
+                              <StateBadge status={s.status} aviso={aviso} />
+                            )}
+                            <StateNotice aviso={aviso} />
                           </div>
                         </td>
                         <td className={cx(PANEL_TD_CLASS, "text-right")}>

@@ -82,7 +82,7 @@ export async function RecurringCard() {
       value={formatCount(total)}
       detail="Pasajeros con dos o más viajes pagados, desde el inicio del sistema."
       icon={<IconTicket />}
-      tone="marca"
+      tone="neutro"
     />
   );
 }

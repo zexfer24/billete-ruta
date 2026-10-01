@@ -134,13 +134,13 @@ export function SkeletonPeriodChips({
     <div aria-hidden="true" className="flex flex-col gap-2">
       <p className="text-sm font-semibold text-tinta-suave">Periodo</p>
       <div className="flex flex-wrap items-start gap-2">
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           {labels.map((label, index) => (
             <span
               key={label}
               className={cx(
                 "inline-flex min-h-11 items-center justify-center rounded-pastilla border px-4 text-[15px] font-semibold sm:justify-start",
-                index === active ? "border-marca-600 bg-marca-600 text-white" : "border-borde-control bg-superficie text-tinta",
+                index === active ? "border-marca-600 bg-marca-50 text-marca-800" : "border-borde-control bg-superficie text-tinta",
               )}
             >
               {label}
@@ -270,14 +270,28 @@ export function SkeletonTable({
   rows = 6,
   cardDetails = 2,
   cardAction = true,
+  cardWideDetail = false,
+  headerBars = false,
   mobileVariant = "tarjetas",
   bare = false,
 }: {
   columns: readonly string[];
   rows?: number;
   cardDetails?: number;
-  /** Si la tarjeta móvil real lleva un botón al pie. */
-  cardAction?: boolean;
+  /**
+   * Pie de la tarjeta móvil real: `true`, un botón; `"barra"`, la etiqueta de
+   * una cifra y su barra de progreso (por ejemplo, "46 % del total"); `false`,
+   * nada.
+   */
+  cardAction?: boolean | "barra";
+  /** La tarjeta móvil real lleva, antes del pie, un dato a todo el ancho (etiqueta y dos renglones). */
+  cardWideDetail?: boolean;
+  /**
+   * Cabeceras como barras: cuando el skeleton no sabe qué tabla viene (por
+   * ejemplo, `loading.tsx` sin la pestaña elegida), no se pintan cabeceras
+   * que luego cambien por otras.
+   */
+  headerBars?: boolean;
   /**
    * `filas`: en el teléfono, filas separadas por líneas (sin tarjeta propia),
    * para listas que ya van dentro de una tarjeta de sección. `reservas`: igual,
@@ -301,16 +315,16 @@ export function SkeletonTable({
         )}
       >
         <div className="flex gap-4 border-b border-borde bg-lienzo px-4 py-3">
-          {columns.map((column) => (
-            <span key={column} className="flex-1 text-sm font-semibold text-tinta-suave">
-              {column}
+          {columns.map((column, col) => (
+            <span key={`${col}-${column}`} className="flex-1 text-sm font-semibold text-tinta-suave">
+              {headerBars ? column ? <Skeleton className="h-4 w-1/2 rounded-pastilla" /> : null : column}
             </span>
           ))}
         </div>
         {Array.from({ length: rows }, (_, row) => (
           <div key={row} className="flex items-center gap-4 border-b border-borde px-4 py-4 last:border-0">
             {columns.map((column, col) => (
-              <div key={column} className="flex-1">
+              <div key={`${col}-${column}`} className="flex-1">
                 <Skeleton className={cx("h-4 rounded-pastilla", col === 0 ? "w-4/5" : "w-2/3")} />
               </div>
             ))}
@@ -374,7 +388,21 @@ export function SkeletonTable({
                 </div>
               ))}
             </div>
-            {cardAction ? <Skeleton className="h-11 w-full" /> : null}
+            {cardWideDetail ? (
+              <div className="flex flex-col gap-1">
+                <Skeleton className="h-3.5 w-16 rounded-pastilla" />
+                <Skeleton className="h-4 w-3/5 rounded-pastilla" />
+                <Skeleton className="h-4 w-2/5 rounded-pastilla" />
+              </div>
+            ) : null}
+            {cardAction === "barra" ? (
+              <div className="flex flex-col gap-1.5">
+                <Skeleton className="h-4 w-24 rounded-pastilla" />
+                <Skeleton className="h-2 w-full rounded-pastilla" />
+              </div>
+            ) : cardAction ? (
+              <Skeleton className="h-11 w-full" />
+            ) : null}
           </div>
         ))}
       </div>

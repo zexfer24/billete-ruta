@@ -9,7 +9,6 @@ import {
   formatCaracasTime24,
 } from "@/lib/time";
 import type { DashboardPeriod } from "@/lib/time";
-import { last24h } from "@/modules/reports";
 
 /** Las dos vistas de la página unificada de reportes del panel. */
 export type ReportView = "recaudacion" | "movimientos";
@@ -20,14 +19,15 @@ export function reportViewFromSlug(slug: string | undefined): ReportView {
 }
 
 /**
- * Rango resuelto de un reporte, con el `preset` que lo originó: "24h" es el
- * valor por defecto sin parámetros, un `DashboardPeriod` viene del acceso
- * rápido de periodo, y "personalizado" viene del formulario de fechas.
+ * Rango resuelto de un reporte, con el `preset` que lo originó: un
+ * `DashboardPeriod` viene del acceso rápido de periodo ("hoy" es además el
+ * valor por defecto sin parámetros, igual que en el tablero del operador) y
+ * "personalizado" viene del formulario de fechas.
  */
 export interface ReportRange {
   from: Date;
   to: Date;
-  preset: "24h" | DashboardPeriod | "personalizado";
+  preset: DashboardPeriod | "personalizado";
 }
 
 /**
@@ -44,7 +44,7 @@ function isDashboardPeriod(value: string | undefined): value is DashboardPeriod 
  * Resuelve un rango de reporte: el periodo rápido gana sobre cualquier fecha
  * personalizada; sin periodo, se arma el rango personalizado con
  * `buildCustom` si vino algún límite; sin nada de eso, o si el rango
- * personalizado queda invertido, caen las últimas 24 h.
+ * personalizado queda invertido, cae "Hoy" (desde las 00:00 hasta ahora).
  */
 function resolveRange(
   periodo: string | undefined,
@@ -57,13 +57,13 @@ function resolveRange(
     return { from, to, preset: periodo };
   }
 
-  const defaults = last24h(now);
+  const defaults = caracasPeriodRange("hoy", now);
   if (hasCustomInput) {
     const { from, to } = buildCustom(defaults);
     if (from <= to) return { from, to, preset: "personalizado" };
   }
 
-  return { from: defaults.from, to: defaults.to, preset: "24h" };
+  return { from: defaults.from, to: defaults.to, preset: "hoy" };
 }
 
 /** Rango de la vista de recaudación: con hora, para acotar dentro del día. */
@@ -104,8 +104,6 @@ export function describeReportRange(range: ReportRange): string {
   switch (range.preset) {
     case "hoy":
       return `Hoy, de ${formatCaracasTime24(range.from)} a ${formatCaracasTime24(range.to)}`;
-    case "24h":
-      return `Últimas 24 horas, ${tramo}`;
     case "7d":
       return `Últimos 7 días, ${tramo}`;
     case "30d":

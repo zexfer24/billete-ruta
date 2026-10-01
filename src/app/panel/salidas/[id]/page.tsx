@@ -101,25 +101,60 @@ function pasajerosDescripcion(pasajeros: ReadonlyArray<{ estado: PassengerBoardi
 }
 
 /**
+ * Quiénes de los que faltan no pueden subir todavía, en dos grupos con una
+ * acción distinta: los que deben dinero (hay que cobrarles) y los que enviaron
+ * un comprobante (hay que revisarlo, no cobrarles: sería un doble cobro). Por
+ * ejemplo "3 todavía deben dinero y 2 esperan que revises su comprobante", o
+ * `null` si no hay nadie así.
+ */
+function atencionPartes(resumen: ManifestSummary): string | null {
+  const partes: string[] = [];
+  const deben = resumen.owingPassengers;
+  const revisar = resumen.reviewPassengers;
+  if (deben > 0) partes.push(`${deben} todavía ${deben === 1 ? "debe" : "deben"} dinero`);
+  if (revisar > 0) partes.push(`${revisar} ${revisar === 1 ? "espera" : "esperan"} que revises su comprobante`);
+  return partes.length > 0 ? partes.join(" y ") : null;
+}
+
+/**
+ * Qué hacer con ellos y hasta cuándo: al registrar la salida, las reservas
+ * sin pago completo se cancelan, así que hay que atenderlos antes.
+ */
+function atencionAccion(resumen: ManifestSummary): string {
+  const uno = resumen.unpaidPassengers === 1;
+  const verbo =
+    resumen.reviewPassengers === 0
+      ? uno
+        ? "Cóbrale"
+        : "Cóbrales"
+      : resumen.owingPassengers === 0
+        ? uno
+          ? "Revisa su comprobante"
+          : "Revisa sus comprobantes"
+        : "Atiéndelos";
+  return `${verbo} antes de registrar la salida: si no, ${uno ? "su reserva se cancela" : "sus reservas se cancelan"}.`;
+}
+
+/**
  * Texto del paso 2 ("Registrar la salida"): cuántos faltan y, si algunos
- * todavía deben dinero, cuántos pueden subir ya con su ticket y cuántos no
- * podrán hasta pagar (el escáner solo deja pasar reservas pagadas o de pago
- * en taquilla).
+ * todavía no pueden subir (deben dinero o esperan la revisión de su
+ * comprobante), cuántos pueden subir ya y qué hacer con los demás antes de
+ * registrar la salida. El escáner solo deja pasar reservas pagadas o de pago
+ * en taquilla; estas últimas todavía no tienen ticket, por eso no se habla de
+ * "su ticket".
  */
 function faltanTexto(resumen: ManifestSummary): string {
   if (resumen.pending === 0) {
     return "Todos los pasajeros con reserva ya subieron. Registra la salida cuando el bus arranque.";
   }
   const faltan = `Faltan ${plural(resumen.pending, "pasajero", "pasajeros")} por abordar`;
-  const deben = resumen.unpaidPassengers;
-  if (deben === 0) return `${faltan}. Escanea sus tickets antes de registrar la salida.`;
-  const listos = resumen.pending - deben;
+  const partes = atencionPartes(resumen);
+  if (!partes) return `${faltan}. Escanea sus tickets antes de registrar la salida.`;
+  const listos = resumen.pending - resumen.unpaidPassengers;
   if (listos === 0) {
-    return `${faltan} y ninguno ha pagado completo: no podrán subir hasta pagar. Cóbrales antes de registrar la salida.`;
+    return `${faltan} y ninguno puede subir todavía: ${partes}. ${atencionAccion(resumen)}`;
   }
-  return `${faltan}: ${listos} ${listos === 1 ? "puede" : "pueden"} subir ya con su ticket y ${deben} todavía ${
-    deben === 1 ? "debe" : "deben"
-  } pagar. Escanea los tickets antes de registrar la salida.`;
+  return `${faltan}: ${listos} ya ${listos === 1 ? "puede" : "pueden"} subir y ${partes}. ${atencionAccion(resumen)}`;
 }
 
 /** Orden de la lista de pasajeros: primero quienes faltan por subir, al final quienes no viajan. */
@@ -267,10 +302,18 @@ export default async function SalidaDetallePage({
   const aviso = departureNotice(salida, ahora);
   const abordajeHref = `/panel/abordaje/${salida.id}`;
   const campos = { departureId: salida.id };
-  // Quienes deben dinero solo importan mientras la salida no ha partido: al
-  // registrar la salida esas reservas se cancelan.
-  const debenPagar = salida.status === "PROGRAMADA" || salida.status === "MANIFIESTO_CERRADO" ? resumen.unpaidPassengers : 0;
+  // Quienes deben dinero o esperan la revisión de su comprobante solo
+  // importan mientras la salida no ha partido: al registrar la salida esas
+  // reservas se cancelan.
+  const antesDeSalir = salida.status === "PROGRAMADA" || salida.status === "MANIFIESTO_CERRADO";
+  const debenDinero = antesDeSalir ? resumen.owingPassengers : 0;
+  const esperanRevision = antesDeSalir ? resumen.reviewPassengers : 0;
   const porCobrarHref = `/panel/pasajeros?vista=por-cobrar&salida=${salida.id}`;
+  const porRevisarHref = `/panel/pasajeros?vista=por-revisar&salida=${salida.id}`;
+  const atencion = atencionPartes(resumen);
+  // Antes de iniciar el embarque todos están "Por abordar": la columna y las
+  // pastillas no dirían nada que la cifra "Por abordar" no diga ya.
+  const mostrarAbordaje = embarqueIniciado || resumen.boarded > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -316,9 +359,7 @@ export default async function SalidaDetallePage({
                   {resumen.expected > 0
                     ? `Hay ${plural(resumen.expected, "pasajero", "pasajeros")} con reserva.`
                     : "Todavía no hay pasajeros con reserva."}
-                  {resumen.unpaidPassengers > 0
-                    ? ` ${resumen.unpaidPassengers === 1 ? "1 de ellos todavía debe dinero" : `${resumen.unpaidPassengers} de ellos todavía deben dinero`}; podrás cobrarles después.`
-                    : null}
+                  {atencion ? ` De ellos, ${atencion}. ${atencionAccion(resumen)}` : null}
                 </p>
               }
               confirmLabel="Sí, iniciar embarque"
@@ -422,7 +463,8 @@ export default async function SalidaDetallePage({
           label="A bordo"
           value={resumen.boarded}
           detail={`de ${plural(resumen.expected, "pasajero esperado", "pasajeros esperados")}`}
-          tone="exito"
+          // Verde solo cuando alguien ya subió: "0 a bordo" no es un logro.
+          tone={resumen.boarded > 0 ? "exito" : "neutro"}
           icon={<IconCheckCircle />}
         />
         <StatCard
@@ -465,20 +507,39 @@ export default async function SalidaDetallePage({
           />
         ) : (
           <>
-            {debenPagar > 0 ? (
+            {debenDinero > 0 || esperanRevision > 0 ? (
               <Alert
                 tone="alerta"
                 role="none"
                 className="mb-5"
                 action={
-                  <Link href={porCobrarHref} className={panelButtonClass("secundario")}>
-                    Ver quién debe
-                  </Link>
+                  // La lista "Por cobrar" cuenta reservas (también las de pago
+                  // en taquilla), así que el botón nombra lo que abre.
+                  <div className="flex flex-wrap gap-2">
+                    {debenDinero > 0 ? (
+                      <Link href={porCobrarHref} className={panelButtonClass("secundario")}>
+                        Ver las reservas por cobrar
+                      </Link>
+                    ) : null}
+                    {esperanRevision > 0 ? (
+                      <Link href={porRevisarHref} className={panelButtonClass("secundario")}>
+                        Revisar comprobantes
+                      </Link>
+                    ) : null}
+                  </div>
                 }
               >
-                {debenPagar === 1
-                  ? "1 pasajero todavía no ha pagado completo y no podrá subir hasta pagar."
-                  : `${debenPagar} pasajeros todavía no han pagado completo y no podrán subir hasta pagar.`}
+                {debenDinero > 0
+                  ? debenDinero === 1
+                    ? "1 pasajero todavía debe dinero y no podrá subir hasta pagar."
+                    : `${debenDinero} pasajeros todavía deben dinero y no podrán subir hasta pagar.`
+                  : null}
+                {debenDinero > 0 && esperanRevision > 0 ? " " : null}
+                {esperanRevision > 0
+                  ? esperanRevision === 1
+                    ? "1 pasajero envió un comprobante que debes revisar."
+                    : `${esperanRevision} pasajeros enviaron un comprobante que debes revisar.`
+                  : null}
               </Alert>
             ) : null}
             {/* Teléfono: una fila por reserva, separadas por líneas y sin tarjeta
@@ -488,7 +549,13 @@ export default async function SalidaDetallePage({
               {gruposViajan.length > 0 ? (
                 <ul className="flex flex-col divide-y divide-borde">
                   {gruposViajan.map((g) => (
-                    <GrupoMovil key={g.key} grupo={g} ahora={ahora} embarqueIniciado={embarqueIniciado} />
+                    <GrupoMovil
+                      key={g.key}
+                      grupo={g}
+                      ahora={ahora}
+                      embarqueIniciado={embarqueIniciado}
+                      mostrarAbordaje={mostrarAbordaje}
+                    />
                   ))}
                 </ul>
               ) : null}
@@ -500,7 +567,14 @@ export default async function SalidaDetallePage({
                   </summary>
                   <ul className="flex flex-col divide-y divide-borde border-t border-borde px-4">
                     {gruposNoViajan.map((g) => (
-                      <GrupoMovil key={g.key} grupo={g} ahora={ahora} embarqueIniciado={embarqueIniciado} plegado />
+                      <GrupoMovil
+                        key={g.key}
+                        grupo={g}
+                        ahora={ahora}
+                        embarqueIniciado={embarqueIniciado}
+                        mostrarAbordaje={mostrarAbordaje}
+                        plegado
+                      />
                     ))}
                   </ul>
                 </details>
@@ -517,7 +591,9 @@ export default async function SalidaDetallePage({
                     <th scope="col" className={PANEL_TH_CLASS}>Cédula</th>
                     <th scope="col" className={PANEL_TH_CLASS}>Código de reserva</th>
                     <th scope="col" className={PANEL_TH_CLASS}>Pago</th>
-                    <th scope="col" className={PANEL_TH_CLASS}>Abordaje</th>
+                    {mostrarAbordaje ? (
+                      <th scope="col" className={PANEL_TH_CLASS}>Abordaje</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -533,7 +609,7 @@ export default async function SalidaDetallePage({
                           Quien no viaja lleva una sola pastilla con el motivo, igual
                           que en el teléfono, que ocupa Pago y Abordaje. */}
                       {p.estado === "no-viaja" ? (
-                        <td colSpan={2} className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                        <td colSpan={mostrarAbordaje ? 2 : 1} className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
                           <StatusBadge label={noViajaLabel(p.reservationStatus)} tone="neutro" />
                         </td>
                       ) : (
@@ -544,9 +620,16 @@ export default async function SalidaDetallePage({
                               tone={reservationStatusTone(p.reservationStatus)}
                             />
                           </td>
-                          <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
-                            <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
-                          </td>
+                          {mostrarAbordaje ? (
+                            <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                              <AbordajeBadge
+                                estado={p.estado}
+                                boardedAt={p.boardedAt}
+                                ahora={ahora}
+                                embarqueIniciado={embarqueIniciado}
+                              />
+                            </td>
+                          ) : null}
                         </>
                       )}
                     </tr>
@@ -571,11 +654,14 @@ function GrupoMovil({
   grupo,
   ahora,
   embarqueIniciado,
+  mostrarAbordaje,
   plegado = false,
 }: {
   grupo: GrupoReserva;
   ahora: Date;
   embarqueIniciado: boolean;
+  /** Antes del embarque no se pinta la pastilla "Por abordar" de cada pasajero. */
+  mostrarAbordaje: boolean;
   plegado?: boolean;
 }) {
   const noViaja = grupo.estado === "no-viaja";
@@ -586,14 +672,18 @@ function GrupoMovil({
           <span className="block text-sm text-tinta-suave">Código de reserva</span>
           <span className="tabular block text-[15px] font-semibold text-tinta">{grupo.code}</span>
         </p>
-        {noViaja ? (
-          <StatusBadge label={noViajaLabel(grupo.reservationStatus)} tone="neutro" />
-        ) : (
-          <StatusBadge
-            label={reservationStatusLabel(grupo.reservationStatus)}
-            tone={reservationStatusTone(grupo.reservationStatus)}
-          />
-        )}
+        {/* `ml-auto`: la pastilla queda siempre a la derecha, también cuando
+            no cabe junto al código y baja a su propio renglón. */}
+        <span className="ml-auto">
+          {noViaja ? (
+            <StatusBadge label={noViajaLabel(grupo.reservationStatus)} tone="neutro" />
+          ) : (
+            <StatusBadge
+              label={reservationStatusLabel(grupo.reservationStatus)}
+              tone={reservationStatusTone(grupo.reservationStatus)}
+            />
+          )}
+        </span>
       </div>
       <ul className="flex flex-col gap-3 border-l-2 border-borde pl-3">
         {grupo.pasajeros.map((p) => (
@@ -605,7 +695,7 @@ function GrupoMovil({
                 {p.isHolder ? " · Titular de la reserva" : null}
               </p>
             </div>
-            {noViaja ? null : (
+            {noViaja || !mostrarAbordaje ? null : (
               <div className="flex flex-wrap gap-2">
                 <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
               </div>

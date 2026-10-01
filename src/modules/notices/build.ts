@@ -7,7 +7,7 @@ import {
   formatCaracasTime24,
   formatDuration,
 } from "@/lib/time";
-import { dueForRelease12h } from "@/modules/scheduler";
+import { paymentDeadline } from "@/modules/scheduler";
 
 /** Nivel visual del aviso: define color e icono en la pantalla del pasajero. */
 export type NoticeLevel = "alerta" | "info" | "exito";
@@ -18,6 +18,7 @@ export type NoticeKind =
   | "COMPROBANTE_RECHAZADO"
   | "COMPROBANTE_EN_VALIDACION"
   | "RECONFIRMAR_PAGO_EN_SITIO"
+  | "SALDO_PENDIENTE"
   | "TICKET_LISTO";
 
 export interface Notice {
@@ -43,6 +44,11 @@ export interface NoticeReservationInput {
   expiresAt: Date | null;
   reconfirmedAt: Date | null;
   hasTicket: boolean;
+  /**
+   * Lo que falta por pagar, ya formateado ("$ 14,35"). Solo se usa en una
+   * reserva pagada en parte; sin él, el aviso de saldo no dice la cifra.
+   */
+  balance?: string | null;
   latestProof: { status: string; rejectionReason: string | null; createdAt: Date } | null;
 }
 
@@ -56,6 +62,10 @@ const ESTADOS_FINALES = new Set(["LIBERADA", "CANCELADA", "ABORDADA", "NO_SHOW"]
 
 const NIVEL_ORDEN: Record<NoticeLevel, number> = { alerta: 0, info: 1, exito: 2 };
 
+/**
+ * Un plazo o una salida más lejanos que esto no se ponen en tono de alerta:
+ * todavía no apuran. Es la misma regla del ticket (`ticketDeadline`).
+ */
 const VEINTICUATRO_HORAS_MIN = 24 * 60;
 
 function etiquetaMinutos(minutos: number): string {
@@ -78,14 +88,9 @@ function cuando(fecha: Date, now: Date): string {
   return `el ${formatInTimeZone(fecha, BUSINESS_TZ, "EEE d MMM", { locale: es })} a las ${hora}`;
 }
 
-/**
- * Hora límite para pagar en la taquilla: la salida menos el mismo plazo con el
- * que el barrido libera el puesto (`dueForRelease12h`), para que el aviso y la
- * liberación nunca se desalineen.
- */
-function limitePagoEnTaquilla(salida: Date, now: Date): Date {
-  const plazoMs = dueForRelease12h(now).getTime() - now.getTime();
-  return new Date(salida.getTime() - plazoMs);
+/** Une el símbolo de la moneda con la cifra para que el monto no se parta entre líneas. */
+function montoSinCorte(valor: string): string {
+  return valor.replace(/^(\$|Bs\.|COP|USDT) +/, "$1 ");
 }
 
 function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
@@ -97,17 +102,36 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
   // reservas a la vez y no debe adivinar a cuál se refiere.
   const viaje = `${reserva.origin} → ${reserva.destination}`;
 
-  if (reserva.status === "PENDIENTE_PAGO" && reserva.expiresAt && reserva.expiresAt > now) {
-    const restante = etiquetaMinutos(durationMinutes(now, reserva.expiresAt));
-    avisos.push({
-      kind: "RESERVA_POR_LIBERAR",
-      level: "alerta",
-      title: "Paga pronto para no perder tu puesto",
-      body: `Te quedan ${restante} para pagar tu viaje ${viaje}. Si no pagas, tu puesto queda libre para otra persona.`,
-      at: reserva.expiresAt,
-      href,
-      reservationCode: reserva.code,
-    });
+  // El plazo es el mismo que dicen el ticket y el detalle (`paymentDeadline`):
+  // nunca después de la salida del bus.
+  const plazo = paymentDeadline(reserva, now);
+
+  if (reserva.status === "PENDIENTE_PAGO" && plazo) {
+    const restante = etiquetaMinutos(durationMinutes(now, plazo.at));
+    avisos.push(
+      plazo.boundByDeparture
+        ? {
+            kind: "RESERVA_POR_LIBERAR",
+            level: "alerta",
+            title: "Paga antes de que salga tu bus",
+            body: `Tu viaje ${viaje} sale ${cuando(
+              reserva.departsAt,
+              now,
+            )}, en ${restante}. Paga antes de esa hora para no perder el viaje.`,
+            at: plazo.at,
+            href,
+            reservationCode: reserva.code,
+          }
+        : {
+            kind: "RESERVA_POR_LIBERAR",
+            level: "alerta",
+            title: "Paga pronto para no perder tu puesto",
+            body: `Te quedan ${restante} para pagar tu viaje ${viaje}. Si no pagas, tu puesto queda libre para otra persona.`,
+            at: plazo.at,
+            href,
+            reservationCode: reserva.code,
+          },
+    );
   }
 
   if (reserva.latestProof?.status === "RECHAZADO") {
@@ -140,28 +164,41 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
     });
   }
 
-  if (
-    reserva.status === "PAGO_EN_SITIO" &&
-    !reserva.reconfirmedAt &&
-    durationMinutes(now, reserva.departsAt) <= VEINTICUATRO_HORAS_MIN
-  ) {
-    const limite = limitePagoEnTaquilla(reserva.departsAt, now);
-    // Si el plazo ya venció, el barrido libera el puesto en breve: el aviso no
-    // ofrece un plazo que ya pasó.
-    if (limite > now) {
-      avisos.push({
-        kind: "RECONFIRMAR_PAGO_EN_SITIO",
-        level: "alerta",
-        title: "Paga en la taquilla para no perder tu puesto",
-        body: `Tu viaje ${viaje} sale ${cuando(
-          reserva.departsAt,
-          now,
-        )}. Tienes hasta ${cuando(limite, now)} para pagar en la taquilla; si no, tu puesto quedará libre.`,
-        at: limite,
-        href,
-        reservationCode: reserva.code,
-      });
-    }
+  // Pagar en la taquilla: se avisa desde que se reserva, con la hora límite
+  // exacta. Solo es alerta cuando vence dentro de 24 horas. Si el plazo ya
+  // venció, `paymentDeadline` no lo da: el barrido libera el puesto en breve.
+  if (reserva.status === "PAGO_EN_SITIO" && plazo) {
+    const urgente = durationMinutes(now, plazo.at) <= VEINTICUATRO_HORAS_MIN;
+    avisos.push({
+      kind: "RECONFIRMAR_PAGO_EN_SITIO",
+      level: urgente ? "alerta" : "info",
+      title: urgente ? "Paga en la taquilla para no perder tu puesto" : "Recuerda pagar en la taquilla",
+      body: `Tu viaje ${viaje} sale ${cuando(
+        reserva.departsAt,
+        now,
+      )}. Tienes hasta ${cuando(plazo.at, now)} para pagar en la taquilla; si no, tu puesto quedará libre.`,
+      at: plazo.at,
+      href,
+      reservationCode: reserva.code,
+    });
+  }
+
+  // Pagada en parte: el puesto no se pierde, pero sin el ticket no se aborda.
+  // Por eso no habla de liberar el puesto, y solo es alerta a menos de 24 horas.
+  if (reserva.status === "ABONADA") {
+    const urgente = durationMinutes(now, reserva.departsAt) <= VEINTICUATRO_HORAS_MIN;
+    const salida = cuando(reserva.departsAt, now);
+    avisos.push({
+      kind: "SALDO_PENDIENTE",
+      level: urgente ? "alerta" : "info",
+      title: "Completa tu pago para recibir el ticket",
+      body: reserva.balance
+        ? `Te faltan ${montoSinCorte(reserva.balance)} para recibir tu ticket del viaje ${viaje}, que sale ${salida}.`
+        : `Te falta una parte del pago para recibir tu ticket del viaje ${viaje}, que sale ${salida}.`,
+      at: reserva.departsAt,
+      href,
+      reservationCode: reserva.code,
+    });
   }
 
   if (reserva.hasTicket && reserva.status === "PAGADA") {

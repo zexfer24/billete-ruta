@@ -24,6 +24,8 @@ export default function MiError({ error, reset }: ErrorPageProps) {
   // de servidor que falló; `router.refresh()` la pide de nuevo. Juntos dentro
   // de una transición, el reintento de verdad vuelve a consultar los datos.
   function retry() {
+    // Mientras reintenta, el botón sigue enfocable (aria-disabled) y el clic se ignora.
+    if (isPending) return;
     startTransition(() => {
       router.refresh();
       reset();
@@ -46,8 +48,8 @@ export default function MiError({ error, reset }: ErrorPageProps) {
         <button
           type="button"
           onClick={retry}
-          disabled={isPending}
-          aria-busy={isPending}
+          aria-disabled={isPending || undefined}
+          aria-busy={isPending || undefined}
           className={buttonClass("primario")}
         >
           {isPending ? "Intentando…" : "Intentar de nuevo"}
@@ -56,6 +58,10 @@ export default function MiError({ error, reset }: ErrorPageProps) {
           Volver al inicio
         </Link>
       </div>
+      {/* Siempre montada: un lector de pantalla anuncia la espera aunque no relea el botón. */}
+      <span className="sr-only" role="status">
+        {isPending ? "Intentando…" : ""}
+      </span>
       {error.digest ? (
         <p className="text-sm text-tinta-tenue">
           Si pides ayuda, menciona este código: <span className="tabular">{error.digest}</span>

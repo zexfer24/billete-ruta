@@ -339,7 +339,63 @@ describe("countAgencyReservationViews", () => {
 });
 
 describe("listPendingProofQueue", () => {
-  it("trae los comprobantes pendientes del más viejo al más nuevo, con cobertura y cédula enmascarada", async () => {
+  it("ordena primero por la salida más próxima y deja al final las salidas que ya partieron, sin ocultar ninguna", async () => {
+    const { salida: salidaEn3Dias, agencia } = await createDepartureFixture({ capacity: 10, hoursFromNow: 72 });
+    const { salida: salidaEn30Min } = await createDepartureFixture({
+      capacity: 10,
+      hoursFromNow: 0.5,
+      agencyId: agencia.id,
+    });
+    const { salida: salidaQuePartio } = await createDepartureFixture({
+      capacity: 10,
+      hoursFromNow: 48,
+      agencyId: agencia.id,
+    });
+    const metodo = await createPaymentMethodFixture({ kind: "DIGITAL", currency: "USD" });
+
+    async function comprobantePara(departureId: string, reference: string) {
+      const cuenta = await createAccountFixture();
+      const reserva = await createReservation({
+        accountId: cuenta.id,
+        departureId,
+        paymentMethodId: metodo.id,
+        companions: [],
+        policiesAccepted: true,
+      });
+      const comprobante = await submitProof({
+        reservationId: reserva.reservationId,
+        accountId: cuenta.id,
+        paymentMethodId: metodo.id,
+        reference,
+        amount: "10.00",
+        currency: "USD",
+        imagePath: `comprobantes/orden/${reference}.png`,
+      });
+      return comprobante.proofId;
+    }
+
+    // Se cargan en este orden: el del bus que sale en 30 minutos llega de último.
+    const enTresDias = await comprobantePara(salidaEn3Dias.id, "REF-3D");
+    const yaPartio = await comprobantePara(salidaQuePartio.id, "REF-PARTIO");
+    const enTreintaMin = await comprobantePara(salidaEn30Min.id, "REF-30M");
+    const base = Date.now();
+    await prisma.paymentProof.update({ where: { id: enTresDias }, data: { createdAt: new Date(base - 3 * 3_600_000) } });
+    await prisma.paymentProof.update({ where: { id: yaPartio }, data: { createdAt: new Date(base - 2 * 3_600_000) } });
+    await prisma.paymentProof.update({ where: { id: enTreintaMin }, data: { createdAt: new Date(base - 3_600_000) } });
+    // La tercera salida ya partió: está en ruta y su hora pasó.
+    await prisma.departure.update({
+      where: { id: salidaQuePartio.id },
+      data: { status: "EN_RUTA", departsAt: new Date(base - 2 * 3_600_000) },
+    });
+
+    const resultado = await listPendingProofQueue(agencia.id);
+
+    expect(resultado.rows.map((r) => r.proofId)).toEqual([enTreintaMin, enTresDias, yaPartio]);
+    expect(resultado.total).toBe(await countPendingProofs(agencia.id));
+    expect(resultado.total).toBe(3);
+  });
+
+  it("trae los comprobantes pendientes con cobertura y cédula enmascarada", async () => {
     const { agencia, enValidacion } = await escenario();
 
     const resultado = await listPendingProofQueue(agencia.id, { pageSize: 10 });

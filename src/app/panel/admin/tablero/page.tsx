@@ -5,7 +5,7 @@ import { requirePanelUser } from "@/modules/auth";
 import { departureTaxRevenue, last24h } from "@/modules/reports";
 import { PeriodFilter } from "../_shared/period-filter";
 import { periodParamsSchema, rangeKey, resolveAdminRange, spansSeveralDays } from "../_shared/period";
-import { PeriodData, PeriodDataSkeleton } from "./period-data";
+import { PERIOD_TITLE, PeriodData, PeriodDataSkeleton } from "./period-data";
 import { LiveTax, LiveTaxSkeleton, RecurringCard, RecurringCardSkeleton } from "./top-cards";
 
 export const metadata: Metadata = { title: "Tablero del terminal" };
@@ -51,11 +51,9 @@ export default async function TableroAdminPage({
         </Suspense>
       </div>
 
-      <PeriodFilter
-        path="/panel/admin/tablero"
-        range={range}
-        caption="Viajes, usuarios nuevos y gráfico"
-      />
+      {/* Como "Resumen de hoy" en el tablero de la agencia: un título de
+          sección con las pestañas de periodo a su derecha y el rango debajo. */}
+      <PeriodFilter path="/panel/admin/tablero" range={range} title={PERIOD_TITLE} />
 
       <Suspense
         key={rangeKey(range)}

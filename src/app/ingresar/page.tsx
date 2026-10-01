@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { safeNext } from "@/lib/safe-next";
-import { firstParam, PUBLIC_TEXT_LINK_CLASS, registerHref } from "../_publico/links";
+import { firstParam, loginDescription, PUBLIC_TEXT_LINK_CLASS, registerHref } from "../_publico/links";
 import { activateHref } from "../registro/texts";
 import { PublicCard, PublicShell } from "../_publico/public-shell";
 import { LoginForm } from "./login-form";
@@ -18,7 +18,7 @@ export default async function IngresarPage({
 
   return (
     <PublicShell>
-      <PublicCard title="Ingresa a tu cuenta" description="Usa tu cédula y tu contraseña.">
+      <PublicCard title="Ingresa a tu cuenta" description={loginDescription(next)}>
         <LoginForm next={next} />
       </PublicCard>
 

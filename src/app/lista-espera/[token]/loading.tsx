@@ -21,7 +21,7 @@ export default function ListaEsperaLoading() {
             <SkeletonText lines={2} />
           </div>
           <Skeleton className="h-24 w-full" />
-          <DepartureBoardSkeleton rows={1} />
+          <DepartureBoardSkeleton rows={1} hideSeats />
           <Skeleton className="h-6 w-3/5 rounded-pastilla" />
           <PrimaryButtonSkeleton />
         </Card>

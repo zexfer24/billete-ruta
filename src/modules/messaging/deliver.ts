@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { MAX_SEND_ATTEMPTS, nextRetryDelayMinutes } from "@/modules/scheduler";
 import { getWhatsAppProvider } from "./get-provider";
-import { isTemplateKey } from "./templates";
+import { isTemplateKey, providerParams } from "./templates";
 
 const BATCH_SIZE = 50;
 
@@ -43,7 +43,14 @@ export async function deliverPendingMessages(now: Date = new Date()): Promise<De
     const payload = (mensaje.payload ?? {}) as Record<string, string>;
 
     try {
-      const resultado = await provider.sendTemplate(mensaje.phone, mensaje.templateKey, payload);
+      // El proveedor recibe los mismos valores que muestran las bandejas
+      // (primer nombre, fecha en palabras): `providerParams` aplica
+      // `displayParam`. El adjunto sigue usando el payload crudo.
+      const resultado = await provider.sendTemplate(
+        mensaje.phone,
+        mensaje.templateKey,
+        providerParams(mensaje.templateKey, payload),
+      );
 
       // El ticket viaja como documento adjunto además del mensaje de texto.
       if (mensaje.templateKey === "ticket_emitido" && mensaje.reservationId) {

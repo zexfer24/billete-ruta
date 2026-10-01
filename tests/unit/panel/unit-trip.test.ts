@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeUnitTrip } from "@/app/panel/_shared/unit-trip";
+import { activeTripDepartureId, describeUnitTrip } from "@/app/panel/_shared/unit-trip";
 import type { UnitDeparture } from "@/modules/reports";
 
 const NOW = new Date("2026-09-13T14:00:00Z");
@@ -159,5 +159,18 @@ describe("describeUnitTrip", () => {
 
   it("sin viaje en curso ni próximas salidas, devuelve null", () => {
     expect(describeUnitTrip({ current: null, upcoming: [] }, NOW)).toBeNull();
+  });
+});
+
+describe("activeTripDepartureId", () => {
+  it("da la salida en ruta, embarcando o atrasada, para enlazar a su hoja", () => {
+    expect(activeTripDepartureId({ current: unidad({ id: "a", status: "EN_RUTA" }) })).toBe("a");
+    expect(activeTripDepartureId({ current: unidad({ id: "b", status: "MANIFIESTO_CERRADO" }) })).toBe("b");
+    expect(activeTripDepartureId({ current: unidad({ id: "c", overdue: true }) })).toBe("c");
+  });
+
+  it("sin viaje en curso o con solo una próxima salida no hay nada que enlazar", () => {
+    expect(activeTripDepartureId({ current: null })).toBeNull();
+    expect(activeTripDepartureId({ current: unidad({ id: "d" }) })).toBeNull();
   });
 });

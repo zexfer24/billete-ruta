@@ -212,6 +212,7 @@ interface DatosGenerados {
   cuentas: readonly { id: string; fullName: string; phone: string; createdAt: Date }[];
   metodos: readonly PaymentMethod[];
   reservas: readonly Prisma.ReservationCreateManyInput[];
+  pasajeros: readonly Prisma.PassengerCreateManyInput[];
   mensajes: readonly Prisma.OutboundMessageCreateManyInput[];
   comprobantes: readonly Prisma.PaymentProofCreateManyInput[];
   efectivo: readonly Prisma.CashPaymentCreateManyInput[];
@@ -322,6 +323,22 @@ function verificarCoherencia(datos: DatosGenerados): void {
     ) {
       problemas.push(`${r.code}: ${r.status} con un método de pago físico`);
     }
+  }
+
+  // Una persona no figura dos veces en la hoja de una misma salida: ni como
+  // titular de dos reservas ni como pasajero de dos grupos.
+  const titularesPorSalida = new Set<string>();
+  for (const r of datos.reservas) {
+    const clave = `${r.departureId}|${r.accountId}`;
+    if (titularesPorSalida.has(clave)) problemas.push(`${r.code}: la cuenta ya reservó en esa salida`);
+    titularesPorSalida.add(clave);
+  }
+  const cedulasPorSalida = new Set<string>();
+  for (const p of datos.pasajeros) {
+    const salida = reservaPorId.get(p.reservationId)?.departureId;
+    const clave = `${salida}|${p.idNumber}`;
+    if (cedulasPorSalida.has(clave)) problemas.push(`Cédula ${p.idNumber}: dos veces en una misma salida`);
+    cedulasPorSalida.add(clave);
   }
 
   for (const m of datos.mensajes) {
@@ -535,6 +552,8 @@ async function main(): Promise<void> {
     estimatedMinutes: number;
     meetingPoint: string;
     recomendaciones: string;
+    /** "Caracas → Mérida", el parámetro `ruta` de los mensajes (como `messageRoute`). */
+    viaje: string;
     pasada: boolean;
     /** Hora real de partida y de llegada; solo en las salidas ya cumplidas. */
     partida: Date | null;
@@ -576,6 +595,7 @@ async function main(): Promise<void> {
         estimatedMinutes: ruta.estimatedMinutes,
         meetingPoint: ruta.meetingPoint,
         recomendaciones: ruta.travelTips ?? RECOMENDACION_GENERAL,
+        viaje: `${ruta.origin} → ${ruta.destination}`,
         pasada: true,
         partida,
         llegada,
@@ -658,6 +678,7 @@ async function main(): Promise<void> {
       estimatedMinutes: d.route.estimatedMinutes,
       meetingPoint: d.route.meetingPoint,
       recomendaciones: d.route.travelTips ?? RECOMENDACION_GENERAL,
+      viaje: `${d.route.origin} → ${d.route.destination}`,
       pasada: false,
       partida: null,
       llegada: null,
@@ -739,16 +760,26 @@ async function main(): Promise<void> {
   // quedan fuera del reparto al azar: sus reservas se eligen más abajo.
   const idsConCedula = new Set(documentos.map((d) => d.accountId));
   const cuentasQueReservan = cuentasAleatorias.filter((c) => idsConCedula.has(c.id));
-  const cuentaMasAntigua = cuentasQueReservan.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b));
+  const porAntiguedad = [...cuentasQueReservan].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
 
-  /** Una cuenta que ya existía, con su cédula cargada, cuando se hizo la reserva. */
-  function cuentaPara(creada: Date): (typeof cuentas)[number] {
+  /**
+   * Una cuenta que ya existía, con su cédula cargada, cuando se hizo la reserva,
+   * y que todavía no reservó en esa salida: la misma persona no figura dos veces
+   * en la hoja de un bus.
+   */
+  function cuentaPara(creada: Date, enSalida: ReadonlySet<string>): (typeof cuentas)[number] {
     const tope = creada.getTime() - 10 * MIN;
     for (let intento = 0; intento < 40; intento += 1) {
       const cuenta = elegir(cuentasQueReservan);
-      if (cuenta.createdAt.getTime() <= tope) return cuenta;
+      if (cuenta.createdAt.getTime() <= tope && !enSalida.has(cuenta.id)) return cuenta;
     }
-    return cuentaMasAntigua;
+    const libre = porAntiguedad.find(
+      (c) => c.createdAt.getTime() <= tope && !enSalida.has(c.id),
+    );
+    if (!libre) throw new Error("No quedan cuentas libres para reservar en la salida");
+    return libre;
   }
 
   // --- Reservas -----------------------------------------------------------
@@ -817,6 +848,8 @@ async function main(): Promise<void> {
     const corte12 = masMinutos(salida.departsAt, -12 * 60);
     const estadoMensaje = salida.pasada ? ("LEIDO" as const) : ("ENTREGADO" as const);
     const salidaTexto = formatCaracasDateTime24(salida.departsAt);
+    /** Cuentas que ya tienen una reserva en esta salida. */
+    const cuentasEnSalida = new Set<string>();
 
     while (ocupados < limite) {
       const pax = Math.min(tamanoGrupo(), limite - ocupados);
@@ -899,7 +932,8 @@ async function main(): Promise<void> {
         creada = masMinutos(ahora, -entero(150, 72 * 60));
       }
 
-      const cuenta = cuentaPara(creada);
+      const cuenta = cuentaPara(creada, cuentasEnSalida);
+      cuentasEnSalida.add(cuenta.id);
 
       // --- Pagos: el comprobante llega dentro de las 2 horas de la reserva, y
       // el pago en sitio se cobra antes de que falten 12 horas para la salida.
@@ -1101,7 +1135,7 @@ async function main(): Promise<void> {
           reservationId,
           phone: cuenta.phone,
           templateKey,
-          payload: { nombre: cuenta.fullName, serial: code, ...payload },
+          payload: { nombre: cuenta.fullName, serial: code, ruta: salida.viaje, ...payload },
           status: estadoMensaje,
           providerMessageId: `mock-${randomUUID()}`,
           attempts: 1,
@@ -1116,11 +1150,24 @@ async function main(): Promise<void> {
         if (fisico) {
           avisar(
             "reserva_condicional",
-            { monto: formatMoney(m.amountInCurrency, metodo.currency), salida: salidaTexto },
+            {
+              monto: formatMoney(m.amountInCurrency, metodo.currency),
+              salida: salidaTexto,
+              limite: formatCaracasDateTime24(corte12),
+            },
             creada,
           );
         } else {
-          avisar("solicitud_recibida", { pasajeros: String(pax) }, creada);
+          // El plazo es el de la app: 2 horas, o la salida si es antes.
+          avisar(
+            "solicitud_recibida",
+            {
+              pasajeros: String(pax),
+              salida: salidaTexto,
+              limite: formatCaracasDateTime24(minFecha(masMinutos(creada, 120), salida.departsAt)),
+            },
+            creada,
+          );
         }
       }
       // Abono aprobado que no completa el total.
@@ -1158,7 +1205,11 @@ async function main(): Promise<void> {
         } else {
           avisar(
             "reconfirmacion_pago_sitio",
-            { salida: salidaTexto, monto: formatMoney(m.amountInCurrency, metodo.currency) },
+            {
+              salida: salidaTexto,
+              monto: formatMoney(m.amountInCurrency, metodo.currency),
+              limite: formatCaracasDateTime24(corte12),
+            },
             enviado,
           );
           // Si paga en la taquilla dentro de la ventana, el barrido siguiente
@@ -1168,10 +1219,10 @@ async function main(): Promise<void> {
           }
         }
       }
-      // Confirmación de asistencia dos horas antes, a las ya pagadas.
+      // Recordatorio dos horas antes, a las ya pagadas.
       const momento2h = masMinutos(salida.departsAt, -2 * 60);
       if (paidAt && paidAt <= momento2h && momento2h <= ahora) {
-        avisar("confirmacion_2h", {}, masMinutos(momento2h, entero(0, 5)));
+        avisar("confirmacion_2h", { salida: salidaTexto, punto: salida.meetingPoint }, masMinutos(momento2h, entero(0, 5)));
       }
       if (liberadaAt) {
         avisar("reserva_liberada", {}, liberadaAt);
@@ -1215,11 +1266,15 @@ async function main(): Promise<void> {
 
     // Lista de espera en las salidas próximas que quedaron llenas.
     if (!salida.pasada && ocupados >= salida.capacity - 1 && suerte(0.6)) {
+      // Quien ya tiene puesto en la salida no espera por otro.
+      const candidatos = cuentasQueReservan.filter((c) => !cuentasEnSalida.has(c.id));
       for (let i = 0; i < entero(1, 4); i += 1) {
+        const [enEspera] = candidatos.splice(entero(0, candidatos.length - 1), 1);
+        if (!enEspera) break;
         espera.push({
           id: randomUUID(),
           departureId: salida.id,
-          accountId: elegir(cuentasQueReservan).id,
+          accountId: enEspera.id,
           passengerCount: tamanoGrupo(),
           status: "EN_ESPERA",
           createdAt: new Date(ahora.getTime() - entero(30, 4000) * MIN),
@@ -1275,10 +1330,10 @@ async function main(): Promise<void> {
           salidaPorId.get(r.departureId)?.pasada === pasada,
       );
       // Primero una salida y un día nuevos; si no hay, al menos otra salida.
+      // Nunca la misma salida dos veces: la persona figuraría doble en la hoja.
       const grupo = [
         aptas.filter((r) => !salidasUsadas.has(r.departureId) && !diasUsados.has(diaDe(r))),
         aptas.filter((r) => !salidasUsadas.has(r.departureId)),
-        aptas,
       ].find((lista) => lista.length > 0);
       if (!grupo) continue;
 
@@ -1330,6 +1385,7 @@ async function main(): Promise<void> {
     cuentas,
     metodos,
     reservas,
+    pasajeros,
     mensajes,
     comprobantes,
     efectivo,

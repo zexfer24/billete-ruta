@@ -12,8 +12,8 @@ import {
   getCurrentExchangeRate,
   missingExchangeRateMessage,
 } from "@/modules/catalog/rates";
-import { enqueueMessage } from "@/modules/messaging";
-import { UNPAID_EXPIRY_MINUTES } from "@/modules/scheduler";
+import { enqueueMessage, messageRoute } from "@/modules/messaging";
+import { UNPAID_EXPIRY_MINUTES, cashCounterDeadline, paymentDeadline } from "@/modules/scheduler";
 import { getAvailability } from "./availability";
 import {
   DepartureClosedError,
@@ -261,6 +261,17 @@ export async function createReservationInTx(
           nombre: cuenta.fullName,
           pasajeros: String(passengerCount),
           serial: code,
+          ruta: messageRoute(salida.route),
+          salida: formatCaracasDateTime24(salida.departsAt),
+          // El mismo plazo que muestra la app: 2 horas, o la salida si es antes.
+          limite: formatCaracasDateTime24(
+            paymentDeadline(
+              { status: estado, departsAt: salida.departsAt, expiresAt: reserva.expiresAt },
+              ahora,
+            )?.at ??
+              reserva.expiresAt ??
+              salida.departsAt,
+          ),
         },
       });
     } else {
@@ -272,7 +283,9 @@ export async function createReservationInTx(
           nombre: cuenta.fullName,
           serial: code,
           monto: formatMoney(montos.amountInCurrency, metodo.currency),
+          ruta: messageRoute(salida.route),
           salida: formatCaracasDateTime24(salida.departsAt),
+          limite: formatCaracasDateTime24(cashCounterDeadline(salida.departsAt, ahora)),
         },
       });
     }

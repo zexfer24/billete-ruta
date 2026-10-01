@@ -48,6 +48,28 @@ export function passengerHref(path: string, loggedIn: boolean): string {
   return loggedIn ? path : loginHref(path);
 }
 
+/** Ruta del asistente de reserva, la que piden "Buscar salidas" y "Ver todas las salidas". */
+const BOOKING_PATH = "/mi/reservar";
+
+/**
+ * Si `next` lleva al asistente de reserva (con o sin parámetros). Sin sesión,
+ * buscar salidas pasa por ingresar o crear cuenta: así esas pantallas dicen
+ * por qué la persona está ahí.
+ */
+export function isBookingNext(next: string | null | undefined): boolean {
+  const destino = safeNext(next);
+  if (!destino) return false;
+  return destino === BOOKING_PATH || destino.startsWith(`${BOOKING_PATH}?`) || destino.startsWith(`${BOOKING_PATH}/`);
+}
+
+/** Frase de la tarjeta de ingresar: la de siempre, o el motivo si viene de buscar salidas. */
+export const LOGIN_DESCRIPTION = "Usa tu cédula y tu contraseña.";
+export const LOGIN_BOOKING_DESCRIPTION = "Para ver las salidas y reservar tu puesto, ingresa con tu cédula y tu contraseña.";
+
+export function loginDescription(next: string | null | undefined): string {
+  return isBookingNext(next) ? LOGIN_BOOKING_DESCRIPTION : LOGIN_DESCRIPTION;
+}
+
 /** Clase de un enlace de texto de las pantallas públicas: morado, subrayado y con 44 px de alto. */
 export const PUBLIC_TEXT_LINK_CLASS =
   "foco inline-flex min-h-11 items-center rounded-control px-1 font-semibold text-marca-700 underline decoration-marca-200 decoration-2 underline-offset-4 transition-colors duration-150 ease-out hover:decoration-marca-600 motion-reduce:transition-none";

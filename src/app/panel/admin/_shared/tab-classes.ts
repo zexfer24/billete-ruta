@@ -24,3 +24,13 @@ export const ADMIN_TAB_CLASS =
 
 /** Pestaña elegida. */
 export const ADMIN_TAB_ACTIVE_CLASS = "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200";
+
+/**
+ * Pestañas de periodo a la derecha de un título de sección, como "Resumen de
+ * hoy" en el tablero de la agencia: en el teléfono ocupan todo el ancho (2 × 2)
+ * y desde `sm` solo el suyo.
+ */
+export const ADMIN_TABS_BESIDE_TITLE_CLASS = "w-full sm:w-auto";
+
+/** Fila del título de sección con sus pestañas de periodo, la misma que en el tablero de la agencia. */
+export const ADMIN_TITLE_ROW_CLASS = "flex flex-wrap items-center justify-between gap-x-4 gap-y-3";

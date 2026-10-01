@@ -37,7 +37,9 @@ export function ReportDataSkeleton({ vista }: { vista: ReportView }) {
         }
         rows={5}
         cardDetails={vista === "recaudacion" ? 2 : 4}
-        cardAction={vista === "recaudacion"}
+        // La tarjeta de recaudación termina en "N % del total" y su barra, no
+        // en un botón; la de viajes no lleva pie.
+        cardAction={vista === "recaudacion" ? "barra" : false}
       />
     </div>
   );

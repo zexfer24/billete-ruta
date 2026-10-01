@@ -195,25 +195,59 @@ function BoardItem({
 }
 
 /**
+ * Nota del precio bajo el título de una lista de salidas: las tarjetas
+ * muestran la tarifa de la agencia, y la tasa del terminal se suma aparte,
+ * igual que en el paso 1 del asistente de reserva ("Precio por persona +
+ * tasa del terminal de $ 1,00"). Así la portada y el asistente dicen la misma
+ * cifra. `taxLabel` es la tasa vigente ya formateada; sin tasa cargada se
+ * dice solo "Precio por persona".
+ */
+export function DeparturePriceNote({ taxLabel, className }: { taxLabel: string | null; className?: string }) {
+  return (
+    <p className={`text-sm text-tinta-suave${className ? ` ${className}` : ""}`}>
+      Precio por persona
+      {taxLabel ? (
+        <>
+          {" "}
+          + tasa del terminal de <span className="tabular whitespace-nowrap">{taxLabel}</span>
+        </>
+      ) : null}
+    </p>
+  );
+}
+
+/**
  * Silueta de carga del tablero: mismas tarjetas con el bloque de la agencia a
- * la izquierda. En el teléfono miden unos 120 px, porque el origen y la
- * agencia ocupan dos líneas; desde `sm`, 96 px. Va dentro del
+ * la izquierda. En el teléfono miden unos 144 px: el destino, el origen, la
+ * agencia en su propia línea y la fila de los puestos con la pastilla de
+ * cuándo sale, que baja a otra línea. Desde `sm` el origen y la agencia van
+ * juntos y la tarjeta mide 96 px. `hideSeats` imita la tarjeta sin puestos
+ * (`DepartureCard` con `hideSeats`, en la lista de espera). Va dentro del
  * `SkeletonScreen` de cada pantalla.
  */
-export function DepartureBoardSkeleton({ rows = 4 }: { rows?: number }) {
+export function DepartureBoardSkeleton({ rows = 4, hideSeats = false }: { rows?: number; hideSeats?: boolean }) {
   return (
     <div aria-hidden="true" className="flex flex-col gap-3">
       {Array.from({ length: Math.max(1, rows) }, (_, index) => (
         <div
           key={index}
-          className="flex min-h-30 items-stretch overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1 sm:min-h-24"
+          className={`flex items-stretch overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1 sm:min-h-24 ${
+            hideSeats ? "min-h-24" : "min-h-36"
+          }`}
         >
           <Skeleton className="w-20 shrink-0 rounded-none" />
           <div className="flex min-w-0 flex-1 items-center gap-3 p-3 sm:p-4">
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <Skeleton className="h-5 w-3/5 rounded-pastilla" />
               <Skeleton className="h-4 w-4/5 rounded-pastilla" />
-              <Skeleton className="h-4 w-2/5 rounded-pastilla" />
+              {/* La agencia, en su propia línea solo en el teléfono. */}
+              <Skeleton className="h-4 w-2/5 rounded-pastilla sm:hidden" />
+              {hideSeats ? null : (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Skeleton className="h-4 w-24 rounded-pastilla sm:w-28" />
+                  <Skeleton className="h-6 w-28 rounded-pastilla sm:hidden" />
+                </div>
+              )}
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               <Skeleton className="h-5 w-16 rounded-pastilla" />

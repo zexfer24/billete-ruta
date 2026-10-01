@@ -1,6 +1,7 @@
 import { IconChevronDown } from "@/components/icons";
 import { SkeletonScreen } from "@/components/skeleton";
 import { FieldPreview, PrimaryButtonPreview } from "../_publico/form-skeleton";
+import { LOGIN_DESCRIPTION } from "../_publico/links";
 import { PublicCard, PublicShell } from "../_publico/public-shell";
 import { ID_NUMBER_HINT } from "../registro/texts";
 
@@ -11,14 +12,16 @@ const LINK_PREVIEW_CLASS =
 /**
  * Silueta de ingresar (spec 6.5 y 2.2). La pantalla no consulta datos, así
  * que se pinta el formulario real quieto: el logo, el título, las etiquetas,
- * las ayudas, el botón "Ingresar" y los enlaces, con los campos vacíos. Solo
- * el lector de pantalla oye el aviso de carga.
+ * las ayudas, el texto del botón "Ingresar" y los enlaces. Los campos y el
+ * botón llevan el brillo de carga, para que no parezcan listos antes de
+ * tiempo. Solo el lector de pantalla oye el aviso de carga.
  */
 export default function IngresarLoading() {
   return (
     <SkeletonScreen label="Cargando el ingreso…">
       <PublicShell>
-        <PublicCard title="Ingresa a tu cuenta" description="Usa tu cédula y tu contraseña.">
+        {/* Sin `next` (un loading.tsx no lo recibe), la frase es la de siempre. */}
+        <PublicCard title="Ingresa a tu cuenta" description={LOGIN_DESCRIPTION}>
           <div aria-hidden="true" className="flex flex-col gap-5">
             <FieldPreview label="Cédula" hint={ID_NUMBER_HINT} />
             <FieldPreview label="Contraseña" password />

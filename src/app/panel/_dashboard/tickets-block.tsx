@@ -5,7 +5,7 @@ import { EmptyState, StatusBadge, panelButtonClass } from "@/components/panel-ui
 import { DashboardSection } from "./section-card";
 import { IconTicket } from "@/components/icons";
 import { ticketsSection } from "./section-texts";
-import { TICKET_ROW_CLASS, TICKETS_LIST_CLASS } from "./list-classes";
+import { TICKET_ROW_CLASS, TICKETS_LIST_CLASS, mobileRowClass } from "./list-classes";
 
 /** Cuántos tickets muestra el tablero antes de remitir a "Pasajeros y pagos". */
 const MAX_FILAS = 5;
@@ -53,8 +53,8 @@ export async function TicketsBlock({
         />
       ) : (
         <ul className={TICKETS_LIST_CLASS}>
-          {visibles.map((ticket) => (
-            <li key={ticket.reservationId} className={TICKET_ROW_CLASS}>
+          {visibles.map((ticket, index) => (
+            <li key={ticket.reservationId} className={`${TICKET_ROW_CLASS} ${mobileRowClass(index)}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Link
                   href={`/panel/pasajeros?vista=pagadas&reserva=${ticket.reservationId}`}
@@ -65,7 +65,7 @@ export async function TicketsBlock({
                 {ticket.salesChannel === "TAQUILLA" ? <StatusBadge label="Taquilla" tone="neutro" /> : null}
               </div>
               <p className="text-sm text-tinta">
-                {ticket.holderName} · {ticket.routeName}
+                {ticket.holderName} · {ticket.origin} → {ticket.destination}
               </p>
               <p className="tabular text-sm text-tinta-suave">{emitido(ticket.issuedAt, now)}</p>
             </li>

@@ -18,6 +18,12 @@ const PASAN_A_AUSENTE = new Set(["PAGADA"]);
  */
 const DEBEN_PAGAR = new Set(["PENDIENTE_PAGO", "EN_VALIDACION", "ABONADA"]);
 
+/**
+ * Parte de `DEBEN_PAGAR` que espera que la agencia revise un comprobante: no
+ * hay que cobrarles (sería un doble cobro), hay que revisar su pago.
+ */
+const ESPERAN_REVISION = new Set(["EN_VALIDACION"]);
+
 /** Reservas sin pago completo que se cancelan al registrar la salida si nadie abordó. */
 const SE_CANCELAN = new Set(["PAGO_EN_SITIO", "PENDIENTE_PAGO", "EN_VALIDACION", "ABONADA"]);
 
@@ -49,6 +55,10 @@ export interface ManifestSummary {
    * en validación o abonada): no podrán subir hasta pagar. Parte de `pending`.
    */
   unpaidPassengers: number;
+  /** Parte de `unpaidPassengers` que todavía debe dinero (pendiente de pago o abonada): hay que cobrarles. */
+  owingPassengers: number;
+  /** Parte de `unpaidPassengers` que envió un comprobante por revisar (en validación). */
+  reviewPassengers: number;
 }
 
 /** Cuenta los pasajeros y las consecuencias de registrar la salida. */
@@ -61,6 +71,7 @@ export function manifestSummary(input: ManifestSummaryInput): ManifestSummary {
   let cancelReservations = 0;
   let cancelPassengers = 0;
   let unpaidPassengers = 0;
+  let reviewPassengers = 0;
 
   for (const reservation of input.reservations) {
     const total = reservation.passengers.length;
@@ -73,6 +84,7 @@ export function manifestSummary(input: ManifestSummaryInput): ManifestSummary {
     if (reservation.status === "ABORDADA") continue;
     pending += total - subieron;
     if (DEBEN_PAGAR.has(reservation.status)) unpaidPassengers += total - subieron;
+    if (ESPERAN_REVISION.has(reservation.status)) reviewPassengers += total - subieron;
 
     if (PASAN_A_AUSENTE.has(reservation.status)) {
       noShowReservations += 1;
@@ -93,6 +105,8 @@ export function manifestSummary(input: ManifestSummaryInput): ManifestSummary {
     cancelReservations,
     cancelPassengers,
     unpaidPassengers,
+    owingPassengers: unpaidPassengers - reviewPassengers,
+    reviewPassengers,
   };
 }
 

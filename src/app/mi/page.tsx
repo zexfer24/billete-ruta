@@ -12,8 +12,10 @@ import { TicketCard, type TicketCardData } from "@/components/ticket-card";
 import { DepartureBoard } from "@/components/departure-board";
 import type { DepartureRowData } from "@/components/departure-row";
 import { Isotipo } from "@/components/logo";
-import { IconCamera, IconChevronRight } from "@/components/icons";
+import { IconCamera, IconChevronRight, IconInfo, IconMapPin } from "@/components/icons";
 import {
+  heroDepartsSoon,
+  heroDepartureTitle,
   pickHeroReservation,
   reservationActionLabel,
   ticketDeadline,
@@ -40,8 +42,23 @@ const SEIS_HORAS_MS = 6 * 60 * 60 * 1000;
  */
 const LIMITE_PROXIMAS = 12;
 
-/** Avisos de plazo de pago: si su reserva ya va en grande, el ticket dice la hora y no se repiten. */
-const AVISOS_DE_PLAZO = new Set(["RESERVA_POR_LIBERAR", "RECONFIRMAR_PAGO_EN_SITIO"]);
+/**
+ * Avisos que el héroe ya dice: el plazo de pago (va en el ticket), el pago en
+ * revisión (la pastilla del ticket) y el ticket listo (el botón). Si su
+ * reserva va en grande o como enlace debajo, no se repiten en "Avisos". Un
+ * comprobante rechazado sí se muestra: dice algo que el ticket no dice.
+ */
+const AVISOS_QUE_DICE_EL_HEROE = new Set([
+  "RESERVA_POR_LIBERAR",
+  "RECONFIRMAR_PAGO_EN_SITIO",
+  "COMPROBANTE_EN_VALIDACION",
+  "TICKET_LISTO",
+]);
+
+/** "Revisando tu pago" → "revisando tu pago", para ir detrás de dos puntos. */
+function lowerFirst(text: string): string {
+  return text.length > 0 ? text[0]!.toLowerCase() + text.slice(1) : text;
+}
 
 /** Enlace de texto con área táctil de 44 px, para "Ver todos". */
 const ENLACE_SECCION =
@@ -54,11 +71,12 @@ const ENLACE_SECCION =
  * salidas de las próximas horas.
  *
  * El héroe lo elige `pickHeroReservation`: la reserva de la salida más
- * cercana, salvo que esa no pida nada (pago en revisión, o ticket pagado que
- * sale en más de 3 horas) y otra reserva próxima tenga un plazo de pago
- * corriendo. Entonces sube esa, con su hora límite en el ticket y el botón
- * para pagarla, y el viaje más cercano queda como enlace debajo. Un ticket
- * pagado que sale dentro de 3 horas nunca cede su lugar.
+ * cercana, que nunca cede su lugar si sale dentro de 3 horas. Si sale más
+ * tarde y no pide nada (pago en revisión o pagada), sube otra reserva con un
+ * plazo de pago que vence pronto (el mismo que el ticket muestra, así el
+ * título "Paga para no perder tu puesto" siempre lleva la hora debajo) o una
+ * pagada en parte que sale dentro de 24 horas; el viaje más cercano queda
+ * como enlace debajo.
  */
 export default async function MiInicioPage() {
   const pasajero = await requirePassenger();
@@ -96,6 +114,7 @@ export default async function MiInicioPage() {
     now,
   );
   const proximaReserva = eleccion?.hero.reserva ?? null;
+  const salePronto = proximaReserva ? heroDepartsSoon(proximaReserva.departure.departsAt, now) : false;
   // Con un héroe que sube por su plazo, el viaje más cercano queda a un toque.
   const viajeMasCercano = eleccion?.promoted ? eleccion.soonest.reserva : null;
 
@@ -128,13 +147,27 @@ export default async function MiInicioPage() {
     : null;
 
   // Si la acción principal ya es subir la cédula, su aviso no se repite debajo;
-  // tampoco el plazo de pago de la reserva que va en grande, que su ticket ya dice.
+  // tampoco lo que ya dicen la reserva en grande y el enlace al viaje más cercano.
   const heroEsCedula = !ticketData && faltaCedula;
+  const codigosEnPantalla = new Set([ticketData?.code, viajeMasCercano?.code].filter(Boolean));
   const avisosRestantes = avisos.filter((aviso) => {
     if (heroEsCedula && aviso.kind === "DOCUMENTO_FALTANTE") return false;
-    if (ticketData && AVISOS_DE_PLAZO.has(aviso.kind) && aviso.reservationCode === ticketData.code) return false;
+    if (aviso.reservationCode && codigosEnPantalla.has(aviso.reservationCode) && AVISOS_QUE_DICE_EL_HEROE.has(aviso.kind)) {
+      return false;
+    }
     return true;
   });
+
+  // El título dice lo que apura: un plazo (con su hora en el ticket), la salida inminente o el pago pendiente.
+  const tituloHeroe = ticketData
+    ? ticketData.deadline
+      ? "Paga para no perder tu puesto"
+      : salePronto
+        ? heroDepartureTitle(ticketData.departsAt, now)
+        : eleccion?.promoted && ticketData.status === "ABONADA"
+          ? "Termina de pagar tu viaje"
+          : "Tu próximo viaje"
+    : null;
 
   const accionPrincipal = ticketData
     ? eleccion?.promoted && ticketData.status === "PENDIENTE_PAGO"
@@ -162,9 +195,28 @@ export default async function MiInicioPage() {
         {ticketData ? (
           <>
             <h1 id="accion-principal" className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">
-              {viajeMasCercano ? "Paga para no perder tu puesto" : "Tu próximo viaje"}
+              {tituloHeroe}
             </h1>
             <TicketCard data={ticketData} size="compacta" />
+            {salePronto && proximaReserva ? (
+              <div className="flex flex-col gap-2 text-tinta">
+                <p className="flex items-start gap-2">
+                  <IconMapPin aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-marca-600" />
+                  <span>
+                    <span className="font-semibold">Aborda en:</span> {proximaReserva.departure.route.meetingPoint}
+                  </span>
+                </p>
+                {ticketData.status === "EN_VALIDACION" ? (
+                  <p className="flex items-start gap-2">
+                    <IconInfo aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-info" />
+                    <span>
+                      Si no confirmamos tu pago antes de la salida, acércate con tu cédula a la taquilla de{" "}
+                      {ticketData.agencyName}.
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <Link
               href={`/mi/reservas/${ticketData.code}`}
               className={buttonClass("primario", "w-full", "lg")}
@@ -174,8 +226,8 @@ export default async function MiInicioPage() {
             {viajeMasCercano ? (
               <Link href={`/mi/reservas/${viajeMasCercano.code}`} className={`${ENLACE_SECCION} self-center text-center`}>
                 <span>
-                  Tu viaje a {viajeMasCercano.departure.route.destination} ·{" "}
-                  {passengerStatusLabel(viajeMasCercano.status)} · Ver
+                  Tu viaje a {viajeMasCercano.departure.route.destination}:{" "}
+                  {lowerFirst(passengerStatusLabel(viajeMasCercano.status))}
                 </span>
                 <IconChevronRight aria-hidden="true" className="size-4 shrink-0" />
               </Link>

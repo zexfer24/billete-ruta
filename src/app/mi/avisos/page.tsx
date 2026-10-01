@@ -142,6 +142,27 @@ export default async function AvisosPage() {
   );
 }
 
+/** Códigos de reserva dentro de un texto ("TR-0930-1PAX-CWNU"). */
+const CODIGO_RESERVA = /(\bTR-[A-Z0-9]+(?:-[A-Z0-9]+)*)/g;
+
+/**
+ * El texto de un mensaje con cada código de reserva en una sola línea: el
+ * navegador no lo parte por los guiones. Los guiones no cambian, así que
+ * copiar y buscar el código sigue funcionando.
+ */
+function TextoConCodigos({ text }: { text: string }) {
+  return text.split(CODIGO_RESERVA).map((parte, indice) =>
+    // `split` con un grupo deja los códigos en las posiciones impares.
+    indice % 2 === 1 ? (
+      <span key={indice} className="whitespace-nowrap">
+        {parte}
+      </span>
+    ) : (
+      parte
+    ),
+  );
+}
+
 /** Mensajes agrupados por día ("Hoy", "Ayer", fecha), del más nuevo al más viejo. */
 function MensajesPorDia({ mensajes, now }: { mensajes: MensajeVM[]; now: Date }) {
   return (
@@ -163,7 +184,9 @@ function MensajesPorDia({ mensajes, now }: { mensajes: MensajeVM[]; now: Date })
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <p className="tabular text-sm font-medium text-tinta-suave">{formatCaracasTime24(mensaje.at)}</p>
-                  <p className="break-words leading-relaxed text-tinta">{mensaje.text}</p>
+                  <p className="break-words leading-relaxed text-tinta">
+                    <TextoConCodigos text={mensaje.text} />
+                  </p>
                   {mensaje.reservationCode ? (
                     // Enlace de texto con flecha, como el pie de NoticeCard: ocho mensajes no
                     // son ocho botones compitiendo con las acciones de "Lo importante ahora".

@@ -5,9 +5,9 @@ import { cx } from "@/components/ui-classes";
 import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
 import { listAccounts } from "@/modules/reports";
 import { accountSearchTerm, countLabel, formatCount, formatPhone } from "../_shared/format";
-import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, MobileCardList, Pagination, TimeCell } from "../_shared/lists";
+import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, Pagination, TimeCell } from "../_shared/lists";
 import { withQuery } from "../_shared/period";
-import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { LineSkeleton, PaginationSkeleton, TableSkeleton } from "../_shared/skeletons";
 
 const PAGE_SIZE = 25;
 
@@ -99,16 +99,23 @@ export async function UsersResults({
         {totalPages > 1 ? `. Estás viendo de la ${formatCount(firstShown)} a la ${formatCount(lastShown)}.` : "."}
       </p>
 
+      {/* Arriba también, como en Mensajes, para no tener que bajar toda la lista para cambiar de página. */}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        hrefFor={(p) => pageHref(query, p)}
+        label="Páginas, arriba de la lista"
+      />
+
       <TableShell
         mobile={
           // En el teléfono, solo lo esencial para reconocer a la persona: el
           // año de nacimiento y el último ingreso quedan en la tabla de
-          // escritorio. Las primeras 10 tarjetas a la vista y el resto de la
-          // página detrás de "Ver N cuentas más"; la consulta auditada no cambia.
-          <MobileCardList
-            label="Cuentas de pasajero"
-            moreNoun={["cuenta", "cuentas"]}
-            items={rows.map((r) => (
+          // escritorio. Se ven las 25 tarjetas de la página, sin "Ver N más":
+          // la lista ya va paginada y plegarla escondía cuentas que
+          // "Siguiente" se saltaba (como en Mensajes).
+          <ul aria-label="Cuentas de pasajero" className="flex flex-col gap-3">
+            {rows.map((r) => (
               <MobileCard
                 key={r.id}
                 title={r.fullName}
@@ -132,7 +139,7 @@ export async function UsersResults({
                 }
               />
             ))}
-          />
+          </ul>
         }
       >
         <table className="w-full text-left">
@@ -181,11 +188,12 @@ export async function UsersResults({
   );
 }
 
-/** Silueta de los resultados: línea del total, tabla de 10 filas y paginación. */
+/** Silueta de los resultados: línea del total, la paginación de arriba y la tabla de 10 filas. */
 export function UsersResultsSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-80" />
+      <PaginationSkeleton />
       <TableSkeleton columns={USER_COLUMNS} rows={10} mobileDetails={0} mobileSubtitleLines={2} />
     </div>
   );

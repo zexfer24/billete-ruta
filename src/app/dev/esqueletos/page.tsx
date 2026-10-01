@@ -2,7 +2,8 @@ import type { ComponentType } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AppHeader, AppHeaderAction } from "@/components/app-header";
-import { IconDocument, IconExit } from "@/components/icons";
+import { IconDocument, IconExit, IconMenu } from "@/components/icons";
+import { LogoLockup } from "@/components/logo";
 
 import PortadaLoading from "@/app/(portada)/loading";
 import IngresarLoading from "@/app/ingresar/loading";
@@ -50,10 +51,18 @@ export const metadata: Metadata = {
  */
 type Frame = "publico" | "mi" | "panel";
 
+/**
+ * Variante del panel que rodea a un skeleton del marco `panel`, la misma de
+ * `PanelNav`: `agencia` (banda marca-600 y cuerpo blanco) o `terminal`
+ * (barra entera marca-900). Sin valor es `agencia`.
+ */
+type PanelVariant = "agencia" | "terminal";
+
 interface GalleryEntry {
   route: string;
   file: string;
   frame: Frame;
+  variant?: PanelVariant;
   note?: string;
   Component: ComponentType;
 }
@@ -137,31 +146,42 @@ const GROUPS: readonly GalleryGroup[] = [
         route: "/panel/admin/tablero",
         file: "src/app/panel/admin/tablero/loading.tsx",
         frame: "panel",
+        variant: "terminal",
         Component: TableroAdminLoading,
       },
       {
         route: "/panel/admin/agencias",
         file: "src/app/panel/admin/agencias/loading.tsx",
         frame: "panel",
+        variant: "terminal",
         Component: AgenciasAdminLoading,
       },
       {
         route: "/panel/admin/usuarios",
         file: "src/app/panel/admin/usuarios/loading.tsx",
         frame: "panel",
+        variant: "terminal",
         Component: UsuariosAdminLoading,
       },
       {
         route: "/panel/admin/movimientos",
         file: "src/app/panel/admin/movimientos/loading.tsx",
         frame: "panel",
+        variant: "terminal",
         Component: MovimientosAdminLoading,
       },
-      { route: "/panel/admin/tasas", file: "src/app/panel/admin/tasas/loading.tsx", frame: "panel", Component: TasasAdminLoading },
+      {
+        route: "/panel/admin/tasas",
+        file: "src/app/panel/admin/tasas/loading.tsx",
+        frame: "panel",
+        variant: "terminal",
+        Component: TasasAdminLoading,
+      },
       {
         route: "/panel/admin/mensajes",
         file: "src/app/panel/admin/mensajes/loading.tsx",
         frame: "panel",
+        variant: "terminal",
         Component: MensajesAdminLoading,
       },
     ],
@@ -219,13 +239,34 @@ function FrameBody({ entry }: { entry: GalleryEntry }) {
   }
 
   if (entry.frame === "panel") {
+    const terminal = entry.variant === "terminal";
     return (
-      // Mismo marco que PanelFrame (src/app/panel/layout.tsx): desde `lg`, la
-      // columna de 272 px de la barra lateral (`w-68`) y el contenido con sus
-      // márgenes; a 375 px se ven las variantes móviles (tarjetas `md:hidden`).
+      // Mismo marco que PanelFrame (src/app/panel/layout.tsx) y PanelNav: desde
+      // `lg`, la columna de 272 px de la barra lateral (`w-68`) con la banda
+      // de su variante y el contenido con sus márgenes; por debajo de `lg`, la
+      // barra superior de 64 px con el logo y "Menú", y las variantes móviles
+      // del contenido (tarjetas `md:hidden`). La barra es decorativa: no navega.
       <div className="bg-lienzo lg:flex">
-        <div aria-hidden="true" className="hidden w-68 shrink-0 border-r border-borde bg-superficie lg:block">
-          <div className="h-28 bg-marca-600" />
+        <div
+          aria-hidden="true"
+          className={`flex min-h-16 items-center justify-between gap-3 px-4 py-2 text-white shadow-1 lg:hidden ${
+            terminal ? "bg-marca-900" : "bg-marca-600"
+          }`}
+        >
+          <LogoLockup tone="blanco" label={terminal ? "Terminal de pasajeros" : "Agencia de ejemplo"} />
+          <span className="flex min-h-11 shrink-0 items-center gap-2 rounded-control bg-white/10 px-4 font-semibold">
+            <IconMenu width={22} height={22} aria-hidden="true" />
+            Menú
+          </span>
+        </div>
+        <div
+          aria-hidden="true"
+          className={`hidden w-68 shrink-0 border-r lg:block ${
+            terminal ? "border-marca-950 bg-marca-900" : "border-borde bg-superficie"
+          }`}
+        >
+          {/* En el terminal la banda y el cuerpo son del mismo morado profundo. */}
+          {terminal ? null : <div className="h-28 bg-marca-600" />}
         </div>
         <div className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <div className="mx-auto max-w-7xl">

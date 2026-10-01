@@ -1,7 +1,9 @@
 export {
   ONCE_PER_RESERVATION_TEMPLATES,
   TEMPLATE_KEYS,
+  STORED_TEXT_KEY,
   isTemplateKey,
+  messageRoute,
   renderPreview,
   renderStoredPreview,
   templateButtons,

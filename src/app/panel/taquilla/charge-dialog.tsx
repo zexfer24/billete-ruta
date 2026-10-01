@@ -75,6 +75,12 @@ export function ChargeDialog({
         // Mientras se registra la venta, Escape no cierra: el cobro ya está en camino.
         if (submitting) event.preventDefault();
       }}
+      onKeyDown={(event) => {
+        // Chrome no deja cancelar un segundo Escape seguido sin una activación
+        // del usuario (close watcher) y cerraría el diálogo igual: se frena
+        // aquí también, como en `ConfirmDialog`.
+        if (event.key === "Escape" && submitting) event.preventDefault();
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget && !submitting) dialogRef.current?.close();
       }}

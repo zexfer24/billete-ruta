@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Alert } from "@/components/alert";
 import { PanelPageHeader, type PanelTab } from "@/components/panel-ui";
 import { MESSAGE_STATUS_LABELS } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
@@ -10,13 +9,15 @@ import { pageFromParam } from "../_shared/format";
 import { withQuery } from "../_shared/period";
 import { MESSAGES_PATH, MESSAGE_STATUSES, messageStatusFromParam } from "./messages";
 import { MessagesList, MessagesListSkeleton } from "./messages-list";
+import { TestModeNotice } from "./test-mode-notice";
 
 export const metadata: Metadata = { title: "Mensajes a pasajeros" };
 
 /**
  * Bandeja de mensajes a pasajeros. En el MVP el proveedor de WhatsApp es de
- * prueba: aquí se ve el texto exacto de cada mensaje y su estado. Pestañas
- * por estado con su contador (`?status=`) y páginas de 50 (`?page=`).
+ * prueba: aquí se ve el texto exacto de cada mensaje y su estado, y el aviso
+ * de modo de prueba dice que esos estados son simulados. Pestañas por estado
+ * con su contador (`?status=`) y páginas de 25 (`?page=`).
  */
 export default async function MensajesAdminPage({
   searchParams,
@@ -50,9 +51,7 @@ export default async function MensajesAdminPage({
         description="Los avisos que el sistema envía a los pasajeros: confirmaciones de reserva, pagos, tickets y recordatorios de viaje."
       />
 
-      <Alert tone="info" role="none" title="Modo de prueba">
-        Por ahora los mensajes no salen por WhatsApp. Aquí ves el texto exacto que recibiría cada pasajero.
-      </Alert>
+      <TestModeNotice />
 
       <AdminTabs label="Estado de los mensajes" tabs={tabs} />
 

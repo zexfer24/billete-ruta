@@ -6,11 +6,10 @@ import type { AgencyPassengerRow, PendingProofRow, ReservationView } from "@/mod
 import type { ProofCoverage } from "@/modules/payments";
 import { formatMoney, toDecimal } from "@/lib/decimal";
 import { maskIdNumber } from "@/lib/identity";
-import { formatCaracas, formatCaracasDateTime24 } from "@/lib/time";
+import { formatCaracas } from "@/lib/time";
 import { departureStatusLabel, reservationStatusLabel, reservationStatusTone, type StatusTone } from "@/lib/labels";
 import {
   EmptyState,
-  MobileCard,
   PANEL_TD_CLASS,
   PANEL_TH_CLASS,
   ProgressBar,
@@ -19,8 +18,8 @@ import {
 } from "@/components/panel-ui";
 import { IconCheckCircle, IconChevronLeft, IconChevronRight, IconList, IconSearch } from "@/components/icons";
 import { countLabel } from "../_dashboard/text";
-import { departsInText } from "../_dashboard/attention";
-import { coverageBadge } from "./proof-review";
+import { afterApproval, coverageBadge } from "./proof-review";
+import { arrowRouteName, proofUrgency, tripWhenText } from "./trip-text";
 import { lastValidPage, pasajerosUrl } from "./urls";
 import { showsUsdEquivalent } from "./money";
 import { LinkPendingIcon, LinkRow } from "./link-pending";
@@ -36,14 +35,7 @@ import { ResponsiveTable } from "../_dashboard/responsive-table";
 export const RESERVATIONS_PAGE_SIZE = 25;
 export const PROOFS_PAGE_SIZE = 15;
 
-/**
- * Con su salida a menos de estas horas, un comprobante por revisar lleva una
- * pastilla de alerta con cuánto falta ("Sale en 44 min"): si no se revisa a
- * tiempo, el pasajero llega al embarque sin ticket.
- */
-const URGENT_DEPARTURE_HOURS = 6;
-
-/** Ancho mínimo del nombre de la ruta en las tablas, para que "Caracas – San Cristóbal" no se parta. */
+/** Ancho mínimo del nombre de la ruta en las tablas, para que "Caracas → San Cristóbal" no se parta. */
 const ROUTE_CELL_CLASS = "block min-w-52";
 
 /** Estado vacío de cada vista cuando no hay filtros activos. */
@@ -73,29 +65,45 @@ function rowSituation(row: AgencyPassengerRow): { label: string; tone: StatusTon
 }
 
 /**
- * Cómo queda la reserva si se aprueba el comprobante, el mismo dato que el
- * panel lateral llama "Saldo después". No se muestra el saldo de antes: junto
- * a "Completa el pago" parecía que el pasajero seguía debiendo ese monto.
+ * "Si lo apruebas: …" solo cuando dice algo que la pastilla no dice ya: con
+ * "Completa el pago", "queda pagada" repetía lo mismo. Se conserva en el abono
+ * parcial (cuánto quedará por pagar) y en el pago de más (que igual queda
+ * pagada).
  */
-function afterApproval(coverage: ProofCoverage): string {
-  return coverage.balanceAfterUsd.greaterThan(0)
-    ? `Quedan ${formatMoney(coverage.balanceAfterUsd, "USD")} por pagar`
-    : "Queda pagada";
-}
-
-/**
- * Pastilla de urgencia de un comprobante: solo si su salida todavía no parte
- * (programada o embarcando) y sale dentro de `URGENT_DEPARTURE_HOURS`.
- */
-function urgencyBadge(row: PendingProofRow, now: Date): ReactNode {
-  if (row.departureStatus !== "PROGRAMADA" && row.departureStatus !== "MANIFIESTO_CERRADO") return null;
-  const faltaMs = row.departsAt.getTime() - now.getTime();
-  if (faltaMs < 0 || faltaMs > URGENT_DEPARTURE_HOURS * 3_600_000) return null;
-  return <StatusBadge label={departsInText(row.departsAt, now)} tone="alerta" />;
+function afterApprovalAddsInfo(coverage: ProofCoverage): boolean {
+  return coverage.kind !== "PAGO_COMPLETO";
 }
 
 function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/**
+ * Aviso de la salida de un comprobante: la pastilla de urgencia (atrasada,
+ * sale pronto o dentro de unas horas, de `proofUrgency`) y, si la salida ya no
+ * está programada, en qué estado está ("Salida: En ruta"). Con el embarque
+ * abierto y atrasada, la pastilla ya dice "Embarque abierto · debía salir…"
+ * y no se repite.
+ */
+function departureFlags(row: PendingProofRow, now: Date): { urgency: ReactNode; statusNote: string | null } {
+  const aviso = proofUrgency({ status: row.departureStatus, departsAt: row.departsAt }, now);
+  const repiteEstado = aviso?.kind === "atrasada" && row.departureStatus === "MANIFIESTO_CERRADO";
+  return {
+    urgency: aviso ? <StatusBadge label={aviso.text} tone="alerta" /> : null,
+    statusNote:
+      row.departureStatus !== "PROGRAMADA" && !repiteEstado
+        ? `Salida: ${departureStatusLabel(row.departureStatus)}`
+        : null,
+  };
+}
+
+/**
+ * Referencia del comprobante en una sola línea. Si el pasajero ya la escribió
+ * con el prefijo ("REF-681744"), no se le antepone la palabra "Referencia",
+ * que decía lo mismo y alargaba la fila un renglón.
+ */
+function referenceText(reference: string): string {
+  return /^ref\b/i.test(reference.trim()) ? reference : `Referencia ${reference}`;
 }
 
 /**
@@ -113,27 +121,68 @@ function HolderIdAndCode({ idNumber, code }: { idNumber: string; code: string })
 }
 
 /**
- * Subtítulo de la tarjeta del teléfono: la pastilla de estado en su propia
- * fila bajo el nombre (al lado del título le quitaba ancho y partía el nombre
- * y el código), luego la cédula, el código y el viaje en una sola línea. Así
- * la cuadrícula queda con los dos montos que se comparan.
+ * Tarjeta de una fila de la lista en el teléfono y la tableta, la misma en
+ * las cinco pestañas: toda la tarjeta es el único enlace. Lleva el nombre, las
+ * pastillas, la cédula y el código en una línea, el viaje, el dato de dinero
+ * y, al pie, la acción con texto visible ("Revisar", "Ver detalle") y la
+ * flecha, que cambia por el indicador de espera mientras se abre el panel
+ * lateral. Sin botón de ancho completo, cada tarjeta ocupa unos 190 px en vez
+ * de 300.
  */
-function CardSubtitle({
-  badge,
+function LinkCard({
+  href,
+  title,
+  srPrefix,
+  badges,
   idNumber,
   code,
   trip,
+  children,
+  actionLabel,
 }: {
-  badge: ReactNode;
+  href: string;
+  title: string;
+  /** Texto para lectores de pantalla antes del nombre ("Revisar el comprobante de "). */
+  srPrefix: string;
+  badges: ReactNode;
   idNumber: string;
   code: string;
-  trip: string;
+  trip: ReactNode;
+  children: ReactNode;
+  actionLabel: string;
 }) {
   return (
+    <li>
+      <Link
+        href={href}
+        scroll={false}
+        className="foco relative flex h-full flex-col gap-1 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-colors duration-150 ease-out hover:bg-marca-50/60 motion-reduce:transition-none"
+      >
+        <span className="break-words text-base font-semibold text-tinta">
+          <span className="sr-only">{srPrefix}</span>
+          {title}
+        </span>
+        <span className="flex flex-wrap gap-1.5">{badges}</span>
+        <span className="tabular text-sm text-tinta-suave">
+          <span className="whitespace-nowrap">{idNumber}</span> · <span className="whitespace-nowrap">{code}</span>
+        </span>
+        <span className="tabular text-sm text-tinta-suave">{trip}</span>
+        {children}
+        {/* La acción ya está en el texto oculto del principio: aquí solo se ve. */}
+        <span className="mt-1 inline-flex min-h-6 items-center gap-1 text-[15px] font-semibold text-marca-700">
+          <span aria-hidden="true">{actionLabel}</span>
+          <LinkPendingIcon icon={<IconChevronRight className="size-5 shrink-0" />} />
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+/** Viaje de una fila: la ruta con flecha y el día y la hora en lenguaje llano ("Hoy 21:00"). */
+function TripLine({ route, departsAt, now }: { route: string; departsAt: Date; now: Date }) {
+  return (
     <>
-      <span className="my-1.5 block">{badge}</span>
-      <HolderIdAndCode idNumber={idNumber} code={code} />
-      <span className="tabular block">{trip}</span>
+      {route} · <span className="whitespace-nowrap">{tripWhenText(departsAt, now)}</span>
     </>
   );
 }
@@ -211,62 +260,60 @@ function ResultsSummary({
 }
 
 /**
- * Tarjeta de un comprobante por revisar en el teléfono y la tableta. Toda la
- * tarjeta es el único enlace (con la flecha a la derecha, que cambia por el
- * indicador de espera mientras se abre), en vez de un botón de ancho completo
- * debajo: la cédula y el código van en una línea y los dos montos en otras dos,
- * así cada tarjeta ocupa unos 190 px en vez de 300.
+ * Tarjeta de un comprobante por revisar (`LinkCard`): la pastilla de qué
+ * cubre con la de urgencia, el viaje con su día y hora, cuánto envió y, solo
+ * si agrega algo, cómo queda la reserva si se aprueba.
  */
 function ProofQueueCard({
   row,
   href,
   badge,
   urgency,
+  statusNote,
+  now,
 }: {
   row: PendingProofRow;
   href: string;
   badge: { label: string; tone: StatusTone };
   urgency: ReactNode;
+  statusNote: string | null;
+  now: Date;
 }) {
   return (
-    <li>
-      <Link
-        href={href}
-        scroll={false}
-        className="foco relative flex h-full items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-colors duration-150 ease-out hover:bg-marca-50/60 motion-reduce:transition-none"
-      >
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="break-words text-base font-semibold text-tinta">
-            <span className="sr-only">Revisar el comprobante de </span>
-            {row.holderName}
+    <LinkCard
+      href={href}
+      title={row.holderName}
+      srPrefix="Revisar el comprobante de "
+      badges={
+        <>
+          <StatusBadge label={badge.label} tone={badge.tone} />
+          {urgency}
+        </>
+      }
+      idNumber={row.maskedHolderIdNumber}
+      code={row.code}
+      trip={<TripLine route={`${row.origin} → ${row.destination}`} departsAt={row.departsAt} now={now} />}
+      actionLabel="Revisar"
+    >
+      {statusNote ? <span className="text-sm font-semibold text-alerta">{statusNote}</span> : null}
+      <span className="tabular text-[15px] text-tinta">
+        Envió <span className="whitespace-nowrap font-semibold">{formatMoney(row.amount, row.currency)}</span>
+        {showsUsdEquivalent(row.currency) ? (
+          <span className="text-tinta-suave">
+            {" "}
+            (equivale a <span className="whitespace-nowrap">{formatMoney(row.amountUsd, "USD")}</span>)
           </span>
-          <span className="flex flex-wrap gap-1.5">
-            <StatusBadge label={badge.label} tone={badge.tone} />
-            {urgency}
-          </span>
-          <span className="tabular text-sm text-tinta-suave">
-            <span className="whitespace-nowrap">{row.maskedHolderIdNumber}</span> ·{" "}
-            <span className="whitespace-nowrap">{row.code}</span>
-          </span>
-          <span className="tabular text-sm text-tinta-suave">
-            {row.routeName} · <span className="whitespace-nowrap">{formatCaracasDateTime24(row.departsAt)}</span>
-          </span>
-          <span className="tabular text-[15px] text-tinta">
-            Envió <span className="whitespace-nowrap font-semibold">{formatMoney(row.amount, row.currency)}</span>
-            {showsUsdEquivalent(row.currency) ? (
-              <span className="text-tinta-suave">
-                {" "}
-                (equivale a <span className="whitespace-nowrap">{formatMoney(row.amountUsd, "USD")}</span>)
-              </span>
-            ) : null}
-          </span>
-          <span className="tabular text-sm text-tinta-suave">Si lo apruebas: {lowerFirst(afterApproval(row.coverage))}</span>
+        ) : null}
+      </span>
+      {afterApprovalAddsInfo(row.coverage) ? (
+        <span className="tabular text-sm text-tinta-suave">
+          Si lo apruebas: {lowerFirst(afterApproval(row.coverage))}
         </span>
-        <LinkPendingIcon icon={<IconChevronRight className="size-5 shrink-0 text-marca-700" />} />
-      </Link>
-    </li>
+      ) : null}
+    </LinkCard>
   );
 }
+
 
 /** Paginación con "Anterior" y "Siguiente" de 44 px y la página actual en palabras. */
 function Pagination({
@@ -303,11 +350,13 @@ function Pagination({
 }
 
 /**
- * Vista "Por revisar": la cola de comprobantes pendientes, del más antiguo al
- * más nuevo, con una pastilla de alerta en los de salidas próximas. En
- * escritorio cada fila tiene un solo enlace, "Revisar", que abre el panel
- * lateral (el resto de la fila lleva al mismo lugar con el ratón); en el
- * teléfono y la tableta, la tarjeta entera es ese enlace.
+ * Vista "Por revisar": la cola de comprobantes pendientes en el orden de
+ * `listPendingProofQueue` (primero los de la salida más próxima, incluidas las
+ * atrasadas, y al final los de salidas que ya partieron), con una pastilla de
+ * alerta en los de salidas atrasadas o próximas. En escritorio cada fila tiene
+ * un solo enlace, "Revisar", que abre el panel lateral (el resto de la fila
+ * lleva al mismo lugar con el ratón); en el teléfono y la tableta, la tarjeta
+ * entera es ese enlace.
  */
 export async function ProofQueueList({
   agencyId,
@@ -321,7 +370,9 @@ export async function ProofQueueList({
   /** Código de `?ok=` que se conserva si hay que corregir la página. */
   okCode?: string;
 }) {
-  const cola = await listPendingProofQueue(agencyId, { page, pageSize: PROOFS_PAGE_SIZE });
+  // El mismo instante para el orden de la cola y para los avisos de cada fila.
+  const now = new Date();
+  const cola = await listPendingProofQueue(agencyId, { page, pageSize: PROOFS_PAGE_SIZE }, now);
 
   // Tras aprobar o rechazar el último de la última página, cae a la última página válida.
   const paginaValida = lastValidPage(cola.total, cola.pageSize, page);
@@ -344,12 +395,11 @@ export async function ProofQueueList({
     );
   }
 
-  const now = new Date();
   const filas = cola.rows.map((row) => ({
     row,
     href: pasajerosUrl({ vista: "por-revisar", pagina: page, comprobante: row.proofId }),
     badge: coverageBadge(row.coverage),
-    urgency: urgencyBadge(row, now),
+    ...departureFlags(row, now),
   }));
 
   return (
@@ -364,8 +414,16 @@ export async function ProofQueueList({
       <ResponsiveTable
         cards={
           <>
-            {filas.map(({ row, href, badge, urgency }) => (
-              <ProofQueueCard key={row.proofId} row={row} href={href} badge={badge} urgency={urgency} />
+            {filas.map(({ row, href, badge, urgency, statusNote }) => (
+              <ProofQueueCard
+                key={row.proofId}
+                row={row}
+                href={href}
+                badge={badge}
+                urgency={urgency}
+                statusNote={statusNote}
+                now={now}
+              />
             ))}
           </>
         }
@@ -391,7 +449,7 @@ export async function ProofQueueList({
               </tr>
             </thead>
             <tbody>
-              {filas.map(({ row, href, badge, urgency }) => (
+              {filas.map(({ row, href, badge, urgency, statusNote }) => (
                 <LinkRow
                   key={row.proofId}
                   selected={row.proofId === selectedProofId}
@@ -402,24 +460,26 @@ export async function ProofQueueList({
                     <HolderIdAndCode idNumber={row.maskedHolderIdNumber} code={row.code} />
                   </td>
                   <td className={PANEL_TD_CLASS}>
-                    <span className={ROUTE_CELL_CLASS}>{row.routeName}</span>
-                    <span className="tabular block text-tinta-suave">{formatCaracasDateTime24(row.departsAt)}</span>
+                    <span className={ROUTE_CELL_CLASS}>
+                      {row.origin} → {row.destination}
+                    </span>
+                    <span className="tabular block text-tinta-suave">{tripWhenText(row.departsAt, now)}</span>
                     {urgency ? <span className="mt-1 block">{urgency}</span> : null}
-                    {row.departureStatus !== "PROGRAMADA" ? (
-                      <span className="block text-alerta">Salida: {departureStatusLabel(row.departureStatus)}</span>
-                    ) : null}
+                    {statusNote ? <span className="block font-semibold text-alerta">{statusNote}</span> : null}
                   </td>
                   <td className={PANEL_TD_CLASS}>
                     <SentAmount amount={row.amount} currency={row.currency} amountUsd={row.amountUsd} strong />
-                    <span className="block text-tinta-suave">
-                      Referencia <span className="tabular whitespace-nowrap">{row.reference}</span>
+                    <span className="tabular block whitespace-nowrap text-tinta-suave">
+                      {referenceText(row.reference)}
                     </span>
                   </td>
                   <td className={PANEL_TD_CLASS}>
                     <StatusBadge label={badge.label} tone={badge.tone} />
-                    <span className="tabular mt-1 block text-tinta-suave">
-                      Si lo apruebas: {lowerFirst(afterApproval(row.coverage))}
-                    </span>
+                    {afterApprovalAddsInfo(row.coverage) ? (
+                      <span className="tabular mt-1 block text-tinta-suave">
+                        Si lo apruebas: {lowerFirst(afterApproval(row.coverage))}
+                      </span>
+                    ) : null}
                   </td>
                   <td className={`${PANEL_TD_CLASS} text-right`}>
                     <Link
@@ -447,6 +507,7 @@ export async function ProofQueueList({
     </div>
   );
 }
+
 
 /**
  * Las otras cuatro vistas: reservas con su viaje, lo pagado y una sola
@@ -515,6 +576,7 @@ export async function ReservationList({
     );
   }
 
+  const now = new Date();
   const filas = lista.rows.map((row) => ({
     row,
     href: pasajerosUrl({ vista, salida, buscar, pagina: page, reserva: row.reservationId }),
@@ -533,30 +595,33 @@ export async function ReservationList({
       <ResponsiveTable
         cards={
           <>
-            {filas.map(({ row, href, situacion }) => (
-              <MobileCard
-                key={row.reservationId}
-                title={row.holderName}
-                subtitle={
-                  <CardSubtitle
-                    badge={<StatusBadge label={situacion.label} tone={situacion.tone} />}
-                    idNumber={maskIdNumber(row.holderIdNumber)}
-                    code={row.code}
-                    trip={`${row.routeName} · ${formatCaracasDateTime24(row.departsAt)}`}
-                  />
-                }
-                details={[
-                  { label: "Pagado", value: formatMoney(toDecimal(row.paidUsd), "USD") },
-                  { label: "Falta", value: formatMoney(toDecimal(row.balanceUsd), "USD") },
-                ]}
-                action={
-                  <Link href={href} scroll={false} className={panelButtonClass("secundario", "md", "relative w-full")}>
-                    <LinkPendingIcon />
-                    Ver detalle
-                  </Link>
-                }
-              />
-            ))}
+            {filas.map(({ row, href, situacion }) => {
+              const saldo = toDecimal(row.balanceUsd);
+              return (
+                <LinkCard
+                  key={row.reservationId}
+                  href={href}
+                  title={row.holderName}
+                  srPrefix="Ver el detalle de la reserva de "
+                  badges={<StatusBadge label={situacion.label} tone={situacion.tone} />}
+                  idNumber={maskIdNumber(row.holderIdNumber)}
+                  code={row.code}
+                  trip={<TripLine route={arrowRouteName(row.routeName)} departsAt={row.departsAt} now={now} />}
+                  actionLabel="Ver detalle"
+                >
+                  <span className="tabular text-[15px] text-tinta">
+                    Pagado{" "}
+                    <span className="whitespace-nowrap font-semibold">{formatMoney(toDecimal(row.paidUsd), "USD")}</span>
+                    {saldo.greaterThan(0) ? (
+                      <span className="text-tinta-suave">
+                        {" "}
+                        · Falta <span className="whitespace-nowrap">{formatMoney(saldo, "USD")}</span>
+                      </span>
+                    ) : null}
+                  </span>
+                </LinkCard>
+              );
+            })}
           </>
         }
         table={
@@ -595,9 +660,9 @@ export async function ReservationList({
                     ) : null}
                   </td>
                   <td className={PANEL_TD_CLASS}>
-                    <span className={ROUTE_CELL_CLASS}>{row.routeName}</span>
+                    <span className={ROUTE_CELL_CLASS}>{arrowRouteName(row.routeName)}</span>
                     <span className="tabular block text-tinta-suave">
-                      {formatCaracasDateTime24(row.departsAt)} ·{" "}
+                      {tripWhenText(row.departsAt, now)} ·{" "}
                       {countLabel(row.passengerCount, "persona", "personas")}
                     </span>
                   </td>

@@ -1,5 +1,7 @@
+import { formatMoney } from "@/lib/decimal";
 import { prisma } from "@/lib/prisma";
 import { listDocuments } from "@/modules/accounts";
+import { balanceUsd } from "@/modules/catalog";
 import type { Notice, NoticeReservationInput } from "./build";
 import { buildNotices } from "./build";
 
@@ -30,6 +32,8 @@ export async function listNoticesForAccount(accountId: string, now: Date = new D
       expiresAt: reserva.expiresAt,
       reconfirmedAt: reserva.reconfirmedAt,
       hasTicket: reserva.ticket !== null,
+      balance:
+        reserva.status === "ABONADA" ? formatMoney(balanceUsd(reserva.totalUsd, reserva.paidUsd), "USD") : null,
       latestProof: ultimoComprobante
         ? {
             status: ultimoComprobante.status,

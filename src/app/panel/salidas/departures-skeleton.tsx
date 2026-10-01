@@ -7,10 +7,10 @@ import { cx } from "@/components/ui-classes";
 const COLUMNAS = [
   { label: "Hora", className: "w-20" },
   { label: "Ruta", className: "min-w-0 flex-1" },
-  { label: "Vehículo y chofer", className: "w-40" },
+  { label: "Vehículo y chofer", className: "w-44" },
   { label: "Puestos", className: "w-44" },
   { label: "Estado", className: "w-44" },
-  { label: "", className: "w-36" },
+  { label: "", className: "w-32" },
 ] as const;
 
 /**
@@ -42,7 +42,7 @@ export function DeparturesListSkeleton() {
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5 px-4 py-4">
                   <Skeleton className="h-4 w-3/5 rounded-pastilla" />
                 </div>
-                <div className="flex w-40 flex-col gap-1.5 px-4 py-4">
+                <div className="flex w-44 flex-col gap-1.5 px-4 py-4">
                   <Skeleton className="h-4 w-20 rounded-pastilla" />
                   <Skeleton className="h-3.5 w-28 rounded-pastilla" />
                 </div>
@@ -52,9 +52,10 @@ export function DeparturesListSkeleton() {
                   <Skeleton className="h-3.5 w-16 rounded-pastilla" />
                 </div>
                 <div className="w-44 px-4 py-4">
-                  <Skeleton className="h-6 w-24 rounded-pastilla" />
+                  {/* "Programada" va en texto, sin pastilla. */}
+                  <Skeleton className="h-4 w-20 rounded-pastilla" />
                 </div>
-                <div className="flex w-36 justify-end px-4 py-4">
+                <div className="flex w-32 justify-end px-4 py-4">
                   {/* Texto fijo: el botón real se pinta tal cual (spec 6.5). */}
                   <span className={panelButtonClass("secundario", "sm", "whitespace-nowrap")}>Ver detalle</span>
                 </div>
@@ -64,15 +65,13 @@ export function DeparturesListSkeleton() {
 
           <div className="flex flex-col gap-3 md:hidden">
             {Array.from({ length: Math.min(filas, 3) }, (_, fila) => (
-              // Misma forma que `DepartureCard`: hora y pastilla, ruta, placa y
-              // chofer, la fila de puestos con "libres" a la derecha, la barra
-              // y "Ver detalle" real (texto fijo).
+              // Misma forma que `DepartureCard`: hora (sin pastilla, porque una
+              // salida programada no la lleva), ruta, placa y chofer, la fila
+              // de puestos con "libres" a la derecha, la barra y "Ver detalle"
+              // real (texto fijo).
               <div key={fila} className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
                 <div className="flex flex-col gap-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <Skeleton className="h-7 w-14" />
-                    <Skeleton className="h-6 w-24 rounded-pastilla" />
-                  </div>
+                  <Skeleton className="h-7 w-14" />
                   <Skeleton className="h-6 w-3/5 rounded-pastilla" />
                 </div>
                 <Skeleton className="h-5 w-1/2 rounded-pastilla" />

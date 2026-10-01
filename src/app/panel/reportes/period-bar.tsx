@@ -5,43 +5,51 @@ import { PANEL_LABEL_CLASS, panelButtonClass, panelInputClass } from "@/componen
 import { cx } from "@/components/ui-classes";
 // `GetForm` lleva a mano la espera de un filtro GET con `next/form`: con una
 // acción de texto, `useFormStatus` (y por eso `SubmitButton`) nunca ve el
-// envío como pendiente. Vive en la carpeta del admin, que lo usa en sus filtros.
-import { GetForm, GetSubmitButton } from "../admin/_shared/get-form";
+// envío como pendiente.
+import { GetForm, GetSubmitButton } from "../_shared/get-form";
 import type { ReportRange, ReportView } from "./range";
 
 /** Horas "00" a "23" para los <select> de filtro, en formato de 24 horas. */
 const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
 
-/** Pastilla de periodo: 44 px de alto, la elegida rellena de morado. */
+/**
+ * Pastilla de periodo: 44 px de alto. La elegida va en morado suave con borde
+ * de marca (como la pestaña activa), no rellena: el morado relleno queda solo
+ * para la acción principal de la pantalla (spec 1.1).
+ */
 const CHIP_CLASS =
   "foco inline-flex min-h-11 shrink-0 items-center gap-2 rounded-pastilla border px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none";
 
+/** Pastilla elegida y pastilla sin elegir. */
+const CHIP_ACTIVE_CLASS = "border-marca-600 bg-marca-50 text-marca-800";
+const CHIP_IDLE_CLASS = "border-borde-control bg-superficie text-tinta hover:bg-marca-50";
+
 /**
- * Rejilla de las cuatro pastillas: en el teléfono, dos filas de dos del mismo
- * ancho (antes "30 días" quedaba sola en un renglón); desde `sm`, en fila.
+ * Rejilla de las tres pastillas: en el teléfono, una fila de tres del mismo
+ * ancho; desde `sm`, en fila con su ancho natural.
  */
-const CHIP_LIST_CLASS = "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap";
+const CHIP_LIST_CLASS = "grid grid-cols-3 gap-2 sm:flex sm:flex-wrap";
 
 /**
  * Elección del periodo de un reporte. Es un filtro, no una navegación, así que
  * se ve distinto de las pestañas de tipo de reporte: la etiqueta "Periodo",
- * pastillas compactas (dos por fila en el teléfono, en fila desde `sm`; nunca
- * se esconden a la derecha) y "Otras fechas", que despliega el formulario de
- * rango debajo. El formulario arranca abierto si ya hay fechas elegidas.
+ * pastillas compactas (las tres en una fila también en el teléfono) y "Otras
+ * fechas", que despliega el formulario de rango debajo. El formulario arranca
+ * abierto si ya hay fechas elegidas. Mismas opciones y mismo valor por
+ * defecto ("Hoy") que el tablero del operador, para que el mismo operador no
+ * vea dos juegos de periodos distintos.
  */
 export function PeriodBar({ vista, range }: { vista: ReportView; range: ReportRange }) {
   const base = `/panel/reportes?vista=${vista}`;
   const personalizado = range.preset === "personalizado";
   const conHora = vista === "recaudacion";
   const etiquetaId = `periodo-${vista}`;
-  const opciones = [
-    { href: base, label: "Últimas 24 h", active: range.preset === "24h" },
-    ...DASHBOARD_PERIODS.map((periodo) => ({
-      href: `${base}&periodo=${periodo}`,
-      label: DASHBOARD_PERIOD_LABELS[periodo],
-      active: range.preset === periodo,
-    })),
-  ];
+  // "Hoy" es el valor por defecto: su enlace no lleva `periodo`.
+  const opciones = DASHBOARD_PERIODS.map((periodo) => ({
+    href: periodo === "hoy" ? base : `${base}&periodo=${periodo}`,
+    label: DASHBOARD_PERIOD_LABELS[periodo],
+    active: range.preset === periodo,
+  }));
 
   return (
     <div className="flex flex-col gap-2">
@@ -59,9 +67,7 @@ export function PeriodBar({ vista, range }: { vista: ReportView; range: ReportRa
                   className={cx(
                     CHIP_CLASS,
                     "w-full justify-center sm:w-auto sm:justify-start",
-                    opcion.active
-                      ? "border-marca-600 bg-marca-600 text-white"
-                      : "border-borde-control bg-superficie text-tinta hover:bg-marca-50",
+                    opcion.active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
                   )}
                 >
                   {opcion.label}
@@ -76,9 +82,7 @@ export function PeriodBar({ vista, range }: { vista: ReportView; range: ReportRa
             className={cx(
               CHIP_CLASS,
               "cursor-pointer list-none [&::-webkit-details-marker]:hidden",
-              personalizado
-                ? "border-marca-600 bg-marca-600 text-white"
-                : "border-transparent text-marca-700 hover:bg-marca-50",
+              personalizado ? CHIP_ACTIVE_CLASS : "border-transparent text-marca-700 hover:bg-marca-50",
             )}
           >
             <IconCalendar className="size-5 shrink-0" />

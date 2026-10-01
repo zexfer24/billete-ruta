@@ -4,7 +4,7 @@ import { IconChevronRight, IconRoute } from "@/components/icons";
 import { EmptyState, StatusBadge, TableShell, panelButtonClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { departureStatusLabel, departureStatusTone } from "@/lib/labels";
-import { formatCaracasDate, formatCaracasTime24, formatDuration } from "@/lib/time";
+import { formatCaracas, formatCaracasDate, formatCaracasTime24, formatDuration } from "@/lib/time";
 import { agencyMovements } from "@/modules/reports";
 import { countLabel, formatCount } from "../_shared/format";
 import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, MobileCardList, TimeCell } from "../_shared/lists";
@@ -36,24 +36,37 @@ function boardingText(boardingStartedAt: Date, reference: Date | null): string {
 
 type Movement = Awaited<ReturnType<typeof agencyMovements>>[number];
 
+/** ¿El viaje llegó otro día del calendario de Caracas que el de su salida? */
+function arrivesAnotherDay(m: Movement): boolean {
+  return Boolean(m.departedAt && m.arrivedAt && formatCaracasDate(m.departedAt) !== formatCaracasDate(m.arrivedAt));
+}
+
+/** "29/09 21:59": el día y la hora juntos, para un viaje que cruza de día. */
+function dayAndTime(date: Date): string {
+  return `${formatCaracas(date, "dd/MM")} ${formatCaracasTime24(date)}`;
+}
+
 /**
  * Horas del viaje en una línea para la tarjeta del teléfono: "Salió 07:55 ·
- * Llegó 16:36", con la fecha de la llegada solo si cae otro día. Sin salida,
- * la hora del embarque.
+ * Llegó 16:36". Si llega otro día, cada hora lleva su fecha al lado, en orden
+ * ("Salió 29/09 21:59 · Llegó 30/09 10:21"), y la línea de abajo ya no repite
+ * la fecha. Sin salida, la hora del embarque.
  */
 function tripHoursLine(m: Movement): string {
   if (!m.departedAt) {
     return m.boardingStartedAt ? `Embarque desde ${formatCaracasTime24(m.boardingStartedAt)}` : "";
   }
+  if (m.arrivedAt && arrivesAnotherDay(m)) {
+    return `Salió ${dayAndTime(m.departedAt)} · Llegó ${dayAndTime(m.arrivedAt)}`;
+  }
   const parts = [`Salió ${formatCaracasTime24(m.departedAt)}`];
-  const arrival = hourFrom(m.arrivedAt, m.departedAt);
-  if (arrival) parts.push(`Llegó ${arrival.time}${arrival.date ? ` del ${arrival.date}` : ""}`);
+  if (m.arrivedAt) parts.push(`Llegó ${formatCaracasTime24(m.arrivedAt)}`);
   return parts.join(" · ");
 }
 
 /**
  * Tarjeta de un viaje en el teléfono: agencia, ruta, estado, las horas en una
- * línea y la fecha con los pasajeros. Toda la tarjeta es el enlace al detalle,
+ * línea y la fecha (si no va ya junto a las horas) con los pasajeros. Toda la tarjeta es el enlace al detalle,
  * como la fila de la tabla (sin un botón repetido en cada tarjeta); el
  * embarque y la duración están en el panel de detalle.
  */
@@ -86,7 +99,7 @@ function MovementCard({ movement: m, href }: { movement: Movement; href: string 
           <span className="flex flex-col text-[15px]">
             {hours ? <span className="tabular font-medium text-tinta">{hours}</span> : null}
             <span className="tabular text-sm text-tinta-suave">
-              {reference ? `${formatCaracasDate(reference)} · ` : ""}
+              {reference && !arrivesAnotherDay(m) ? `${formatCaracasDate(reference)} · ` : ""}
               {countLabel(m.passengerCount, "pasajero", "pasajeros")}
             </span>
           </span>
@@ -266,7 +279,7 @@ export function MovementsListSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-60" />
-      <TableSkeleton columns={MOVEMENT_COLUMNS} rows={8} mobileDetails={0} mobileSubtitleLines={3} />
+      <TableSkeleton columns={MOVEMENT_COLUMNS} rows={8} mobileDetails={0} mobileSubtitleLines={3} mobileChevron />
     </div>
   );
 }

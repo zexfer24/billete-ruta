@@ -38,7 +38,7 @@ export function Card({ children, className }: CardProps) {
 /** Texto de ayuda debajo de un campo. El `id` se enlaza desde el control con `aria-describedby`. */
 export function FieldHint({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <p id={id} className="text-sm leading-snug text-tinta-suave">
+    <p id={id} className="text-pretty text-sm leading-snug text-tinta-suave">
       {children}
     </p>
   );
@@ -62,7 +62,7 @@ export function FieldError({
     <p
       id={id}
       role={afterSubmit ? "alert" : undefined}
-      className="flex items-start gap-1.5 text-sm font-semibold leading-snug text-peligro"
+      className="flex items-start gap-1.5 text-pretty text-sm font-semibold leading-snug text-peligro"
     >
       <IconAlertCircle className="mt-px size-4 shrink-0" />
       <span>{children}</span>

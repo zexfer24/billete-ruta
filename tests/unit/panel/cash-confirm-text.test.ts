@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amountToCents, cashConfirmText, decimalToCents, formatCents } from "@/app/panel/_forms/cash-confirm-text";
+import { amountToCents, cashConfirmText, centsToInput, decimalToCents, formatCents } from "@/app/panel/_forms/cash-confirm-text";
 
 describe("amountToCents", () => {
   it("acepta coma o punto y hasta dos decimales", () => {
@@ -56,5 +56,32 @@ describe("cashConfirmText", () => {
       "Se convierte a dólares con la tasa que corresponde y se descuenta de lo que falta por cobrar, $ 41,00.",
     );
     expect(texto.excess).toBeNull();
+  });
+
+  const LOCAL = { balanceCents: 897900, rateFromUsd: 36.5, rateLabel: "1 US$ = Bs. 36,50" };
+
+  it("en bolívares con la tasa da el saldo que queda en bolívares", () => {
+    const texto = cashConfirmText({ amountCents: 365000, currency: "VES", balanceCents: 24600, local: LOCAL });
+    expect(texto.outcome).toBe("Con la tasa de 1 US$ = Bs. 36,50, quedará un saldo de Bs. 5.329,00 por cobrar.");
+    expect(texto.excess).toBeNull();
+  });
+
+  it("en bolívares con el saldo exacto avisa que se emite el ticket", () => {
+    const texto = cashConfirmText({ amountCents: 897900, currency: "VES", balanceCents: 24600, local: LOCAL });
+    expect(texto.outcome).toBe("Con la tasa de 1 US$ = Bs. 36,50, la reserva quedará pagada y se emitirá el ticket.");
+    expect(texto.excess).toBeNull();
+  });
+
+  it("en bolívares advierte el excedente en bolívares", () => {
+    const texto = cashConfirmText({ amountCents: 1000000, currency: "VES", balanceCents: 24600, local: LOCAL });
+    expect(texto.excess).toBe("Supera lo que falta por cobrar en Bs. 1.021,00. El excedente también quedará registrado.");
+  });
+});
+
+describe("centsToInput", () => {
+  it("escribe el monto con coma decimal y sin separador de miles", () => {
+    expect(centsToInput(897900)).toBe("8979,00");
+    expect(centsToInput(4105)).toBe("41,05");
+    expect(amountToCents(centsToInput(98400000))).toBe(98400000);
   });
 });

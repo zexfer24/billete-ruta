@@ -14,8 +14,8 @@ export const metadata: Metadata = { title: "Abordaje" };
  * Pantalla de abordaje de una salida: dice qué bus se está embarcando, cuántos
  * pasajeros ya subieron y deja buscar cada ticket. Solo se abre mientras la
  * salida está embarcando o en ruta; en cualquier otro estado explica por qué
- * y lleva de vuelta a la hoja de la salida con el botón del aviso (sin un
- * segundo enlace de volver que lleve al mismo sitio). La columna es estrecha
+ * y qué hacer. El enlace de volver a la hoja va siempre arriba, como en toda
+ * pantalla de detalle (principio 4 de la spec). La columna es estrecha
  * para leerse de un vistazo en la puerta del bus, pero alineada a la izquierda
  * como el resto del panel.
  */
@@ -37,7 +37,7 @@ export default async function AbordajePage({
   return (
     <div className="flex w-full max-w-xl flex-col gap-6">
       <PanelPageHeader
-        back={abierto ? { href: hojaHref, label: "Volver a la salida" } : undefined}
+        back={{ href: hojaHref, label: "Volver a la salida" }}
         title="Abordaje"
         description={
           <>
@@ -78,10 +78,14 @@ export default async function AbordajePage({
                 ? "Esta salida fue cancelada"
                 : "Este viaje ya terminó"
           }
+          // Con el viaje cerrado, "Volver a la salida" de arriba ya lleva a la
+          // hoja: un segundo enlace al mismo sitio solo sobraría.
           action={
-            <Link href={hojaHref} className={panelButtonClass("secundario")}>
-              {salida.status === "PROGRAMADA" ? "Ir a iniciar el embarque" : "Ver la hoja de la salida"}
-            </Link>
+            salida.status === "PROGRAMADA" ? (
+              <Link href={hojaHref} className={panelButtonClass("secundario")}>
+                Ir a iniciar el embarque
+              </Link>
+            ) : undefined
           }
         >
           {salida.status === "PROGRAMADA"

@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { listBookableDepartures, listOriginsAndDestinations } from "@/modules/catalog";
+import { getCurrentDepartureTax, listBookableDepartures, listOriginsAndDestinations } from "@/modules/catalog";
 import { currentPassenger } from "@/modules/auth";
 import { buttonClass, Card, SectionTitle } from "@/components/ui";
 import { IconUser } from "@/components/icons";
-import { DepartureBoard } from "@/components/departure-board";
+import { DepartureBoard, DeparturePriceNote } from "@/components/departure-board";
 import type { DepartureRowData } from "@/components/departure-row";
+import { formatMoney } from "@/lib/decimal";
 import { passengerHref } from "../_publico/links";
 import { PortadaSearch } from "./portada-search";
 import {
@@ -23,10 +24,12 @@ const SALIDAS_EN_PORTADA = 6;
 export default async function PortadaPage() {
   const now = new Date();
 
-  const [{ origins, destinations }, salidas, pasajero] = await Promise.all([
+  const [{ origins, destinations }, salidas, pasajero, tasa] = await Promise.all([
     listOriginsAndDestinations(),
     listBookableDepartures({ to: new Date(now.getTime() + SEIS_HORAS_MS), onlyWithSeats: true }, now),
     currentPassenger(),
+    // Sin tasa cargada la portada no se cae: la nota dice solo "Precio por persona".
+    getCurrentDepartureTax(now).catch(() => null),
   ]);
 
   const loggedIn = pasajero !== null;
@@ -78,6 +81,10 @@ export default async function PortadaPage() {
             <div className="flex flex-col gap-1">
               <SectionTitle id="proximas-salidas">Próximas salidas</SectionTitle>
               <p className="text-sm text-tinta-suave">{PORTADA_UPCOMING_HINT}</p>
+              {/* La tarjeta muestra la tarifa; la tasa del terminal se avisa aquí, como en el asistente. */}
+              {salidasVM.length > 0 ? (
+                <DeparturePriceNote taxLabel={tasa ? formatMoney(tasa, "USD") : null} />
+              ) : null}
             </div>
             <DepartureBoard
               departures={salidasVM}

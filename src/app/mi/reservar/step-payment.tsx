@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, type FormEvent, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
 import { IconAlertCircle } from "@/components/icons";
 import { currencyName, deadlinePhrase, estimatedOnlineDeadline } from "@/components/passenger-copy";
@@ -80,6 +80,17 @@ export function StepPayment({
   const [state, formAction] = useActionState(crearReservaAction, initialCrearState);
   const errorRef = useRef<HTMLDivElement>(null);
   const methodsRef = useRef<HTMLFieldSetElement>(null);
+  // Contador y no booleano: cada toque de "Confirmar reserva" sin forma de pago vuelve a llevar las opciones a la vista.
+  const [intentos, setIntentos] = useState(0);
+  const faltaMetodo = intentos > 0 && !selectedMethod;
+
+  // Después del render en que aparece el aviso, para que también quede a la vista (como en el paso 3).
+  useEffect(() => {
+    if (intentos === 0 || selectedMethod) return;
+    revealAndFocus(methodsRef.current, methodsRef.current?.querySelector<HTMLInputElement>("input[type=radio]") ?? null);
+    // Solo cuando la persona vuelve a tocar "Confirmar reserva".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intentos]);
 
   useEffect(() => {
     if (state.error) {
@@ -121,7 +132,6 @@ export function StepPayment({
             name="paymentMethodId"
             value={m.id}
             checked={checked}
-            required
             onChange={() => onChangePaymentMethod(m.id)}
             className="size-5 shrink-0 cursor-pointer accent-marca-600 focus-visible:outline-none"
           />
@@ -137,16 +147,20 @@ export function StepPayment({
     );
   }
 
+  /**
+   * Sin forma de pago no se envía: el aviso aparece dentro de las opciones y
+   * el efecto de arriba las lleva a la vista. `noValidate` evita el globo
+   * nativo del navegador, que desaparece solo y habla en el idioma del sistema.
+   */
   function validarAntesDeEnviar(event: FormEvent<HTMLFormElement>) {
     if (!selectedMethod) {
       event.preventDefault();
-      // La nota "Elige una forma de pago" ya está en pantalla: basta con llevar las opciones a la vista.
-      revealAndFocus(methodsRef.current, methodsRef.current?.querySelector<HTMLInputElement>("input[type=radio]") ?? null);
+      setIntentos((n) => n + 1);
     }
   }
 
   return (
-    <form action={formAction} onSubmit={validarAntesDeEnviar} className="flex flex-col gap-5">
+    <form action={formAction} onSubmit={validarAntesDeEnviar} noValidate className="flex flex-col gap-5">
       <input type="hidden" name="departureId" value={departure.id} />
       <input type="hidden" name="companions" value={companionsPayload} />
       <input type="hidden" name="policiesAccepted" value={policiesAccepted ? "on" : ""} />
@@ -158,8 +172,24 @@ export function StepPayment({
           Elige otra salida o pregunta en la taquilla de {departure.agencyName}.
         </Alert>
       ) : (
-        <fieldset ref={methodsRef} className="flex flex-col gap-4">
+        <fieldset
+          ref={methodsRef}
+          aria-describedby={faltaMetodo ? "forma-pago-error" : undefined}
+          className="flex flex-col gap-4"
+        >
           <legend className="sr-only">Forma de pago</legend>
+          {faltaMetodo ? (
+            <div id="forma-pago-error">
+              <Alert tone="peligro" title="Falta elegir cómo vas a pagar">
+                Elige una forma de pago para confirmar tu reserva.
+              </Alert>
+            </div>
+          ) : !selectedMethod ? (
+            <p className="flex items-center gap-2 text-sm font-medium text-tinta-suave">
+              <IconAlertCircle aria-hidden="true" className="size-4 shrink-0" />
+              Elige una forma de pago para confirmar.
+            </p>
+          ) : null}
           {enLinea.length > 0 ? (
             <div className="flex flex-col gap-2">
               <p className="font-semibold text-tinta">Pagar en línea</p>
@@ -180,7 +210,7 @@ export function StepPayment({
           ) : null}
           {!physicalAllowed ? (
             <p className="text-sm text-tinta-suave">
-              Esta salida es muy pronto para pagar en la taquilla: paga en línea.
+              Este bus sale en menos de 12 horas, así que ya no puedes pagar en la taquilla. Paga en línea.
             </p>
           ) : null}
         </fieldset>
@@ -271,13 +301,6 @@ export function StepPayment({
             {state.error}
           </Alert>
         </div>
-      ) : null}
-
-      {!selectedMethod && availableMethods.length > 0 ? (
-        <p className="flex items-center gap-2 text-sm font-medium text-tinta-suave">
-          <IconAlertCircle aria-hidden="true" className="size-4 shrink-0" />
-          Elige una forma de pago para confirmar.
-        </p>
       ) : null}
 
       <StickyActions summary={summary}>

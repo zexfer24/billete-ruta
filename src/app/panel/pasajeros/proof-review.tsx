@@ -25,16 +25,34 @@ import { pasajerosUrlFromHidden } from "./urls";
  * reserva, para no duplicar el marcado entre las dos.
  */
 
-/** Qué cubre un comprobante frente al saldo pendiente, en lenguaje llano. */
+/**
+ * Qué cubre un comprobante frente al saldo pendiente, en lenguaje llano.
+ * Mientras nadie lo aprueba va en tono `info` (spec 3.4: "en validación"),
+ * nunca en verde, que quiere decir "pagado, confirmado": una cola llena de
+ * pastillas verdes parecía de pagos ya confirmados. Solo "Paga de más" va en
+ * alerta, porque es lo único que pide atención antes de aprobar.
+ */
 export function coverageBadge(coverage: ProofCoverage): { label: string; tone: StatusTone } {
   switch (coverage.kind) {
     case "ABONO_PARCIAL":
       return { label: "Paga una parte", tone: "info" };
     case "PAGO_COMPLETO":
-      return { label: "Completa el pago", tone: "exito" };
+      return { label: "Completa el pago", tone: "info" };
     case "EXCEDE_SALDO":
       return { label: `Paga de más: ${formatMoney(coverage.excessUsd, "USD")}`, tone: "alerta" };
   }
+}
+
+/**
+ * Cómo queda la reserva si se aprueba el comprobante, en lenguaje llano y con
+ * las mismas palabras en la lista y en el panel lateral: "Queda pagada" o
+ * "Quedan $ 43,71 por pagar". No se muestra el saldo de antes: junto a
+ * "Completa el pago" parecía que el pasajero seguía debiendo ese monto.
+ */
+export function afterApproval(coverage: ProofCoverage): string {
+  return coverage.balanceAfterUsd.greaterThan(0)
+    ? `Quedan ${formatMoney(coverage.balanceAfterUsd, "USD")} por pagar`
+    : "Queda pagada";
 }
 
 /** Lo que pasará al aprobar, con los montos: es la descripción de la confirmación. */
@@ -273,10 +291,8 @@ export function ProofReviewPanel({
             ...(coverage
               ? [
                   {
-                    label: "Saldo después",
-                    value: (
-                      <span className="tabular font-semibold">{formatMoney(coverage.balanceAfterUsd, "USD")}</span>
-                    ),
+                    label: "Si lo apruebas",
+                    value: <span className="tabular font-semibold">{afterApproval(coverage)}</span>,
                   },
                 ]
               : []),

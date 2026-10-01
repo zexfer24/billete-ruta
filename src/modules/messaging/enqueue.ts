@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { TemplateKey } from "./templates";
-import { templateParams } from "./templates";
+import { STORED_TEXT_KEY, renderPreview, templateParams } from "./templates";
 
 export interface EnqueueInput {
   reservationId?: string | null;
@@ -35,7 +35,12 @@ export async function enqueueMessage(
         waitlistEntryId: input.waitlistEntryId ?? null,
         phone: input.phone,
         templateKey: input.templateKey,
-        payload: input.payload as Prisma.InputJsonValue,
+        // Se guarda también el texto exacto, para que la bandeja muestre lo
+        // que se envió aunque la plantilla cambie después.
+        payload: {
+          ...input.payload,
+          [STORED_TEXT_KEY]: renderPreview(input.templateKey, input.payload),
+        } as Prisma.InputJsonValue,
         status: "ENCOLADO",
         scheduledFor: input.scheduledFor ?? new Date(),
       },

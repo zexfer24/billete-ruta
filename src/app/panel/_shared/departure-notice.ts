@@ -39,3 +39,17 @@ export function departureNotice(
   }
   return null;
 }
+
+/** Espacio de no separación (U+00A0). */
+const NBSP = String.fromCharCode(0xa0);
+
+/**
+ * El mismo texto con la hora pegada a sus palabras ("a las 21:00", "en 15
+ * min") mediante espacios de no separación: en una columna angosta se parte
+ * "Debía salir / a las 21:00", nunca "Debía salir a las / 21:00".
+ */
+export function noticeTextNoBreak(text: string): string {
+  return text
+    .replace(/a las (\d{1,2}:\d{2})/g, `a${NBSP}las${NBSP}$1`)
+    .replace(/en (\d+) min/g, `en${NBSP}$1${NBSP}min`);
+}

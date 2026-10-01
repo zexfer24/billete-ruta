@@ -37,7 +37,7 @@ export function ticketsSection(periodPhrase: string): SectionTexts {
 export const FIGURE_LABELS = {
   recaudado: "Recaudado",
   salidas: "Salidas",
-  tickets: "Tickets emitidos",
+  tickets: "Tickets",
 } as const;
 
 export const ACTIVITY_TITLE = "Actividad reciente";

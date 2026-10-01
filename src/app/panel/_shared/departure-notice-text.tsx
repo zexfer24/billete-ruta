@@ -1,5 +1,5 @@
 import { IconClock, IconWarning } from "@/components/icons";
-import type { DepartureNotice } from "./departure-notice";
+import { noticeTextNoBreak, type DepartureNotice } from "./departure-notice";
 
 /**
  * Aviso de tiempo junto a la pastilla de estado de una salida: "Debía salir a
@@ -11,7 +11,7 @@ export function DepartureNoticeText({ aviso }: { aviso: DepartureNotice }) {
   return (
     <p className="tabular flex items-start gap-1.5 text-sm font-semibold text-alerta">
       <Icon className="mt-0.5 size-4 shrink-0" />
-      <span>{aviso.text}</span>
+      <span>{noticeTextNoBreak(aviso.text)}</span>
     </p>
   );
 }

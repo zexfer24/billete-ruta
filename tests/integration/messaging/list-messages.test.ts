@@ -15,7 +15,14 @@ describe("listMessagesForPhone", () => {
       await enqueueMessage(tx, {
         phone: TELEFONO_UNO,
         templateKey: "solicitud_recibida",
-        payload: { nombre: "Ana", pasajeros: "1", serial: "TR-0913-1PAX-AAAA" },
+        payload: {
+          nombre: "Ana",
+          pasajeros: "1",
+          serial: "TR-0913-1PAX-AAAA",
+          ruta: "Caracas → Mérida",
+          salida: "13/09/2026 22:00",
+          limite: "13/09/2026 14:00",
+        },
         scheduledFor: new Date(Date.now() - 60_000),
       });
     });
@@ -26,6 +33,7 @@ describe("listMessagesForPhone", () => {
         payload: {
           nombre: "Ana",
           serial: "TR-0913-1PAX-AAAA",
+          ruta: "Caracas → Mérida",
           salida: "13/09/2026 22:00",
           punto: "Andén 3",
         },
@@ -35,7 +43,14 @@ describe("listMessagesForPhone", () => {
       await enqueueMessage(tx, {
         phone: TELEFONO_DOS,
         templateKey: "solicitud_recibida",
-        payload: { nombre: "Luis", pasajeros: "1", serial: "TR-0913-1PAX-BBBB" },
+        payload: {
+          nombre: "Luis",
+          pasajeros: "1",
+          serial: "TR-0913-1PAX-BBBB",
+          ruta: "Caracas → Mérida",
+          salida: "13/09/2026 22:00",
+          limite: "13/09/2026 14:00",
+        },
       });
     });
 
@@ -74,6 +89,7 @@ describe("listMessagesForPhone", () => {
 
     const [mensaje] = await listMessagesForPhone(TELEFONO_UNO);
     expect(mensaje?.text).toContain("Ana");
-    expect(mensaje?.text).toContain("TR-0001");
+    // En pantalla el código lleva separadores invisibles para no partirse por el guion.
+    expect(mensaje?.text.replaceAll("⁠", "")).toContain("TR-0001");
   });
 });

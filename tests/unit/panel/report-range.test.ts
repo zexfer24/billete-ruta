@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { caracasPeriodRange } from "@/lib/time";
-import { last24h } from "@/modules/reports";
 import { reportViewFromSlug, resolveMovementsRange, resolveRevenueRange } from "@/app/panel/reportes/range";
 
 const NOW = new Date("2026-09-13T02:30:00Z");
@@ -18,10 +17,10 @@ describe("reportViewFromSlug", () => {
 });
 
 describe("resolveRevenueRange", () => {
-  it("sin parámetros, usa las últimas 24 h", () => {
-    const defaults = last24h(NOW);
+  it("sin parámetros, usa «Hoy», igual que el tablero del operador", () => {
+    const defaults = caracasPeriodRange("hoy", NOW);
     const rango = resolveRevenueRange({}, NOW);
-    expect(rango.preset).toBe("24h");
+    expect(rango.preset).toBe("hoy");
     expect(rango.from).toEqual(defaults.from);
     expect(rango.to).toEqual(defaults.to);
   });
@@ -42,10 +41,10 @@ describe("resolveRevenueRange", () => {
     expect(rango.to).toEqual(esperado.to);
   });
 
-  it("periodo=semana no es válido; sin fechas, últimas 24 h", () => {
-    const defaults = last24h(NOW);
+  it("periodo=semana no es válido; sin fechas, «Hoy»", () => {
+    const defaults = caracasPeriodRange("hoy", NOW);
     const rango = resolveRevenueRange({ periodo: "semana" }, NOW);
-    expect(rango.preset).toBe("24h");
+    expect(rango.preset).toBe("hoy");
     expect(rango.from).toEqual(defaults.from);
     expect(rango.to).toEqual(defaults.to);
   });
@@ -60,20 +59,20 @@ describe("resolveRevenueRange", () => {
     expect(rango.to).toEqual(new Date("2026-09-11T22:59:59.999Z"));
   });
 
-  it("si from > to, vuelve a las últimas 24 h", () => {
-    const defaults = last24h(NOW);
+  it("si from > to, vuelve a «Hoy»", () => {
+    const defaults = caracasPeriodRange("hoy", NOW);
     const rango = resolveRevenueRange({ desde: "2026-09-12", hasta: "2026-09-01" }, NOW);
-    expect(rango.preset).toBe("24h");
+    expect(rango.preset).toBe("hoy");
     expect(rango.from).toEqual(defaults.from);
     expect(rango.to).toEqual(defaults.to);
   });
 });
 
 describe("resolveMovementsRange", () => {
-  it("sin parámetros, usa las últimas 24 h", () => {
-    const defaults = last24h(NOW);
+  it("sin parámetros, usa «Hoy», igual que el tablero del operador", () => {
+    const defaults = caracasPeriodRange("hoy", NOW);
     const rango = resolveMovementsRange({}, NOW);
-    expect(rango.preset).toBe("24h");
+    expect(rango.preset).toBe("hoy");
     expect(rango.from).toEqual(defaults.from);
     expect(rango.to).toEqual(defaults.to);
   });
@@ -93,10 +92,10 @@ describe("resolveMovementsRange", () => {
     expect(rango.to).toEqual(new Date("2026-09-12T03:59:59.999Z"));
   });
 
-  it("si from > to, vuelve a las últimas 24 h", () => {
-    const defaults = last24h(NOW);
+  it("si from > to, vuelve a «Hoy»", () => {
+    const defaults = caracasPeriodRange("hoy", NOW);
     const rango = resolveMovementsRange({ desde: "2026-09-12", hasta: "2026-09-01" }, NOW);
-    expect(rango.preset).toBe("24h");
+    expect(rango.preset).toBe("hoy");
     expect(rango.from).toEqual(defaults.from);
     expect(rango.to).toEqual(defaults.to);
   });

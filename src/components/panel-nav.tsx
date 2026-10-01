@@ -139,6 +139,12 @@ interface Theme {
   body: string;
   groupTitle: string;
   link: string;
+  /**
+   * Enlace activo: fondo, color e indicador lateral (spec 6.4), sin cambiar el
+   * peso de la letra. La negrita ensancha el texto y partía en dos líneas
+   * "Recaudación y movimientos", con lo que el menú cambiaba de altura al
+   * entrar a Reportes.
+   */
   linkActive: string;
   indicator: string;
   focus: string;
@@ -152,7 +158,7 @@ const THEMES: Record<PanelNavVariant, Theme> = {
     body: "bg-superficie text-tinta",
     groupTitle: "text-tinta-suave",
     link: "text-tinta hover:bg-marca-50 hover:text-marca-700",
-    linkActive: "bg-marca-50 font-semibold text-marca-700",
+    linkActive: "bg-marca-50 text-marca-700",
     indicator: "bg-marca-600",
     focus: "foco",
     divider: "border-borde",
@@ -163,7 +169,7 @@ const THEMES: Record<PanelNavVariant, Theme> = {
     body: "bg-marca-900 text-white",
     groupTitle: "text-marca-200",
     link: "text-white/85 hover:bg-white/10 hover:text-white",
-    linkActive: "bg-white/10 font-semibold text-white",
+    linkActive: "bg-white/10 text-white",
     indicator: "bg-sol",
     focus: "foco-sobre-marca",
     divider: "border-white/15",

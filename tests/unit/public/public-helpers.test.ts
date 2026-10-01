@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   afterRegisterHref,
   firstParam,
+  isBookingNext,
+  LOGIN_BOOKING_DESCRIPTION,
+  LOGIN_DESCRIPTION,
+  loginDescription,
   loginHref,
   passengerHref,
   registerHref,
@@ -22,6 +26,7 @@ import {
   claimTitle,
   heldSeatsLabel,
 } from "@/app/lista-espera/waitlist-labels";
+import { REGISTER_BOOKING_DESCRIPTION, REGISTER_TEXTS, registerDescription } from "@/app/registro/texts";
 
 describe("enlaces con next", () => {
   it("conserva una ruta interna y la codifica", () => {
@@ -142,5 +147,24 @@ describe("textos de la lista de espera", () => {
     expect(claimRemainingLabel(new Date(now.getTime() + 25 * 60_000), now)).toBe("Te quedan 25 min");
     expect(claimRemainingLabel(new Date(now.getTime() + 130 * 60_000), now)).toBe("Te quedan 2 h 10 min");
     expect(claimRemainingLabel(new Date(now.getTime() + 20_000), now)).toBe("Te queda menos de un minuto");
+  });
+});
+
+describe("motivo de ingresar y registrarse", () => {
+  it("dice por qué se pide la cuenta cuando se llega desde buscar salidas", () => {
+    expect(isBookingNext("/mi/reservar")).toBe(true);
+    expect(isBookingNext("/mi/reservar?origen=Caracas")).toBe(true);
+    expect(loginDescription("/mi/reservar?departureId=abc")).toBe(LOGIN_BOOKING_DESCRIPTION);
+    expect(registerDescription("crear", "/mi/reservar")).toBe(REGISTER_BOOKING_DESCRIPTION);
+  });
+
+  it("usa la frase de siempre con otro next, sin next o con uno externo", () => {
+    expect(isBookingNext("/mi/reservarlo")).toBe(false);
+    expect(isBookingNext("https://evil.com/mi/reservar")).toBe(false);
+    expect(loginDescription(undefined)).toBe(LOGIN_DESCRIPTION);
+    expect(loginDescription("/mi/documentos")).toBe(LOGIN_DESCRIPTION);
+    expect(registerDescription("crear", undefined)).toBe(REGISTER_TEXTS.crear.description);
+    // Activar conserva su frase: explica cómo escribir los datos de la taquilla.
+    expect(registerDescription("activar", "/mi/reservar")).toBe(REGISTER_TEXTS.activar.description);
   });
 });

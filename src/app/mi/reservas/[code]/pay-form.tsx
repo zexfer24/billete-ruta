@@ -194,7 +194,7 @@ function UploadForm({
         minLength={4}
         value={reference}
         onChange={(event) => setReference(event.target.value)}
-        hint="Es el número de la operación que te da tu banco o tu app al pagar."
+        hint="Es el número de la operación que te da tu banco o tu app al pagar. Tiene al menos 4 letras o números."
         required
       />
 

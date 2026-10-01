@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { listDrivers } from "@/modules/agencies";
 import { agencyFleetStatus } from "@/modules/reports";
@@ -22,7 +23,8 @@ import { cx } from "@/components/ui-classes";
 import { okMessage } from "../_dashboard/search-params";
 import { DriverForm } from "../_forms/driver-form";
 import { VehicleForm } from "../_forms/vehicle-form";
-import { describeUnitTrip } from "../_shared/unit-trip";
+import { noticeTextNoBreak } from "../_shared/departure-notice";
+import { activeTripDepartureId, describeUnitTrip } from "../_shared/unit-trip";
 
 export type FleetView = "vehiculos" | "choferes";
 
@@ -52,19 +54,59 @@ function TripSummary({
 }) {
   const viaje = describeUnitTrip(unit, now);
   if (!viaje) return <span className="text-tinta-suave">Sin salidas en los próximos 7 días</span>;
+  // Un viaje en ruta, embarcando o atrasado se resuelve en su hoja: la ruta
+  // enlaza a ella (la fila sigue abriendo la edición de la unidad).
+  const salidaId = activeTripDepartureId(unit);
   return (
     <span className="flex flex-col">
-      <span className="font-semibold text-tinta">{viaje.title}</span>
+      {salidaId ? (
+        <Link
+          href={`/panel/salidas/${salidaId}`}
+          className="foco w-fit rounded-control font-semibold text-marca-700 underline underline-offset-2 hover:text-marca-800"
+        >
+          {viaje.title}
+          <span className="sr-only"> (abrir la salida)</span>
+        </Link>
+      ) : (
+        <span className="font-semibold text-tinta">{viaje.title}</span>
+      )}
       {viaje.late ? (
         // Atrasada: mismo aviso, icono y tono que la lista de salidas y el tablero.
         <span className="tabular flex items-start gap-1.5 text-sm font-semibold text-alerta">
           <IconWarning className="mt-0.5 size-4 shrink-0" />
-          <span>{viaje.detail}</span>
+          <span>{noticeTextNoBreak(viaje.detail)}</span>
         </span>
       ) : (
         <span className="tabular text-sm text-tinta-suave">{viaje.detail}</span>
       )}
     </span>
+  );
+}
+
+/**
+ * Viaje de una unidad en la tarjeta del teléfono: a todo el ancho, debajo de
+ * las cifras, porque en media columna la ruta y el aviso se partían en cuatro
+ * renglones. Va junto al botón de editar, en el pie de la tarjeta.
+ */
+function MobileTripAndAction({
+  unit,
+  now,
+  action,
+}: {
+  unit: { current: UnitDeparture | null; upcoming: UnitDeparture[]; upcomingCount: number };
+  now: Date;
+  action: ReactNode;
+}) {
+  return (
+    <div className="flex w-full flex-col gap-3">
+      <div className="flex flex-col gap-0.5">
+        <p className="text-sm text-tinta-suave">Viaje</p>
+        <div className="tabular text-[15px] font-medium text-tinta">
+          <TripSummary unit={unit} now={now} />
+        </div>
+      </div>
+      {action}
+    </div>
   );
 }
 
@@ -122,18 +164,21 @@ function VehiclesList({ vehicles, selectedId, now }: { vehicles: VehicleStatusRo
               title={<span className="tabular">{v.plate}</span>}
               subtitle={`${v.brand} ${v.model}`}
               status={<StatusBadge label={UNIT_STATE_LABELS[v.state]} tone={unitStateTone(v.state)} />}
-              details={[
-                { label: "Puestos", value: v.seatCount },
-                { label: "Viaje", value: <TripSummary unit={v} now={now} /> },
-              ]}
+              details={[{ label: "Puestos", value: v.seatCount }]}
               action={
-                <Link
-                  href={`/panel/flota?vista=vehiculos&editar=${v.id}`}
-                  scroll={false}
-                  className={panelButtonClass("secundario", "md", "w-full")}
-                >
-                  Editar vehículo
-                </Link>
+                <MobileTripAndAction
+                  unit={v}
+                  now={now}
+                  action={
+                    <Link
+                      href={`/panel/flota?vista=vehiculos&editar=${v.id}`}
+                      scroll={false}
+                      className={panelButtonClass("secundario", "md", "w-full")}
+                    >
+                      Editar vehículo
+                    </Link>
+                  }
+                />
               }
             />
           ))}
@@ -216,18 +261,21 @@ function DriversList({ drivers, selectedId, now }: { drivers: DriverStatusRow[];
               title={c.fullName}
               subtitle={<span className="tabular">Cédula {c.idNumber}</span>}
               status={<StatusBadge label={UNIT_STATE_LABELS[c.state]} tone={unitStateTone(c.state)} />}
-              details={[
-                { label: "Viajes completados", value: c.arrivalCount },
-                { label: "Viaje", value: <TripSummary unit={c} now={now} /> },
-              ]}
+              details={[{ label: "Viajes completados", value: c.arrivalCount }]}
               action={
-                <Link
-                  href={`/panel/flota?vista=choferes&editar=${c.id}`}
-                  scroll={false}
-                  className={panelButtonClass("secundario", "md", "w-full")}
-                >
-                  Editar chofer
-                </Link>
+                <MobileTripAndAction
+                  unit={c}
+                  now={now}
+                  action={
+                    <Link
+                      href={`/panel/flota?vista=choferes&editar=${c.id}`}
+                      scroll={false}
+                      className={panelButtonClass("secundario", "md", "w-full")}
+                    >
+                      Editar chofer
+                    </Link>
+                  }
+                />
               }
             />
           ))}

@@ -5,7 +5,7 @@ import { firstParam, loginHref, PUBLIC_TEXT_LINK_CLASS, registerHref } from "../
 import { PublicCard, PublicShell } from "../_publico/public-shell";
 import { parseRegisterMode } from "./mode";
 import { RegisterForm } from "./register-form";
-import { COUNTER_NOTICE_TEXT, REGISTER_TEXTS } from "./texts";
+import { activateHref, REGISTER_TEXTS, registerDescription } from "./texts";
 
 interface RegistroSearchParams {
   next?: string | string[];
@@ -36,11 +36,14 @@ export default async function RegistroPage({
 
   return (
     <PublicShell>
-      <PublicCard title={textos.title} description={textos.description}>
+      <PublicCard title={textos.title} description={registerDescription(mode, next)}>
         <RegisterForm next={next} mode={mode} />
       </PublicCard>
 
-      {/* Dos líneas al pie en los dos modos: el enlace a ingresar y la salida al otro caso. */}
+      {/*
+        Dos líneas al pie en los dos modos, simétricas: el enlace a ingresar y
+        el enlace al otro caso (crear o activar), conservando `next`.
+      */}
       <div className="flex flex-col gap-2 text-center">
         <p className="text-base text-tinta-suave">
           {mode === "activar" ? "¿Ya elegiste tu contraseña?" : "¿Ya tienes cuenta?"}{" "}
@@ -56,7 +59,12 @@ export default async function RegistroPage({
             </Link>
           </p>
         ) : (
-          <p className="text-sm leading-relaxed text-tinta-suave">{COUNTER_NOTICE_TEXT}</p>
+          <p className="text-base text-tinta-suave">
+            ¿Te registraron en la taquilla?{" "}
+            <Link href={activateHref(next)} className={PUBLIC_TEXT_LINK_CLASS}>
+              Activa tu cuenta
+            </Link>
+          </p>
         )}
       </div>
     </PublicShell>

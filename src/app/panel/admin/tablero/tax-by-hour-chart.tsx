@@ -21,6 +21,13 @@ export function chartDescription(severalDays: boolean): string {
 /** Texto de la leyenda bajo las barras, compartido con la silueta. */
 export const CHART_CAPTION = "Horas del día, de 00 a 23. La barra más oscura es la hora con más cobro.";
 
+/**
+ * Celda del rótulo de una hora bajo su barra, compartida con la silueta. Con
+ * `flex justify-center` el número queda centrado sobre la barra aunque sea más
+ * ancho que la celda (pantallas angostas).
+ */
+export const HOUR_LABEL_CELL_CLASS = "tabular flex min-w-0 flex-1 justify-center text-sm text-tinta-tenue";
+
 /** Texto del desplegable con las cifras exactas, compartido con la silueta. */
 export const CHART_DETAIL_LABEL = "Ver el monto de cada hora";
 
@@ -109,16 +116,14 @@ export function TaxByHourChart({
                   );
                 })}
               </div>
+              {/* Cada rótulo va centrado bajo su barra aunque sea más ancho que
+                  ella (en el teléfono la celda mide unos 10 px y "18", unos 17):
+                  `text-center` alinea a la izquierda un texto que desborda su
+                  caja, `justify-center` de flexbox lo reparte a los dos lados. */}
               <div aria-hidden="true" className="mt-1.5 flex gap-px sm:gap-1">
                 {hours.map((h, index) => (
-                  <span
-                    key={h.hour}
-                    className={cx(
-                      "tabular min-w-0 flex-1 text-center text-sm text-tinta-tenue",
-                      index % 3 !== 0 && "max-md:invisible",
-                    )}
-                  >
-                    {h.hour.slice(0, 2)}
+                  <span key={h.hour} className={cx(HOUR_LABEL_CELL_CLASS, index % 3 !== 0 && "max-md:invisible")}>
+                    <span className="whitespace-nowrap">{h.hour.slice(0, 2)}</span>
                   </span>
                 ))}
               </div>

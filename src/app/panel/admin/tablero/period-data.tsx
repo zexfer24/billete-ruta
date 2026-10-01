@@ -31,7 +31,13 @@ import {
   type AdminRange,
 } from "../_shared/period";
 import { SectionHeadingSkeleton, StatCardSkeleton, TableSkeleton } from "../_shared/skeletons";
-import { CHART_CAPTION, CHART_DETAIL_LABEL, TaxByHourChart, chartDescription } from "./tax-by-hour-chart";
+import {
+  CHART_CAPTION,
+  CHART_DETAIL_LABEL,
+  HOUR_LABEL_CELL_CLASS,
+  TaxByHourChart,
+  chartDescription,
+} from "./tax-by-hour-chart";
 
 /** Cuántas filas trae cada lista del tablero. Las cifras usan el total real. */
 const LIST_LIMIT = 100;
@@ -76,6 +82,13 @@ const NEW_ACCOUNTS_DESCRIPTION =
   "Pasajeros que crearon su cuenta, o a quienes se la crearon en taquilla, en este periodo.";
 const CHART_TITLE = "Tasa cobrada por hora del día";
 
+/**
+ * Título de la sección del periodo, con las pestañas a su derecha, como
+ * "Resumen de hoy" en el tablero de la agencia. Fijo, para que la silueta de
+ * carga lo pinte real aunque no conozca `?periodo=`.
+ */
+export const PERIOD_TITLE = { text: "Resumen del periodo", id: "periodo-titulo" } as const;
+
 /** Cabecera de columna que queda fija arriba cuando la lista se desplaza. */
 const STICKY_TH = cx(PANEL_TH_CLASS, "sticky top-0 z-10 bg-superficie shadow-1");
 
@@ -107,14 +120,14 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
           value={formatCount(trips.total)}
           detail="Viajes que llegaron a su destino."
           icon={<IconBus />}
-          tone="marca"
+          tone="neutro"
         />
         <StatCard
           label="Usuarios nuevos"
           value={formatCount(newAccounts.total)}
           detail="Cuentas de pasajero creadas."
           icon={<IconUsers />}
-          tone="marca"
+          tone="neutro"
         />
       </div>
 
@@ -358,14 +371,8 @@ export function PeriodDataSkeleton({ severalDays = false }: { severalDays?: bool
                     mismas clases y el mismo rotulado cada tres horas en el teléfono. */}
                 <div className="mt-1.5 flex gap-px sm:gap-1">
                   {Array.from({ length: 24 }, (_, index) => (
-                    <span
-                      key={index}
-                      className={cx(
-                        "tabular min-w-0 flex-1 text-center text-sm text-tinta-tenue",
-                        index % 3 !== 0 && "max-md:invisible",
-                      )}
-                    >
-                      {String(index).padStart(2, "0")}
+                    <span key={index} className={cx(HOUR_LABEL_CELL_CLASS, index % 3 !== 0 && "max-md:invisible")}>
+                      <span className="whitespace-nowrap">{String(index).padStart(2, "0")}</span>
                     </span>
                   ))}
                 </div>

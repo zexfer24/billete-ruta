@@ -1,6 +1,7 @@
 import { Skeleton, SkeletonText } from "@/components/skeleton";
 import { PANEL_TD_CLASS, PANEL_TH_CLASS, panelButtonClass } from "@/components/panel-ui";
 import { IconChevronRight } from "@/components/icons";
+import { TABS_CONTAINER_CLASS, tabItemLayoutClass } from "./tab-layout";
 
 /**
  * Siluetas de carga de "Pasajeros y pagos" (spec 6.5), compartidas por
@@ -16,11 +17,11 @@ import { IconChevronRight } from "@/components/icons";
 export function TabsSkeleton({ labels }: { labels: readonly string[] }) {
   return (
     <div aria-hidden="true">
-      <div className="flex w-full flex-wrap gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1">
-        {labels.map((label) => (
+      <div className={TABS_CONTAINER_CLASS}>
+        {labels.map((label, index) => (
           <span
             key={label}
-            className="inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold text-tinta-suave sm:grow-0 sm:justify-start"
+            className={`inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold text-tinta-suave sm:grow-0 sm:justify-start ${tabItemLayoutClass(index, labels.length)}`}
           >
             {label}
             <Skeleton className="h-5 w-7 rounded-pastilla" />
@@ -51,25 +52,27 @@ function FiltersSkeleton() {
   );
 }
 
-/** Qué lista reproduce la silueta: la cola de comprobantes o las reservas. */
-export type ListSkeletonVariant = "comprobantes" | "reservas";
+/**
+ * Qué lista reproduce la silueta: la cola de comprobantes, las reservas o
+ * `neutra`, para cuando no se sabe qué vista va a abrir (el `loading.tsx` de
+ * la ruta: desde el tablero se llega con `?vista=pagadas` o `?vista=por-cobrar`,
+ * y sin vista la página abre "Por revisar" o "Todas"). La neutra solo pinta
+ * reales los textos que comparten las dos tablas.
+ */
+export type ListSkeletonVariant = "comprobantes" | "reservas" | "neutra";
 
-/** Cabeceras reales de cada tabla, las mismas de `passenger-list.tsx`. */
-const TABLE_HEADERS: Record<ListSkeletonVariant, readonly string[]> = {
+/** Cabeceras de cada tabla, las mismas de `passenger-list.tsx`; `null` es una barra. */
+const TABLE_HEADERS: Record<ListSkeletonVariant, readonly (string | null)[]> = {
   comprobantes: ["Pasajero", "Viaje", "Monto enviado", "Qué cubre"],
   reservas: ["Pasajero", "Viaje", "Pagado", "Estado"],
+  neutra: ["Pasajero", "Viaje", null, null],
 };
 
-/** Texto real del enlace de cada fila de la tabla. */
-const ROW_LINK_LABELS: Record<ListSkeletonVariant, string> = {
+/** Texto real del enlace de cada fila y de cada tarjeta; `null` es una barra. */
+const ROW_LINK_LABELS: Record<ListSkeletonVariant, string | null> = {
   comprobantes: "Revisar",
   reservas: "Ver detalle",
-};
-
-/** Etiquetas de los dos datos de la tarjeta del teléfono. */
-const CARD_LABELS: Record<ListSkeletonVariant, readonly [string, string]> = {
-  comprobantes: ["Monto enviado", "Si lo apruebas"],
-  reservas: ["Pagado", "Falta"],
+  neutra: null,
 };
 
 /** Barras de texto de 14 px apiladas como líneas de una celda (20 px por línea). */
@@ -85,34 +88,35 @@ function CellLines({ widths }: { widths: readonly string[] }) {
 
 /** Tercera y cuarta columna de una fila de tabla, según la vista. */
 function RowStatusCells({ variant }: { variant: ListSkeletonVariant }) {
-  if (variant === "comprobantes") {
+  if (variant === "reservas") {
     return (
       <>
         <td className={PANEL_TD_CLASS}>
-          {/* Monto, equivalente, «Referencia» y el código, que baja de línea. */}
-          <CellLines widths={["w-24", "w-28", "w-20", "w-32"]} />
+          <div className="flex min-w-44 flex-col gap-1.5">
+            <CellLines widths={["w-32"]} />
+            <Skeleton className="h-2 w-full rounded-pastilla" />
+          </div>
         </td>
         <td className={PANEL_TD_CLASS}>
           <div className="flex flex-col gap-1.5">
-            <Skeleton className="h-7 w-32 rounded-pastilla" />
-            <CellLines widths={["w-40"]} />
+            <Skeleton className="h-7 w-24 rounded-pastilla" />
+            <CellLines widths={["w-28"]} />
           </div>
         </td>
       </>
     );
   }
+  // Comprobantes (y la neutra, que toma su forma): monto, equivalente y la
+  // referencia en una línea; luego la pastilla de qué cubre y una línea.
   return (
     <>
       <td className={PANEL_TD_CLASS}>
-        <div className="flex min-w-44 flex-col gap-1.5">
-          <CellLines widths={["w-32"]} />
-          <Skeleton className="h-2 w-full rounded-pastilla" />
-        </div>
+        <CellLines widths={["w-24", "w-28", "w-32"]} />
       </td>
       <td className={PANEL_TD_CLASS}>
         <div className="flex flex-col gap-1.5">
-          <Skeleton className="h-7 w-24 rounded-pastilla" />
-          <CellLines widths={["w-28"]} />
+          <Skeleton className="h-7 w-32 rounded-pastilla" />
+          <CellLines widths={["w-40"]} />
         </div>
       </td>
     </>
@@ -122,20 +126,21 @@ function RowStatusCells({ variant }: { variant: ListSkeletonVariant }) {
 /**
  * Silueta de la lista: con `filters`, la tarjeta de filtros; luego la línea
  * de conteo y la tabla (desde `xl`) o tarjetas, como `ResponsiveTable`. Las
- * cabeceras de la tabla y las etiquetas de las tarjetas son textos fijos y se
- * pintan reales; las filas y las tarjetas tienen las mismas líneas que las de
- * verdad, para que la lista no salte al llegar los datos.
+ * cabeceras de la tabla y la acción de las tarjetas son textos fijos y se
+ * pintan reales (salvo en la variante `neutra`); las filas y las tarjetas
+ * tienen las mismas líneas que las de verdad, para que la lista no salte al
+ * llegar los datos.
  */
 export function ListSkeleton({
   rows = 8,
   filters = false,
-  variant = "comprobantes",
+  variant = "neutra",
 }: {
   rows?: number;
   filters?: boolean;
   variant?: ListSkeletonVariant;
 }) {
-  const [labelA, labelB] = CARD_LABELS[variant];
+  const linkLabel = ROW_LINK_LABELS[variant];
   return (
     <div aria-hidden="true" className="flex flex-col gap-6">
       {filters ? <FiltersSkeleton /> : null}
@@ -146,9 +151,9 @@ export function ListSkeleton({
           <table className="w-full text-left">
             <thead className="border-b border-borde">
               <tr>
-                {TABLE_HEADERS[variant].map((header) => (
-                  <th key={header} scope="col" className={PANEL_TH_CLASS}>
-                    {header}
+                {TABLE_HEADERS[variant].map((header, i) => (
+                  <th key={header ?? `barra-${i}`} scope="col" className={PANEL_TH_CLASS}>
+                    {header ?? <Skeleton className="h-4 w-24 rounded-pastilla" />}
                   </th>
                 ))}
                 <th scope="col" className={PANEL_TH_CLASS} />
@@ -165,7 +170,11 @@ export function ListSkeleton({
                   </td>
                   <RowStatusCells variant={variant} />
                   <td className={`${PANEL_TD_CLASS} text-right`}>
-                    <span className={panelButtonClass("secundario")}>{ROW_LINK_LABELS[variant]}</span>
+                    {linkLabel ? (
+                      <span className={panelButtonClass("secundario")}>{linkLabel}</span>
+                    ) : (
+                      <Skeleton className="ml-auto h-11 w-28" />
+                    )}
                   </td>
                 </tr>
               ))}
@@ -174,9 +183,9 @@ export function ListSkeleton({
         </div>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:hidden">
-          {Array.from({ length: 4 }, (_, i) =>
-            variant === "comprobantes" ? <ProofCardSkeleton key={i} /> : <ReservationCardSkeleton key={i} labels={[labelA, labelB]} />,
-          )}
+          {Array.from({ length: 4 }, (_, i) => (
+            <CardSkeleton key={i} actionLabel={linkLabel} />
+          ))}
         </div>
       </div>
     </div>
@@ -184,47 +193,31 @@ export function ListSkeleton({
 }
 
 /**
- * Tarjeta de comprobante del teléfono (`ProofQueueCard`): toda la tarjeta es
- * el enlace, con la flecha a la derecha; nombre, pastillas, cédula y código,
- * viaje, monto enviado y qué pasa si se aprueba.
+ * Tarjeta del teléfono y la tableta (`LinkCard` de `passenger-list.tsx`), la
+ * misma en las cinco pestañas: nombre, pastilla, cédula y código, viaje, el
+ * dato de dinero y, al pie, la acción con su flecha (en barra si no se sabe
+ * qué vista abre).
  */
-function ProofCardSkeleton() {
+function CardSkeleton({ actionLabel }: { actionLabel: string | null }) {
   return (
-    <div className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex h-6 items-center">
-          <Skeleton className="h-5 w-2/3 rounded-pastilla" />
-        </span>
-        <Skeleton className="h-7 w-36 rounded-pastilla" />
-        <CellLines widths={["w-3/4", "w-4/5"]} />
-        <span className="flex h-6 items-center">
-          <Skeleton className="h-4 w-1/2 rounded-pastilla" />
-        </span>
-        <CellLines widths={["w-2/3"]} />
-      </div>
-      <IconChevronRight className="size-5 shrink-0 text-marca-700" />
-    </div>
-  );
-}
-
-/** Tarjeta de reserva del teléfono (`MobileCard`): datos, los dos montos y «Ver detalle». */
-function ReservationCardSkeleton({ labels }: { labels: readonly [string, string] }) {
-  return (
-    <div className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
-      <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1">
+      <span className="flex h-6 items-center">
         <Skeleton className="h-5 w-2/3 rounded-pastilla" />
-        <Skeleton className="my-1.5 h-7 w-36 rounded-pastilla" />
-        <CellLines widths={["w-24", "w-36", "w-3/4"]} />
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-        {labels.map((label) => (
-          <div key={label} className="flex min-w-0 flex-col gap-1">
-            <span className="text-sm text-tinta-suave">{label}</span>
-            <Skeleton className="h-5 w-24 rounded-pastilla" />
-          </div>
-        ))}
-      </div>
-      <span className={panelButtonClass("secundario", "md", "w-full")}>Ver detalle</span>
+      </span>
+      <Skeleton className="h-7 w-36 rounded-pastilla" />
+      <span className="flex h-5 items-center">
+        <Skeleton className="h-4 w-3/4 rounded-pastilla" />
+      </span>
+      <span className="flex h-5 items-center">
+        <Skeleton className="h-4 w-4/5 rounded-pastilla" />
+      </span>
+      <span className="flex h-6 items-center">
+        <Skeleton className="h-4 w-1/2 rounded-pastilla" />
+      </span>
+      <span className="mt-1 inline-flex min-h-6 items-center gap-1 text-[15px] font-semibold text-marca-700">
+        {actionLabel ?? <Skeleton className="h-4 w-20 rounded-pastilla" />}
+        <IconChevronRight className="size-5 shrink-0" />
+      </span>
     </div>
   );
 }

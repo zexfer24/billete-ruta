@@ -19,8 +19,8 @@ import { ACTIVITY_TITLE, QUICK_REGISTER_SECTION } from "@/app/panel/_dashboard/s
  * textos fijos se pintan reales: los dos botones de la cabecera, las pestañas
  * del periodo, los títulos de sección y las dos secciones plegadas. Lo que
  * depende de la persona o del periodo elegido (el nombre de la agencia, el
- * saludo, "Resumen de…", la pestaña activa y la descripción de "Tickets
- * nuevos") va en barra: este archivo no recibe los `searchParams` y marcaría
+ * saludo, "Resumen de…", la pestaña activa y las descripciones de "Tickets
+ * nuevos" y "Actividad reciente") va en barra: este archivo no recibe los `searchParams` y marcaría
  * mal el periodo al entrar directo a `/panel?periodo=7d`.
  */
 export default function TableroLoading() {
@@ -80,7 +80,8 @@ export default function TableroLoading() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <CollapsibleSkeleton title={ACTIVITY_TITLE} description="Ventas, cobros y embarques de tu agencia." />
+        {/* Sin descripción: la real depende del periodo ("…de hoy"), que este archivo no conoce. */}
+        <CollapsibleSkeleton title={ACTIVITY_TITLE} />
         <CollapsibleSkeleton title={QUICK_REGISTER_SECTION.title} description={QUICK_REGISTER_SECTION.description} />
       </div>
     </SkeletonScreen>

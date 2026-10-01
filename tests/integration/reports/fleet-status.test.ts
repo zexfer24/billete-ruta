@@ -160,6 +160,58 @@ describe("agencyFleetStatus", () => {
     }
   });
 
+  it("la consulta y unitStateOf usan el mismo corte de 12 horas para las salidas sin cerrar", async () => {
+    const agencia = await createAgencyFixture();
+    const ruta = await createRouteFixture(agencia.id);
+    const now = new Date();
+    const haceHoras = (horas: number) => new Date(now.getTime() - horas * 3_600_000);
+
+    /** Un chofer y un vehículo propios con una sola salida en el estado y la hora dados. */
+    async function unidadCon(status: "PROGRAMADA" | "MANIFIESTO_CERRADO" | "EN_RUTA", departsAt: Date) {
+      const chofer = await createDriverFixture(agencia.id);
+      const vehiculo = await createVehicleFixture(agencia.id);
+      const salida = await prisma.departure.create({
+        data: {
+          routeId: ruta.id,
+          vehicleId: vehiculo.id,
+          driverId: chofer.id,
+          departsAt,
+          capacity: 20,
+          status,
+        },
+      });
+      return { chofer, vehiculo, salida };
+    }
+
+    const cerradaVieja = await unidadCon("MANIFIESTO_CERRADO", haceHoras(13));
+    const programadaVieja = await unidadCon("PROGRAMADA", haceHoras(13));
+    const enRutaVieja = await unidadCon("EN_RUTA", haceHoras(20));
+    const cerradaReciente = await unidadCon("MANIFIESTO_CERRADO", haceHoras(11));
+
+    const estado = await agencyFleetStatus(agencia.id, now);
+    const chofer = (id: string) => estado.drivers.find((d) => d.id === id);
+    const vehiculo = (id: string) => estado.vehicles.find((v) => v.id === id);
+
+    // Más de 12 horas sin cerrar: ya no comprometen a la unidad.
+    for (const unidad of [cerradaVieja, programadaVieja]) {
+      expect(chofer(unidad.chofer.id)?.state).toBe("DISPONIBLE");
+      expect(chofer(unidad.chofer.id)?.current).toBeNull();
+      expect(vehiculo(unidad.vehiculo.id)?.state).toBe("DISPONIBLE");
+      expect(vehiculo(unidad.vehiculo.id)?.current).toBeNull();
+    }
+
+    // EN_RUTA no tiene límite: un viaje que salió de verdad sigue en curso.
+    expect(chofer(enRutaVieja.chofer.id)?.state).toBe("EN_RUTA");
+    expect(chofer(enRutaVieja.chofer.id)?.current?.id).toBe(enRutaVieja.salida.id);
+    expect(vehiculo(enRutaVieja.vehiculo.id)?.state).toBe("EN_RUTA");
+
+    // Dentro de las 12 horas la consulta sí la trae: el corte no es más
+    // estrecho en la base de datos que en la función pura.
+    expect(chofer(cerradaReciente.chofer.id)?.state).toBe("EMBARCANDO");
+    expect(chofer(cerradaReciente.chofer.id)?.current?.id).toBe(cerradaReciente.salida.id);
+    expect(vehiculo(cerradaReciente.vehiculo.id)?.state).toBe("EMBARCANDO");
+  });
+
   it("no incluye choferes ni vehículos de otra agencia", async () => {
     const { agencia, choferOtro, vehiculoOtro } = await escenario();
 

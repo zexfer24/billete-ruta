@@ -37,7 +37,7 @@ const TEMPLATE_NAMES = new Map<string, string>([
   ["pago_rechazado", "Pago rechazado"],
   ["recordatorio_24h", "Recordatorio del viaje, un día antes"],
   ["reconfirmacion_pago_sitio", "Aviso para pagar en la taquilla"],
-  ["confirmacion_2h", "Confirmación de asistencia, dos horas antes"],
+  ["confirmacion_2h", "Recordatorio del viaje, dos horas antes"],
   ["reserva_liberada", "Puesto liberado"],
   ["cupo_disponible_lista_espera", "Puesto disponible para la lista de espera"],
 ]);

@@ -6,6 +6,8 @@ export interface RecentTicketRow {
   code: string;
   holderName: string;
   routeName: string;
+  origin: string;
+  destination: string;
   departsAt: Date;
   issuedAt: Date;
   salesChannel: SalesChannel;
@@ -46,6 +48,8 @@ export async function listRecentTickets(
       code: t.reservation.code,
       holderName: t.reservation.account.fullName,
       routeName: t.reservation.departure.route.name,
+      origin: t.reservation.departure.route.origin,
+      destination: t.reservation.departure.route.destination,
       departsAt: t.reservation.departure.departsAt,
       issuedAt: t.issuedAt,
       salesChannel: t.reservation.salesChannel,

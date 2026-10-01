@@ -11,8 +11,12 @@ const TAB_LABELS = ["Por revisar", "Por cobrar", "Pagadas", "Anuladas", "Todas"]
  * título, los dos botones y las cinco pestañas con sus textos reales (el
  * contador en barra), y la lista. Ninguna pestaña va marcada y no se pintan
  * los filtros: sin vista en la URL, la página abre "Por revisar" (que no
- * tiene filtros) o "Todas" según haya comprobantes esperando, y este archivo
- * no puede saberlo. Los filtros llegan junto con la lista.
+ * tiene filtros) o "Todas" según haya comprobantes esperando, y desde el
+ * tablero se llega con `?vista=pagadas` o `?vista=por-cobrar`: este archivo no
+ * puede saberlo. Por eso la lista va en su variante neutra: solo pinta reales
+ * las cabeceras que comparten las dos tablas ("Pasajero" y "Viaje") y deja en
+ * barra las otras y la acción de cada fila, para no mostrar un momento botones
+ * "Revisar" que luego son "Ver detalle". Los filtros llegan junto con la lista.
  */
 export default function PasajerosLoading() {
   return (
@@ -41,7 +45,7 @@ export default function PasajerosLoading() {
         <Skeleton className="h-5 w-96 max-w-full rounded-pastilla" />
       </div>
 
-      <ListSkeleton />
+      <ListSkeleton variant="neutra" />
     </SkeletonScreen>
   );
 }

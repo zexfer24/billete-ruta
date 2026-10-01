@@ -1,17 +1,17 @@
 import type { ReactNode } from "react";
-import { IconEye } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
-import { buttonClass } from "@/components/ui";
-import { fieldControlClass } from "@/components/ui-classes";
 
 /**
  * Formularios públicos quietos, para los `loading.tsx` de ingresar y
  * registro (spec 6.5): esas pantallas no consultan datos, así que su
  * silueta es el formulario real sin controles. Las etiquetas, las ayudas y
- * el texto del botón se pintan reales y los campos vacíos con su borde, con
- * las mismas medidas que `Field`, `PasswordField` y el botón `lg`; así la
- * pantalla no cambia de forma cuando llega. Van dentro de una zona
- * `aria-hidden`: el lector de pantalla oye el aviso de carga.
+ * el texto del botón se pintan reales, con las mismas medidas que `Field`,
+ * `PasswordField` y el botón `lg`, para que la pantalla no cambie de forma
+ * cuando llega. Los campos y el botón, en cambio, llevan el brillo de
+ * `.esqueleto` y no el borde de control ni el relleno morado: así nadie toca
+ * un campo que todavía no abre el teclado ni pulsa un botón que todavía no
+ * responde creyendo que la app falló. Van dentro de una zona `aria-hidden`:
+ * el lector de pantalla oye el aviso de carga.
  */
 export function FieldPreview({
   label,
@@ -20,18 +20,15 @@ export function FieldPreview({
 }: {
   label: string;
   hint?: string;
-  /** Muestra el botón "Mostrar" dentro del campo, como `PasswordField`. */
+  /** Reserva el lugar del botón "Mostrar" dentro del campo, como `PasswordField`. */
   password?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-sm font-semibold text-tinta">{label}</span>
-      <div className={fieldControlClass(false, "relative block bg-superficie")}>
+      <div className="esqueleto block min-h-12 rounded-control">
         {password ? (
-          <span className="absolute right-0.5 top-1/2 inline-flex min-h-11 -translate-y-1/2 items-center gap-1.5 px-3 text-sm font-semibold text-marca-700">
-            <IconEye aria-hidden="true" className="size-5" />
-            Mostrar
-          </span>
+          <span className="absolute right-3 top-1/2 h-4 w-20 -translate-y-1/2 rounded-pastilla bg-marca-100" />
         ) : null}
       </div>
       {hint ? <p className="text-sm leading-snug text-tinta-suave">{hint}</p> : null}
@@ -39,9 +36,17 @@ export function FieldPreview({
   );
 }
 
-/** Botón principal quieto, con su texto real. */
+/**
+ * Botón principal quieto (56 px), con su texto real sobre el brillo de carga
+ * en vez del relleno morado: se lee qué hará, pero no parece listo para
+ * tocarse.
+ */
 export function PrimaryButtonPreview({ children }: { children: ReactNode }) {
-  return <span className={buttonClass("primario", "w-full", "lg")}>{children}</span>;
+  return (
+    <span className="esqueleto flex min-h-14 w-full items-center justify-center rounded-pastilla px-6 text-lg font-semibold text-marca-700">
+      {children}
+    </span>
+  );
 }
 
 /**

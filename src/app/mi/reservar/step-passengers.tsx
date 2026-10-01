@@ -105,7 +105,7 @@ export function StepPassengers({
   }
 
   // Después del render que muestra los errores: el primer campo pendiente y su
-  // mensaje quedan en el centro de la zona visible, por encima de las barras fijas.
+  // mensaje quedan en el centro de la zona visible, por encima de la barra fija.
   useEffect(() => {
     if (intentos === 0) return;
     const primero = pendientes[0];

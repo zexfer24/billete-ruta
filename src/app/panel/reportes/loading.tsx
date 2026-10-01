@@ -11,7 +11,7 @@ export default function ReportesLoading() {
         description="Cuánto cobró tu agencia en cada ruta y qué viajes hicieron tus choferes."
       />
       <SkeletonTabs labels={["Recaudación", "Viajes de choferes"]} />
-      <SkeletonPeriodChips labels={["Últimas 24 h", "Hoy", "7 días", "30 días"]} extra="Otras fechas" />
+      <SkeletonPeriodChips labels={["Hoy", "7 días", "30 días"]} extra="Otras fechas" />
       <ReportDataSkeleton vista="recaudacion" />
     </SkeletonScreen>
   );

@@ -8,7 +8,7 @@ import { REGISTER_GROUPS, REGISTER_HINTS } from "./texts";
 /**
  * Silueta del registro (spec 6.5 y 2.2). La pantalla no consulta datos, así
  * que se pinta el formulario real quieto: el logo, los tres grupos con sus
- * etiquetas y ayudas y los campos vacíos. El título, la frase, el texto del
+ * etiquetas y ayudas, y los campos con el brillo de carga. El título, la frase, el texto del
  * botón y el pie dependen de `?modo=` ("Crea tu cuenta" o "Activa tu
  * cuenta"), que un `loading.tsx` no recibe: van como barras, para que la
  * carga nunca diga una cosa y la pantalla otra. Solo el lector de pantalla

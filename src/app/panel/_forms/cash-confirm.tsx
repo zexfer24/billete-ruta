@@ -6,19 +6,47 @@ import { IconInfo, IconWarning } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { cx, panelButtonClass } from "@/components/ui-classes";
 import { amountToCents, cashConfirmText, decimalToCents, type CashConfirmText, type CashCurrency } from "./cash-confirm-text";
+import type { CashEquivalent } from "./cash-equivalents";
 
 const MONEDAS: readonly CashCurrency[] = ["USD", "VES", "COP", "USDT"];
 const MONTO_INVALIDO = "Escribe un monto mayor que cero, con hasta dos decimales. Por ejemplo, 12,50.";
 
-/** Cierra el diálogo cuando el envío del formulario termina. */
-function CloseWhenDone({ onDone }: { onDone: () => void }) {
+/**
+ * Sigue el envío del formulario: guarda en `pendingRef` si el cobro está en
+ * camino (los manejadores del `<dialog>` lo leen para no cerrarse a mitad del
+ * envío) y cierra el diálogo cuando termina. Mismo patrón que `ConfirmDialog`.
+ */
+function CloseWhenDone({ onDone, pendingRef }: { onDone: () => void; pendingRef: { current: boolean } }) {
   const { pending } = useFormStatus();
   const wasPending = useRef(false);
   useEffect(() => {
+    pendingRef.current = pending;
     if (wasPending.current && !pending) onDone();
     wasPending.current = pending;
-  }, [pending, onDone]);
+  }, [pending, onDone, pendingRef]);
   return null;
+}
+
+/**
+ * "Revisar el monto": mientras el cobro se envía queda con `aria-disabled` y
+ * no hace nada (sin el `disabled` nativo, para que el foco no se pierda): el
+ * cobro ya está en camino y cerrar el diálogo haría creer que no se hizo.
+ */
+function ReviewButton({ buttonRef, onClose }: { buttonRef: { current: HTMLButtonElement | null }; onClose: () => void }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-disabled={pending || undefined}
+      onClick={() => {
+        if (!pending) onClose();
+      }}
+      className={panelButtonClass("secundario", "lg", "w-full sm:w-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-60")}
+    >
+      Revisar el monto
+    </button>
+  );
 }
 
 /**
@@ -31,7 +59,18 @@ function CloseWhenDone({ onDone }: { onDone: () => void }) {
  * cual. No es `ConfirmDialog` porque ese arma su propio formulario y no ve lo
  * que el operador escribió.
  */
-export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: string; holderName?: string }) {
+export function CashConfirmSubmit({
+  balanceUsd,
+  holderName,
+  equivalents = [],
+}: {
+  balanceUsd: string;
+  holderName?: string;
+  /** Lo que falta en cada moneda y su tasa, para dar el saldo resultante también en bolívares o pesos. */
+  equivalents?: readonly CashEquivalent[];
+}) {
+  const { pending } = useFormStatus();
+  const pendingRef = useRef(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -59,7 +98,8 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
   const open = useCallback(() => {
     const form = triggerRef.current?.form;
     const dialog = dialogRef.current;
-    if (!form || !dialog || dialog.open) return;
+    // Con un cobro en camino no se vuelve a abrir: se confirmaría dos veces.
+    if (!form || !dialog || dialog.open || pendingRef.current) return;
 
     const montoInput = form.elements.namedItem("amount");
     const monedaSelect = form.elements.namedItem("currency");
@@ -70,12 +110,18 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
     if (!form.reportValidity() || cents === null) return;
 
     const moneda = MONEDAS.find((m) => m === monedaSelect.value) ?? "USD";
+    const equivalente = equivalents.find((e) => e.currency === moneda);
+    const tasa = equivalente?.rateFromUsd ? Number(equivalente.rateFromUsd) : null;
     setTexto(
       cashConfirmText({
         amountCents: cents,
         currency: moneda,
         balanceCents: decimalToCents(balanceUsd) ?? 0,
         holderName,
+        local:
+          equivalente && equivalente.balanceCents !== null && tasa !== null && equivalente.rateLabel
+            ? { balanceCents: equivalente.balanceCents, rateFromUsd: tasa, rateLabel: equivalente.rateLabel }
+            : undefined,
       }),
     );
     previousOverflow.current = document.body.style.overflow;
@@ -83,7 +129,7 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
     setAbierto(true);
     dialog.showModal();
     cancelRef.current?.focus();
-  }, [balanceUsd, holderName]);
+  }, [balanceUsd, holderName, equivalents]);
 
   // Enter en un campo del formulario abre la confirmación en vez de enviar.
   useEffect(() => {
@@ -106,7 +152,8 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
         type="button"
         onClick={open}
         aria-haspopup="dialog"
-        className={panelButtonClass("exito", "lg", "w-full sm:w-fit")}
+        aria-disabled={pending || undefined}
+        className={panelButtonClass("exito", "lg", "w-full sm:w-fit aria-disabled:cursor-not-allowed aria-disabled:opacity-60")}
       >
         Registrar cobro
       </button>
@@ -121,8 +168,16 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
           setAbierto(false);
           restoreScroll();
         }}
+        // Mientras el cobro se envía, ni Escape ni un clic en el fondo cierran
+        // el diálogo: el operador podría creer que no se cobró y repetirlo.
+        onCancel={(event) => {
+          if (pendingRef.current) event.preventDefault();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && pendingRef.current) event.preventDefault();
+        }}
         onClick={(event) => {
-          if (event.target === event.currentTarget) close();
+          if (event.target === event.currentTarget && !pendingRef.current) close();
         }}
         className="m-auto w-[calc(100%-2rem)] max-w-md rounded-tarjeta border border-borde bg-superficie p-0 text-tinta shadow-2 backdrop:bg-tinta/50"
       >
@@ -163,14 +218,7 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
           ) : null}
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              ref={cancelRef}
-              type="button"
-              onClick={close}
-              className={panelButtonClass("secundario", "lg", "w-full sm:w-auto")}
-            >
-              Revisar el monto
-            </button>
+            <ReviewButton buttonRef={cancelRef} onClose={close} />
             <SubmitButton
               disabled={!abierto}
               pendingLabel="Registrando cobro…"
@@ -178,7 +226,7 @@ export function CashConfirmSubmit({ balanceUsd, holderName }: { balanceUsd: stri
             >
               Sí, registrar cobro
             </SubmitButton>
-            <CloseWhenDone onDone={close} />
+            <CloseWhenDone onDone={close} pendingRef={pendingRef} />
           </div>
         </div>
       </dialog>

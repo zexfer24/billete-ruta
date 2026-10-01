@@ -55,26 +55,63 @@ export interface CashConfirmText {
 }
 
 /**
+ * Lo que falta por cobrar en bolívares o pesos y la tasa con la que el
+ * servidor convertirá el cobro (ver `cash-equivalents.ts`).
+ */
+export interface LocalBalance {
+  /** Saldo en la moneda elegida, en centavos, redondeado hacia arriba. */
+  balanceCents: number;
+  /** Bolívares o pesos por dólar. Solo para mostrar: la cuenta que vale es la del servidor. */
+  rateFromUsd: number;
+  /** Tasa legible: "1 US$ = Bs. 36,50". */
+  rateLabel: string;
+}
+
+/**
  * Frases del diálogo de confirmación. En dólares o USDT (uno a uno) se da el
- * saldo que queda; en bolívares o pesos la conversión la hace el servidor con
- * la tasa que corresponde, así que no se inventa una cifra.
+ * saldo que queda en dólares. En bolívares o pesos, con `local`, se da en esa
+ * moneda y con la tasa que se usará, igual que el servidor: el monto se pasa
+ * a dólares con redondeo al céntimo y se compara con el saldo en dólares. Sin
+ * `local` no se inventa una cifra.
  */
 export function cashConfirmText(input: {
   amountCents: number;
   currency: CashCurrency;
   balanceCents: number;
   holderName?: string;
+  local?: LocalBalance;
 }): CashConfirmText {
-  const { amountCents, currency, balanceCents, holderName } = input;
+  const { amountCents, currency, balanceCents, holderName, local } = input;
   const lead = `Registrarás ${formatCents(amountCents, currency)} en efectivo${
     holderName ? ` a nombre de ${holderName}` : ""
   }. Un cobro registrado no se puede borrar.`;
 
   if (currency === "VES" || currency === "COP") {
+    if (!local || !(local.rateFromUsd > 0)) {
+      return {
+        lead,
+        outcome: `Se convierte a dólares con la tasa que corresponde y se descuenta de lo que falta por cobrar, ${formatCents(balanceCents, "USD")}.`,
+        excess: null,
+      };
+    }
+    const enDolares = Math.round(amountCents / local.rateFromUsd);
+    const conTasa = `Con la tasa de ${local.rateLabel}`;
+    if (enDolares < balanceCents) {
+      const resta = Math.max(1, local.balanceCents - amountCents);
+      return {
+        lead,
+        outcome: `${conTasa}, quedará un saldo de ${formatCents(resta, currency)} por cobrar.`,
+        excess: null,
+      };
+    }
+    const sobra = amountCents - local.balanceCents;
     return {
       lead,
-      outcome: `Se convierte a dólares con la tasa que corresponde y se descuenta de lo que falta por cobrar, ${formatCents(balanceCents, "USD")}.`,
-      excess: null,
+      outcome: `${conTasa}, la reserva quedará pagada y se emitirá el ticket.`,
+      excess:
+        enDolares > balanceCents && sobra > 0
+          ? `Supera lo que falta por cobrar en ${formatCents(sobra, currency)}. El excedente también quedará registrado.`
+          : null,
     };
   }
 
@@ -90,4 +127,9 @@ export function cashConfirmText(input: {
         ? `Supera lo que falta por cobrar en ${formatCents(-resta, "USD")}. El excedente también quedará registrado.`
         : null,
   };
+}
+
+/** Centavos como texto para el campo del monto: "8979,00" (sin separador de miles). */
+export function centsToInput(cents: number): string {
+  return `${Math.floor(cents / 100)},${(cents % 100).toString().padStart(2, "0")}`;
 }

@@ -150,6 +150,8 @@ export function TicketCard({
     const review = reviewUsd !== undefined && Number(reviewUsd) > 0 ? formatUsdString(reviewUsd) : null;
     // Todo lo enviado está en revisión y aún no hay nada aprobado: la barra vacía no aporta nada.
     const onlyInReview = review !== null && paid <= 0;
+    // Sin ningún pago ni nada en revisión, una barra vacía con "Pagaste $ 0,00" no dice qué falta: va el total.
+    const nothingPaid = review === null && paid <= 0 && data.status !== "PAGADA";
 
     return (
       <article
@@ -212,6 +214,10 @@ export function TicketCard({
               {inactive ? null : onlyInReview ? (
                 <p className="tabular text-sm font-medium text-tinta">
                   Enviaste {review}: lo estamos revisando
+                </p>
+              ) : nothingPaid ? (
+                <p className="tabular text-base text-tinta">
+                  Total a pagar: <strong className="font-bold">{formatUsdString(data.totalUsd)}</strong>
                 </p>
               ) : (
                 <ProgressBar

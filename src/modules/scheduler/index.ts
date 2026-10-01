@@ -8,3 +8,5 @@ export {
   dueForRelease12h,
   nextRetryDelayMinutes,
 } from "./windows";
+export { cashCounterDeadline, paymentDeadline } from "./deadlines";
+export type { DeadlineInput, PaymentDeadline } from "./deadlines";

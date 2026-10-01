@@ -3,7 +3,7 @@
  * foco, sin que el navegador vuelva a desplazar la página por su cuenta.
  *
  * `focus()` solo no basta: si el elemento ya está dentro de la ventana, el
- * navegador no mueve nada aunque lo tapen las barras fijas de abajo. Con el
+ * navegador no mueve nada aunque lo tape la barra fija de abajo. Con el
  * relleno de desplazamiento de `globals.css` (activado por
  * `data-acciones-fijas`), `scrollIntoView` centra el bloque en la zona que
  * sí se ve. Si el bloque es más alto que esa zona, se alinea por arriba para

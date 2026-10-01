@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
-import { departureWhenLabel } from "@/components/departure-format";
 import { IconChevronDown, IconClock, IconShield, IconStore, IconTicket, type IconProps } from "@/components/icons";
 import { StickyActions } from "@/components/sticky-actions";
 import { estimatedOnlineDeadline, whenPhrase } from "@/components/passenger-copy";
@@ -57,8 +56,8 @@ function condicionesDe(departure: DepartureVM, now: Date, cashOffered: boolean):
  * Paso 3 del asistente: la salida elegida, las condiciones en cuatro frases
  * cortas con icono, el texto completo plegado y la casilla de aceptación.
  * "Continuar" no se deshabilita: si falta marcar la casilla, lo dice, lleva
- * la casilla y el aviso al centro de la zona visible (por encima de las
- * barras fijas) y le da el foco. Cada toque vuelve a hacerlo.
+ * la casilla y el aviso al centro de la zona visible (por encima de la
+ * barra fija) y le da el foco. Cada toque vuelve a hacerlo.
  */
 export function StepPolicies({
   departure,
@@ -100,9 +99,9 @@ export function StepPolicies({
       <ChosenDeparture departure={departure} now={now} />
 
       {salePronto ? (
+        // La hora ya va en la tarjeta de la salida, justo arriba: el aviso dice solo qué hacer.
         <Alert tone="alerta" role="none" title="Este bus sale pronto">
-          {departureWhenLabel(new Date(departure.departsAtIso), now)}. Si pagas en línea, sube la captura
-          cuanto antes y llega al terminal con tiempo.
+          Paga en línea y sube la captura cuanto antes; llega al terminal con tiempo.
         </Alert>
       ) : null}
 

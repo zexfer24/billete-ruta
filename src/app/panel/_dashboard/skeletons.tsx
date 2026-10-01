@@ -1,10 +1,16 @@
 import { Skeleton, SkeletonCircle } from "@/components/skeleton";
-import { PANEL_TH_CLASS, panelButtonClass } from "@/components/panel-ui";
+import { PANEL_TD_CLASS, PANEL_TH_CLASS, panelButtonClass } from "@/components/panel-ui";
 import type { ReactNode } from "react";
 import { IconBus, IconCash, IconChevronDown, IconChevronRight, IconTicket } from "@/components/icons";
 import { FIGURE_LABELS, FLEET_SECTION, TRIPS_TODAY_SECTION, ticketsSection, type SectionTexts } from "./section-texts";
 import { FIGURE_CELL_CLASS, FIGURE_WIDE_CELL_CLASS, FIGURES_GRID_CLASS } from "./figure-classes";
-import { FLEET_DRIVER_ROW_CLASS, FLEET_LIST_CLASS, TICKET_ROW_CLASS, TICKETS_LIST_CLASS } from "./list-classes";
+import {
+  FLEET_DRIVER_ROW_CLASS,
+  FLEET_LIST_CLASS,
+  TICKET_ROW_CLASS,
+  TICKETS_LIST_CLASS,
+  mobileRowClass,
+} from "./list-classes";
 import {
   DASHBOARD_SECTION_ACTION_CLASS,
   DASHBOARD_SECTION_HEADER_CLASS,
@@ -19,26 +25,84 @@ import {
  * y botones de sección) se pintan reales; los datos, como barras.
  */
 
-/** Fondo y borde de cada aviso de la silueta: el primero alerta, el segundo información. */
-const ATTENTION_TONES = ["border-alerta/30 bg-alerta-suave", "border-info/30 bg-info-suave"] as const;
+/**
+ * Una línea de texto de la silueta con el alto de la línea real: la barra va
+ * centrada dentro de un renglón de `lineClass` de alto. `className` agrega
+ * clases al renglón (por ejemplo `sm:hidden` para una línea que solo existe en
+ * el teléfono, donde el texto real se parte en más renglones).
+ */
+function LineBar({ lineClass, width, className = "" }: { lineClass: string; width: string; className?: string }) {
+  return (
+    <span className={`flex items-center ${lineClass} ${className}`}>
+      <Skeleton className={`h-4 rounded-pastilla ${width}`} />
+    </span>
+  );
+}
 
-/** Silueta de "Lo que necesita tu atención": dos avisos con su botón, con sus fondos suaves reales. */
+/** Renglón del título de un `Alert` (16 px en negrita, `leading-snug`: 22 px). */
+const ALERT_TITLE_LINE = "h-[22px]";
+/** Renglón del cuerpo de un `Alert` (16 px, `leading-relaxed`: 26 px). */
+const ALERT_BODY_LINE = "h-[26px]";
+
+/**
+ * Los dos avisos de la silueta con el contenido de siempre: primero el de
+ * comprobantes (alerta), cuyo título se parte en dos renglones en el teléfono
+ * y su texto en tres (dos desde `sm`); luego el de una salida (información),
+ * con el título en un renglón y el texto en dos (uno desde `sm`). Cada
+ * renglón lleva su ancho de barra y, si solo existe en el teléfono, `sm:hidden`.
+ */
+const ATTENTION_CARDS: ReadonlyArray<{
+  tone: string;
+  title: ReadonlyArray<{ width: string; className?: string }>;
+  body: ReadonlyArray<{ width: string; className?: string }>;
+}> = [
+  {
+    tone: "border-alerta/30 bg-alerta-suave",
+    title: [{ width: "w-full sm:w-1/2" }, { width: "w-1/3", className: "sm:hidden" }],
+    body: [{ width: "w-full" }, { width: "w-full sm:w-2/3" }, { width: "w-1/2", className: "sm:hidden" }],
+  },
+  {
+    tone: "border-info/30 bg-info-suave",
+    title: [{ width: "w-4/5 sm:w-1/3" }],
+    body: [{ width: "w-full sm:w-3/5" }, { width: "w-2/3", className: "sm:hidden" }],
+  },
+];
+
+/**
+ * Silueta de "Lo que necesita tu atención" con la geometría de `Alert`: el
+ * icono de 24 px, el título y el texto con el alto de sus renglones reales y
+ * el botón de 44 px (debajo, con la sangría del icono, en el teléfono; a la
+ * derecha desde `sm`). Así el bloque mide lo mismo que el real y lo que está
+ * debajo no baja de golpe al llegar los datos.
+ */
 export function AttentionSkeleton() {
   return (
     <div aria-hidden="true" className="flex flex-col gap-3">
-      {ATTENTION_TONES.map((tone) => (
+      {ATTENTION_CARDS.map((card) => (
         <div
-          key={tone}
-          className={`flex flex-col gap-3 rounded-control border px-4 py-3.5 sm:flex-row sm:items-center ${tone}`}
+          key={card.tone}
+          className={`flex flex-col gap-3 rounded-control border px-4 py-3.5 sm:flex-row sm:items-start ${card.tone}`}
         >
-          <div className="flex flex-1 items-start gap-3">
-            <SkeletonCircle className="size-6" />
-            <div className="flex flex-1 flex-col gap-2">
-              <Skeleton className="h-5 w-2/3 rounded-pastilla" />
-              <Skeleton className="h-4 w-1/2 rounded-pastilla" />
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <span className="shrink-0 pt-px">
+              <SkeletonCircle className="size-6" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex flex-col">
+                {card.title.map((line, i) => (
+                  <LineBar key={i} lineClass={ALERT_TITLE_LINE} width={line.width} className={line.className} />
+                ))}
+              </div>
+              <div className="flex flex-col">
+                {card.body.map((line, i) => (
+                  <LineBar key={i} lineClass={ALERT_BODY_LINE} width={line.width} className={line.className} />
+                ))}
+              </div>
             </div>
           </div>
-          <Skeleton className="ml-9 h-11 w-44 sm:ml-0" />
+          <div className="flex shrink-0 pl-9 sm:pl-0">
+            <Skeleton className="h-11 w-44" />
+          </div>
         </div>
       ))}
     </div>
@@ -95,11 +159,24 @@ export function FiguresSkeleton() {
   );
 }
 
-/** Silueta de la línea en vivo de reservas por cobrar (`PendingNowLine`), con su alto de 44 px. */
+/**
+ * Silueta de la línea en vivo de reservas por cobrar (`PendingNowLine`): en el
+ * teléfono la frase de 15 px ocupa tres renglones de 22 px y "Ver por cobrar"
+ * (44 px) baja a su propia línea; desde `sm`, la frase y el enlace van en una
+ * sola línea de 44 px.
+ */
 export function PendingNowSkeleton() {
   return (
-    <div aria-hidden="true" className="flex min-h-11 items-center">
-      <Skeleton className="h-4 w-96 max-w-full rounded-pastilla" />
+    <div aria-hidden="true" className="flex flex-wrap items-center gap-x-2">
+      <div className="flex w-full flex-col sm:hidden">
+        <LineBar lineClass="h-[22px]" width="w-full" />
+        <LineBar lineClass="h-[22px]" width="w-full" />
+        <LineBar lineClass="h-[22px]" width="w-1/2" />
+      </div>
+      <span className="hidden min-h-11 items-center sm:flex">
+        <Skeleton className="h-4 w-96 max-w-full rounded-pastilla" />
+      </span>
+      <Skeleton className="h-11 w-36" />
     </div>
   );
 }
@@ -175,7 +252,8 @@ function ticketsSectionTexts(periodPhrase: string | undefined): Partial<SectionT
 }
 
 /**
- * Silueta de "Tickets nuevos" (`TicketsBlock`): cinco filas con la misma
+ * Silueta de "Tickets nuevos" (`TicketsBlock`): cinco filas (tres en el
+ * teléfono, como el bloque real) con la misma
  * geometría que las reales (el código en un renglón de 44 px, el pasajero con
  * la ruta y la hora de emisión) y sin pastilla, que en las reales solo
  * aparece en las ventas de taquilla. Sin `periodPhrase` (el `loading.tsx` no
@@ -188,7 +266,7 @@ export function TicketsSkeleton({ periodPhrase }: { periodPhrase?: string }) {
       <div className="p-5">
         <div className={TICKETS_LIST_CLASS}>
           {Array.from({ length: 5 }, (_, i) => (
-            <div key={i} className={TICKET_ROW_CLASS}>
+            <div key={i} className={`${TICKET_ROW_CLASS} ${mobileRowClass(i)}`}>
               <span className="flex min-h-11 items-center">
                 <Skeleton className="h-5 w-40 rounded-pastilla" />
               </span>
@@ -256,7 +334,8 @@ const TRIPS_COLUMNS = [
  * debajo de `xl`, cuatro tarjetas (dos columnas desde `md`) con hora y ruta,
  * pastilla (bajo la ruta en el teléfono), bus y chofer, la frase de
  * movimientos y la flecha; desde `xl`, la
- * tabla con sus cabeceras reales y seis filas.
+ * tabla con sus cabeceras reales y cuatro filas de 88 px (el enlace de la
+ * ruta de 44 px y la línea del bus), como las reales.
  */
 export function TripsTodaySkeleton() {
   return (
@@ -275,14 +354,17 @@ export function TripsTodaySkeleton() {
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: 6 }, (_, row) => (
+              {Array.from({ length: 4 }, (_, row) => (
                 <tr key={row} className="border-b border-borde last:border-0">
                   {TRIPS_COLUMNS.map((column) => (
-                    <td key={column.label} className="px-4 py-3 align-middle">
+                    <td key={column.label} className={PANEL_TD_CLASS}>
                       {column.label === "Ruta, bus y chofer" ? (
-                        <div className="flex flex-col gap-2 py-1">
-                          <Skeleton className="h-5 w-48 rounded-pastilla" />
-                          <Skeleton className="h-4 w-36 rounded-pastilla" />
+                        // El enlace de la ruta (44 px) y la línea del bus y el chofer (20 px).
+                        <div className="flex flex-col">
+                          <span className="flex min-h-11 items-center">
+                            <Skeleton className="h-5 w-48 rounded-pastilla" />
+                          </span>
+                          <TextLineBar className="w-36" />
                         </div>
                       ) : column.label === "Estado" ? (
                         <Skeleton className="h-7 w-24 rounded-pastilla" />
@@ -303,7 +385,7 @@ export function TripsTodaySkeleton() {
               className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
             >
               {/* Como la tarjeta real: en el teléfono la pastilla baja bajo la
-                  ruta y la frase de movimientos ocupa dos renglones. */}
+                  ruta; luego el bus y el chofer, y la frase de movimientos. */}
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-col items-start gap-1 sm:flex-row sm:justify-between sm:gap-2">
                   <span className="flex h-6 w-2/3 items-center">
@@ -314,9 +396,6 @@ export function TripsTodaySkeleton() {
                 <TextLineBar className="w-1/2" />
                 <span className="flex h-6 items-center">
                   <Skeleton className="h-4 w-4/5 rounded-pastilla" />
-                </span>
-                <span className="flex h-6 items-center sm:hidden">
-                  <Skeleton className="h-4 w-1/3 rounded-pastilla" />
                 </span>
               </div>
               <IconChevronRight className="size-5 shrink-0 text-marca-700" />
@@ -329,16 +408,26 @@ export function TripsTodaySkeleton() {
 }
 
 /**
- * Silueta de una sección plegable cerrada (`Collapsible`): el título, la
- * descripción y "Ver" reales, con la misma altura, sin botón que enfocar.
+ * Silueta de una sección plegable cerrada (`Collapsible`): el título y "Ver"
+ * reales, con la misma altura, sin botón que enfocar. La descripción va real
+ * si es fija; sin ella (la de "Actividad reciente" depende del periodo, que
+ * el `loading.tsx` no conoce), en barra de dos renglones en el teléfono y uno
+ * desde `sm`, para no pintar un texto que la página cambia al llegar.
  */
-export function CollapsibleSkeleton({ title, description }: { title: string; description: string }) {
+export function CollapsibleSkeleton({ title, description }: { title: string; description?: string }) {
   return (
     <div aria-hidden="true" className="rounded-tarjeta border border-borde bg-superficie shadow-1">
       <div className="flex min-h-16 items-center justify-between gap-4 px-5 py-4">
         <div className="min-w-0">
           <p className="text-lg font-semibold text-tinta">{title}</p>
-          <p className="mt-0.5 text-sm leading-snug text-tinta-suave">{description}</p>
+          {description ? (
+            <p className="mt-0.5 text-sm leading-snug text-tinta-suave">{description}</p>
+          ) : (
+            <span className="mt-0.5 flex flex-col">
+              <LineBar lineClass="h-[19px]" width="w-64 max-w-full" />
+              <LineBar lineClass="h-[19px]" width="w-32" className="sm:hidden" />
+            </span>
+          )}
         </div>
         <span className="inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-marca-700">
           Ver
