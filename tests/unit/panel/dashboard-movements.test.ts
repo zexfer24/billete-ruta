@@ -6,10 +6,10 @@ import { porCobrarNowText } from "@/app/panel/_dashboard/text";
 const at = (hhmm: string) => new Date(`2026-09-30T${hhmm}:00Z`);
 
 describe("tripMovementText", () => {
-  it("sin hitos dice una sola vez que todavía no embarca", () => {
+  it("sin hitos no dice nada: la pastilla de estado ya lo dice", () => {
     expect(
       tripMovementText({ status: "PROGRAMADA", boardingStartedAt: null, departedAt: null, arrivedAt: null }),
-    ).toBe("Todavía no embarca");
+    ).toBeNull();
   });
 
   it("una salida cancelada sin hitos dice que no salió", () => {

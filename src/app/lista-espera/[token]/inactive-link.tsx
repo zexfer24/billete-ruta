@@ -7,21 +7,21 @@ import { PublicCard, PublicShell } from "../../_publico/public-shell";
 
 /**
  * Enlace que ya no sirve: venció, ya se usó para reservar o nunca existió. El
- * sistema no distingue esos casos al leer el enlace, así que el texto cubre
- * los dos más comunes y ofrece qué hacer en cada uno.
+ * sistema no distingue esos casos al leer el enlace, así que una sola frase
+ * cubre los dos más comunes y dice qué hacer en cada uno, antes de los dos
+ * botones.
  */
 export function InactiveLink({ loggedIn }: { loggedIn: boolean }) {
   return (
     <PublicShell>
       <PublicCard
         eyebrow={<StateIcon tone="alerta" icon={<IconClock />} />}
-        title="Este enlace ya no está activo"
-        description="El tiempo para reservar este puesto terminó, o ya usaste el enlace para reservarlo."
+        // "ya no está activo" va unido con espacios que no se cortan (U+00A0):
+        // el título se parte en "Este enlace / ya no está activo", nunca
+        // separando la negación.
+        title={"Este enlace ya no está activo"}
+        description="El tiempo para reservar este puesto terminó, o ya usaste el enlace. Si ya reservaste, lo encuentras en tus viajes; si no, busca otra salida."
       >
-        <p className="text-base leading-relaxed text-tinta">
-          Si ya reservaste, lo encuentras en tus viajes. Si no, busca otra salida: todavía puede
-          haber puestos.
-        </p>
         <OtherDepartureActions loggedIn={loggedIn} showTrips />
       </PublicCard>
     </PublicShell>

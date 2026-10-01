@@ -218,10 +218,10 @@ export function DeparturePriceNote({ taxLabel, className }: { taxLabel: string |
 
 /**
  * Silueta de carga del tablero: mismas tarjetas con el bloque de la agencia a
- * la izquierda. En el teléfono miden unos 144 px: el destino, el origen, la
- * agencia en su propia línea y la fila de los puestos con la pastilla de
- * cuándo sale, que baja a otra línea. Desde `sm` el origen y la agencia van
- * juntos y la tarjeta mide 96 px. `hideSeats` imita la tarjeta sin puestos
+ * la izquierda. En el teléfono miden unos 116 px: el destino, el origen, la
+ * agencia en su propia línea y los puestos. Imitan el caso común, sin la
+ * pastilla "Sale en N min", que solo aparece si falta menos de una hora.
+ * Desde `sm` el origen y la agencia van juntos y la tarjeta mide 96 px. `hideSeats` imita la tarjeta sin puestos
  * (`DepartureCard` con `hideSeats`, en la lista de espera). Va dentro del
  * `SkeletonScreen` de cada pantalla.
  */
@@ -232,7 +232,7 @@ export function DepartureBoardSkeleton({ rows = 4, hideSeats = false }: { rows?:
         <div
           key={index}
           className={`flex items-stretch overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1 sm:min-h-24 ${
-            hideSeats ? "min-h-24" : "min-h-36"
+            hideSeats ? "min-h-24" : "min-h-28"
           }`}
         >
           <Skeleton className="w-20 shrink-0 rounded-none" />
@@ -243,10 +243,7 @@ export function DepartureBoardSkeleton({ rows = 4, hideSeats = false }: { rows?:
               {/* La agencia, en su propia línea solo en el teléfono. */}
               <Skeleton className="h-4 w-2/5 rounded-pastilla sm:hidden" />
               {hideSeats ? null : (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <Skeleton className="h-4 w-24 rounded-pastilla sm:w-28" />
-                  <Skeleton className="h-6 w-28 rounded-pastilla sm:hidden" />
-                </div>
+                <Skeleton className="h-4 w-24 rounded-pastilla sm:w-28" />
               )}
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">

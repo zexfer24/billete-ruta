@@ -1,21 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { balanceUsd, listBookableDepartures } from "@/modules/catalog";
+import { balanceUsd, getCurrentDepartureTax, listBookableDepartures } from "@/modules/catalog";
 import { requirePassenger } from "@/modules/auth";
 import { listNoticesForAccount } from "@/modules/notices";
 import { prisma } from "@/lib/prisma";
-import { formatUsdString } from "@/lib/decimal";
+import { formatMoney, formatUsdString } from "@/lib/decimal";
 import { passengerStatusLabel } from "@/lib/labels";
 import { buttonClass, Card, SectionTitle } from "@/components/ui";
 import { NoticeCard } from "@/components/notice-card";
 import { TicketCard, type TicketCardData } from "@/components/ticket-card";
-import { DepartureBoard } from "@/components/departure-board";
+import { DepartureBoard, DeparturePriceNote } from "@/components/departure-board";
 import type { DepartureRowData } from "@/components/departure-row";
 import { Isotipo } from "@/components/logo";
 import { IconCamera, IconChevronRight, IconInfo, IconMapPin } from "@/components/icons";
 import {
   heroDepartsSoon,
   heroDepartureTitle,
+  homeNotices,
   pickHeroReservation,
   reservationActionLabel,
   ticketDeadline,
@@ -42,19 +43,6 @@ const SEIS_HORAS_MS = 6 * 60 * 60 * 1000;
  */
 const LIMITE_PROXIMAS = 12;
 
-/**
- * Avisos que el héroe ya dice: el plazo de pago (va en el ticket), el pago en
- * revisión (la pastilla del ticket) y el ticket listo (el botón). Si su
- * reserva va en grande o como enlace debajo, no se repiten en "Avisos". Un
- * comprobante rechazado sí se muestra: dice algo que el ticket no dice.
- */
-const AVISOS_QUE_DICE_EL_HEROE = new Set([
-  "RESERVA_POR_LIBERAR",
-  "RECONFIRMAR_PAGO_EN_SITIO",
-  "COMPROBANTE_EN_VALIDACION",
-  "TICKET_LISTO",
-]);
-
 /** "Revisando tu pago" → "revisando tu pago", para ir detrás de dos puntos. */
 function lowerFirst(text: string): string {
   return text.length > 0 ? text[0]!.toLowerCase() + text.slice(1) : text;
@@ -72,11 +60,11 @@ const ENLACE_SECCION =
  *
  * El héroe lo elige `pickHeroReservation`: la reserva de la salida más
  * cercana, que nunca cede su lugar si sale dentro de 3 horas. Si sale más
- * tarde y no pide nada (pago en revisión o pagada), sube otra reserva con un
- * plazo de pago que vence pronto (el mismo que el ticket muestra, así el
- * título "Paga para no perder tu puesto" siempre lleva la hora debajo) o una
- * pagada en parte que sale dentro de 24 horas; el viaje más cercano queda
- * como enlace debajo.
+ * tarde, sube otra reserva cuyo plazo de pago vence antes que el suyo (el
+ * mismo que el ticket muestra, así el título "Paga para no perder tu puesto"
+ * siempre lleva la hora debajo); si nada apura y el viaje más cercano no pide
+ * nada, sube una pagada en parte que sale dentro de 24 horas. El viaje más
+ * cercano queda como enlace debajo.
  */
 export default async function MiInicioPage() {
   const pasajero = await requirePassenger();
@@ -88,7 +76,7 @@ export default async function MiInicioPage() {
     departure: { departsAt: { gt: now } },
   };
 
-  const [avisos, proximas, totalProximas, salidasDeViajes, salidas] = await Promise.all([
+  const [avisos, proximas, totalProximas, salidasDeViajes, salidas, tasa] = await Promise.all([
     listNoticesForAccount(pasajero.id),
     prisma.reservation.findMany({
       where: dondeProximas,
@@ -100,6 +88,8 @@ export default async function MiInicioPage() {
     // Un viaje es una salida: dos reservas de la misma salida son un solo viaje.
     prisma.reservation.findMany({ where: dondeProximas, distinct: ["departureId"], select: { departureId: true } }),
     listBookableDepartures({ to: new Date(now.getTime() + SEIS_HORAS_MS), onlyWithSeats: true }, now),
+    // Sin tasa vigente la nota de precio dice solo "por persona", como en la portada.
+    getCurrentDepartureTax(now).catch(() => null),
   ]);
 
   const eleccion = pickHeroReservation(
@@ -149,14 +139,10 @@ export default async function MiInicioPage() {
   // Si la acción principal ya es subir la cédula, su aviso no se repite debajo;
   // tampoco lo que ya dicen la reserva en grande y el enlace al viaje más cercano.
   const heroEsCedula = !ticketData && faltaCedula;
-  const codigosEnPantalla = new Set([ticketData?.code, viajeMasCercano?.code].filter(Boolean));
-  const avisosRestantes = avisos.filter((aviso) => {
-    if (heroEsCedula && aviso.kind === "DOCUMENTO_FALTANTE") return false;
-    if (aviso.reservationCode && codigosEnPantalla.has(aviso.reservationCode) && AVISOS_QUE_DICE_EL_HEROE.has(aviso.kind)) {
-      return false;
-    }
-    return true;
-  });
+  const codigosEnPantalla = new Set(
+    [ticketData?.code, viajeMasCercano?.code].filter((code): code is string => Boolean(code)),
+  );
+  const avisosRestantes = homeNotices(avisos, { codesOnScreen: codigosEnPantalla, heroIsDocument: heroEsCedula });
 
   // El título dice lo que apura: un plazo (con su hora en el ticket), la salida inminente o el pago pendiente.
   const tituloHeroe = ticketData
@@ -295,7 +281,7 @@ export default async function MiInicioPage() {
             action={
               avisosRestantes.length > 1 ? (
                 <Link href="/mi/avisos" className={ENLACE_SECCION}>
-                  Ver los {avisosRestantes.length} avisos
+                  Ver todos los avisos
                   <IconChevronRight aria-hidden="true" className="size-4" />
                 </Link>
               ) : undefined
@@ -314,17 +300,23 @@ export default async function MiInicioPage() {
       */}
       {ticketData ? null : (
         <section aria-labelledby="salidas-inicio" className="flex flex-col gap-3">
-          <SectionTitle
-            id="salidas-inicio"
-            action={
-              <Link href="/mi/reservar" className={ENLACE_SECCION}>
-                Ver todas las salidas
-                <IconChevronRight aria-hidden="true" className="size-4" />
-              </Link>
-            }
-          >
-            Salen pronto
-          </SectionTitle>
+          <div className="flex flex-col gap-1">
+            <SectionTitle
+              id="salidas-inicio"
+              action={
+                <Link href="/mi/reservar" className={ENLACE_SECCION}>
+                  Ver todas las salidas
+                  <IconChevronRight aria-hidden="true" className="size-4" />
+                </Link>
+              }
+            >
+              Salen pronto
+            </SectionTitle>
+            {/* La tarjeta muestra la tarifa; la tasa del terminal se avisa aquí, como en la portada. */}
+            {salidasVM.length > 0 ? (
+              <DeparturePriceNote taxLabel={tasa ? formatMoney(tasa, "USD") : null} />
+            ) : null}
+          </div>
           <DepartureBoard
             departures={salidasVM}
             now={now}

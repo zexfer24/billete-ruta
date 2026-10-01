@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { IconArrowLeft, IconCalendar, IconChevronDown, IconPlus } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { cx, panelButtonClass } from "@/components/ui-classes";
+import { PERIOD_CHIP_ACTIVE_CLASS, PERIOD_CHIP_CLASS, PERIOD_CHIP_IDLE_CLASS, PeriodChipCheck } from "./period-chips";
 
 /**
  * Siluetas de las piezas del panel (spec 6.5) para los `loading.tsx` y los
@@ -139,16 +140,18 @@ export function SkeletonPeriodChips({
             <span
               key={label}
               className={cx(
-                "inline-flex min-h-11 items-center justify-center rounded-pastilla border px-4 text-[15px] font-semibold sm:justify-start",
-                index === active ? "border-marca-600 bg-marca-50 text-marca-800" : "border-borde-control bg-superficie text-tinta",
+                PERIOD_CHIP_CLASS,
+                "justify-center sm:justify-start",
+                index === active ? PERIOD_CHIP_ACTIVE_CLASS : PERIOD_CHIP_IDLE_CLASS,
               )}
             >
+              {index === active ? <PeriodChipCheck /> : null}
               {label}
             </span>
           ))}
         </div>
         {extra ? (
-          <span className="inline-flex min-h-11 items-center gap-2 rounded-pastilla border border-transparent px-4 text-[15px] font-semibold text-marca-700">
+          <span className={cx(PERIOD_CHIP_CLASS, "border-transparent text-marca-700")}>
             <IconCalendar className="size-5 shrink-0" />
             {extra}
             <IconChevronDown className="size-5 shrink-0" />
@@ -280,11 +283,11 @@ export function SkeletonTable({
   cardDetails?: number;
   /**
    * Pie de la tarjeta móvil real: `true`, un botón; `"barra"`, la etiqueta de
-   * una cifra y su barra de progreso (por ejemplo, "46 % del total"); `false`,
-   * nada.
+   * una cifra y su barra de progreso (por ejemplo, "46 % del total");
+   * `"enlace"`, un enlace de texto ("Editar ›"); `false`, nada.
    */
-  cardAction?: boolean | "barra";
-  /** La tarjeta móvil real lleva, antes del pie, un dato a todo el ancho (etiqueta y dos renglones). */
+  cardAction?: boolean | "barra" | "enlace";
+  /** La tarjeta móvil real lleva, antes del pie, un dato a todo el ancho en dos renglones (el viaje de flota). */
   cardWideDetail?: boolean;
   /**
    * Cabeceras como barras: cuando el skeleton no sabe qué tabla viene (por
@@ -380,22 +383,25 @@ export function SkeletonTable({
               </div>
               <Skeleton className="h-6 w-20 rounded-pastilla" />
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              {Array.from({ length: cardDetails }, (_, i) => (
-                <div key={i} className="flex flex-col gap-1">
-                  <Skeleton className="h-3.5 w-16 rounded-pastilla" />
-                  <Skeleton className="h-4 w-24 rounded-pastilla" />
-                </div>
-              ))}
-            </div>
+            {cardDetails > 0 ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                {Array.from({ length: cardDetails }, (_, i) => (
+                  <div key={i} className="flex flex-col gap-1">
+                    <Skeleton className="h-3.5 w-16 rounded-pastilla" />
+                    <Skeleton className="h-4 w-24 rounded-pastilla" />
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {cardWideDetail ? (
               <div className="flex flex-col gap-1">
-                <Skeleton className="h-3.5 w-16 rounded-pastilla" />
-                <Skeleton className="h-4 w-3/5 rounded-pastilla" />
+                <Skeleton className="h-5 w-3/5 rounded-pastilla" />
                 <Skeleton className="h-4 w-2/5 rounded-pastilla" />
               </div>
             ) : null}
-            {cardAction === "barra" ? (
+            {cardAction === "enlace" ? (
+              <Skeleton className="h-5 w-20 rounded-pastilla" />
+            ) : cardAction === "barra" ? (
               <div className="flex flex-col gap-1.5">
                 <Skeleton className="h-4 w-24 rounded-pastilla" />
                 <Skeleton className="h-2 w-full rounded-pastilla" />

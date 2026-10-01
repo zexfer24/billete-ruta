@@ -22,7 +22,7 @@ afterAll(disconnect);
 
 /**
  * Una agencia con una unidad de cada estado posible: en ruta, asignada a una
- * salida de mañana, disponible sin ninguna salida, y fuera de servicio; más
+ * salida dentro de unas horas, disponible sin ninguna salida, y fuera de servicio; más
  * otra agencia que nunca debe aparecer en los resultados.
  */
 async function escenario() {
@@ -54,12 +54,12 @@ async function escenario() {
 
   const choferAsignado = await createDriverFixture(agencia.id);
   const vehiculoAsignado = await createVehicleFixture(agencia.id);
-  const salidaManana = await prisma.departure.create({
+  const salidaProxima = await prisma.departure.create({
     data: {
       routeId: ruta.id,
       vehicleId: vehiculoAsignado.id,
       driverId: choferAsignado.id,
-      departsAt: new Date(Date.now() + 24 * 3_600_000),
+      departsAt: new Date(Date.now() + 6 * 3_600_000),
       capacity: 20,
     },
   });
@@ -86,7 +86,7 @@ async function escenario() {
     salidaEnRuta,
     choferAsignado,
     vehiculoAsignado,
-    salidaManana,
+    salidaProxima,
     choferDisponible,
     vehiculoDisponible,
     choferInactivo,
@@ -111,14 +111,14 @@ describe("agencyFleetStatus", () => {
     expect(filaVehiculo?.current?.departedAt).not.toBeNull();
   });
 
-  it("un chofer con una salida programada para mañana queda asignado", async () => {
-    const { agencia, choferAsignado, salidaManana } = await escenario();
+  it("un chofer con una salida programada dentro de 6 horas queda asignado", async () => {
+    const { agencia, choferAsignado, salidaProxima } = await escenario();
 
     const estado = await agencyFleetStatus(agencia.id);
 
     const fila = estado.drivers.find((d) => d.id === choferAsignado.id);
     expect(fila?.state).toBe("ASIGNADO");
-    expect(fila?.upcoming.map((u) => u.id)).toEqual([salidaManana.id]);
+    expect(fila?.upcoming.map((u) => u.id)).toEqual([salidaProxima.id]);
   });
 
   it("un chofer inactivo sin ninguna salida queda fuera de servicio", async () => {
@@ -130,13 +130,13 @@ describe("agencyFleetStatus", () => {
     expect(fila?.state).toBe("FUERA_DE_SERVICIO");
   });
 
-  it("vehicleSummary trae las cinco claves aunque alguna valga cero, y suma el total de vehículos", async () => {
+  it("vehicleSummary trae las seis claves aunque alguna valga cero, y suma el total de vehículos", async () => {
     const { agencia } = await escenario();
 
     const estado = await agencyFleetStatus(agencia.id);
 
     expect(Object.keys(estado.vehicleSummary).sort()).toEqual(
-      ["ASIGNADO", "DISPONIBLE", "EMBARCANDO", "EN_RUTA", "FUERA_DE_SERVICIO"].sort(),
+      ["ASIGNADO", "ATRASADO", "DISPONIBLE", "EMBARCANDO", "EN_RUTA", "FUERA_DE_SERVICIO"].sort(),
     );
     const suma = Object.values(estado.vehicleSummary).reduce((a, b) => a + b, 0);
     expect(suma).toBe(estado.vehicles.length);
@@ -145,6 +145,7 @@ describe("agencyFleetStatus", () => {
     expect(estado.vehicleSummary.DISPONIBLE).toBe(1);
     expect(estado.vehicleSummary.FUERA_DE_SERVICIO).toBe(1);
     expect(estado.vehicleSummary.EMBARCANDO).toBe(0);
+    expect(estado.vehicleSummary.ATRASADO).toBe(0);
   });
 
   it("los contadores de embarque y desembarque de cada chofer coinciden con listDrivers", async () => {

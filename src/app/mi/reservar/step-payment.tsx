@@ -4,12 +4,11 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
 import { IconAlertCircle } from "@/components/icons";
-import { currencyName, deadlinePhrase, estimatedOnlineDeadline } from "@/components/passenger-copy";
+import { currencyName, deadlineBeforePhrase, estimatedOnlineDeadline } from "@/components/passenger-copy";
 import { StickyActions } from "@/components/sticky-actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Card } from "@/components/ui";
 import { buttonClass, cx } from "@/components/ui-classes";
-import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { dueForRelease12h } from "@/modules/scheduler";
 import { crearReservaAction, type CrearReservaState } from "./actions";
 import {
@@ -113,6 +112,8 @@ export function StepPayment({
   const plazoTaquillaMs = dueForRelease12h(now).getTime() - now.getTime();
   const limiteTaquilla = new Date(new Date(departure.departsAtIso).getTime() - plazoTaquillaMs);
   const total = formatCents(cost.totalCents, "USD");
+  // Con una sola persona, el recibo no repite cada monto como "× 1" y "por persona".
+  const variasPersonas = passengerCount > 1;
   // Si el bus sale antes de que venzan las 2 horas, el plazo es la salida.
   const plazoEnLinea = estimatedOnlineDeadline(new Date(departure.departsAtIso), now);
   const totalEnMoneda = selectedMethod ? equivalente(cost.totalCents, selectedMethod, exchangeRates) : null;
@@ -224,7 +225,7 @@ export function StepPayment({
               "Confirmas tu reserva con el botón de abajo.",
               `Pagas ${totalEnMoneda ?? total} con ${selectedMethod.name}: te mostramos los datos.`,
               plazoEnLinea?.boundByDeparture
-                ? `Subes la captura del pago antes de ${deadlinePhrase(plazoEnLinea, now)}.`
+                ? `Subes la captura del pago ${deadlineBeforePhrase(plazoEnLinea, now)}.`
                 : "Subes la captura del pago. Tienes 2 horas para hacerlo.",
             ].map((paso, indice) => (
               <li key={paso} className="flex items-start gap-3">
@@ -246,8 +247,8 @@ export function StepPayment({
 
       {selectedMethod?.kind === "FISICO" ? (
         <Alert tone="info" role="none" title="Pagas en la taquilla">
-          Paga {total} en la taquilla de {departure.agencyName} antes del {formatCaracasDate(limiteTaquilla)} a
-          las {formatCaracasTime24(limiteTaquilla)}. Si no, el puesto se libera.
+          Paga {total} en la taquilla de {departure.agencyName}{" "}
+          {deadlineBeforePhrase({ at: limiteTaquilla, boundByDeparture: false }, now)}. Si no, el puesto se libera.
         </Alert>
       ) : null}
 
@@ -256,15 +257,19 @@ export function StepPayment({
         <dl className="tabular flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-tinta-suave">
-              Pasaje × {passengerCount}
-              <span className="block text-sm">{formatCents(cost.fareCents, "USD")} por persona</span>
+              {variasPersonas ? `Pasaje × ${passengerCount}` : "Pasaje"}
+              {variasPersonas ? (
+                <span className="block text-sm">{formatCents(cost.fareCents, "USD")} por persona</span>
+              ) : null}
             </dt>
             <dd className="font-semibold text-tinta">{formatCents(cost.fareTotalCents, "USD")}</dd>
           </div>
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-tinta-suave">
-              Tasa del terminal × {passengerCount}
-              <span className="block text-sm">{formatCents(cost.taxCents, "USD")} por persona</span>
+              {variasPersonas ? `Tasa del terminal × ${passengerCount}` : "Tasa del terminal"}
+              {variasPersonas ? (
+                <span className="block text-sm">{formatCents(cost.taxCents, "USD")} por persona</span>
+              ) : null}
             </dt>
             <dd className="font-semibold text-tinta">{formatCents(cost.taxTotalCents, "USD")}</dd>
           </div>

@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/decimal";
 import { formatCaracasDateTime24 } from "@/lib/time";
-import { enqueueMessage, messageRoute } from "@/modules/messaging";
+import { enqueueMessage, messageRoute, reminderRecommendations } from "@/modules/messaging";
+import { balanceUsd } from "@/modules/catalog";
 import {
   cashCounterDeadline,
   dueForConfirmation2h,
@@ -70,9 +71,9 @@ async function sweepReminder24h(now: Date): Promise<number> {
 
   let encolados = 0;
   for (const reserva of reservas) {
-    await prisma.$transaction(async (tx) => {
+    const creado = await prisma.$transaction(async (tx) => {
       if (reserva.status === "PAGO_EN_SITIO") {
-        await enqueueMessage(tx, {
+        return enqueueMessage(tx, {
           reservationId: reserva.id,
           phone: reserva.account.phone,
           templateKey: "reconfirmacion_pago_sitio",
@@ -86,25 +87,28 @@ async function sweepReminder24h(now: Date): Promise<number> {
             limite: formatCaracasDateTime24(cashCounterDeadline(reserva.departure.departsAt, now)),
           },
         });
-      } else {
-        await enqueueMessage(tx, {
-          reservationId: reserva.id,
-          phone: reserva.account.phone,
-          templateKey: "recordatorio_24h",
-          payload: {
-            nombre: reserva.account.fullName,
-            serial: reserva.code,
-            ruta: messageRoute(reserva.departure.route),
-            salida: formatCaracasDateTime24(reserva.departure.departsAt),
-            punto: reserva.departure.route.meetingPoint,
-            recomendaciones:
-              reserva.departure.route.travelTips ??
-              "Llega 30 minutos antes con tu cédula en mano.",
-          },
-        });
       }
+      // Una reserva pagada en parte no tiene ticket hasta saldar: el
+      // recordatorio le dice cuánto le falta, el mismo saldo que muestra la app.
+      const saldo = balanceUsd(reserva.totalUsd, reserva.paidUsd);
+      return enqueueMessage(tx, {
+        reservationId: reserva.id,
+        phone: reserva.account.phone,
+        templateKey: "recordatorio_24h",
+        payload: {
+          nombre: reserva.account.fullName,
+          serial: reserva.code,
+          ruta: messageRoute(reserva.departure.route),
+          salida: formatCaracasDateTime24(reserva.departure.departsAt),
+          punto: reserva.departure.route.meetingPoint,
+          recomendaciones: reminderRecommendations({
+            travelTips: reserva.departure.route.travelTips,
+            saldo: reserva.status === "ABONADA" && !saldo.isZero() ? formatMoney(saldo, "USD") : null,
+          }),
+        },
+      });
     });
-    encolados += 1;
+    if (creado) encolados += 1;
   }
   return encolados;
 }
@@ -167,7 +171,7 @@ async function sweepConfirmation2h(now: Date): Promise<number> {
 
   let encolados = 0;
   for (const reserva of reservas) {
-    await prisma.$transaction((tx) =>
+    const creado = await prisma.$transaction((tx) =>
       enqueueMessage(tx, {
         reservationId: reserva.id,
         phone: reserva.account.phone,
@@ -181,7 +185,7 @@ async function sweepConfirmation2h(now: Date): Promise<number> {
         },
       }),
     );
-    encolados += 1;
+    if (creado) encolados += 1;
   }
   return encolados;
 }

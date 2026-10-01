@@ -25,6 +25,7 @@ import { errorMessage, okMessage } from "../../_dashboard/search-params";
 import { CompactFigures } from "../../_shared/compact-figures";
 import { departureWhenText, plural } from "../../_shared/day-label";
 import { departureNotice } from "../../_shared/departure-notice";
+import { arrowRouteName } from "../../_shared/route-text";
 import { DepartureNoticeText } from "../../_shared/departure-notice-text";
 import { loadManifestOrNotFound } from "../../_shared/load-manifest";
 import {
@@ -72,6 +73,11 @@ const NO_VIAJA_LABELS: Readonly<Record<string, string>> = {
   NO_SHOW: "No viaja: no se presentó",
   ABORDADA: "No viaja: no subió con su grupo",
 };
+
+/** Texto del desplegable de quienes no viajan, el mismo en el teléfono y en la tabla. */
+function noViajanResumen(cuantos: number): string {
+  return cuantos === 1 ? "Ver el pasajero que no viaja" : `Ver los ${cuantos} pasajeros que no viajan`;
+}
 
 function noViajaLabel(reservationStatus: string): string {
   return NO_VIAJA_LABELS[reservationStatus] ?? "No viaja";
@@ -309,7 +315,11 @@ export default async function SalidaDetallePage({
   const debenDinero = antesDeSalir ? resumen.owingPassengers : 0;
   const esperanRevision = antesDeSalir ? resumen.reviewPassengers : 0;
   const porCobrarHref = `/panel/pasajeros?vista=por-cobrar&salida=${salida.id}`;
-  const porRevisarHref = `/panel/pasajeros?vista=por-revisar&salida=${salida.id}`;
+  const hayAvisoPago = debenDinero > 0 || esperanRevision > 0;
+  // La cola "Por revisar" es de toda la agencia (no se filtra por salida): el
+  // enlace no lleva `salida=` y el botón lo dice, para no prometer un filtro
+  // que la cola no aplica. La cola ya ordena primero la salida más próxima.
+  const porRevisarHref = "/panel/pasajeros?vista=por-revisar";
   const atencion = atencionPartes(resumen);
   // Antes de iniciar el embarque todos están "Por abordar": la columna y las
   // pastillas no dirían nada que la cifra "Por abordar" no diga ya.
@@ -319,7 +329,7 @@ export default async function SalidaDetallePage({
     <div className="flex flex-col gap-6">
       <PanelPageHeader
         back={{ href: "/panel/salidas", label: "Volver a salidas" }}
-        title={salida.route.name}
+        title={arrowRouteName(salida.route.name)}
         description={
           <>
             <span className="tabular">{cuando}</span> · Vehículo <span className="tabular">{salida.vehicle.plate}</span>{" "}
@@ -507,7 +517,7 @@ export default async function SalidaDetallePage({
           />
         ) : (
           <>
-            {debenDinero > 0 || esperanRevision > 0 ? (
+            {hayAvisoPago ? (
               <Alert
                 tone="alerta"
                 role="none"
@@ -523,7 +533,7 @@ export default async function SalidaDetallePage({
                     ) : null}
                     {esperanRevision > 0 ? (
                       <Link href={porRevisarHref} className={panelButtonClass("secundario")}>
-                        Revisar comprobantes
+                        Revisar los comprobantes de la agencia
                       </Link>
                     ) : null}
                   </div>
@@ -562,7 +572,7 @@ export default async function SalidaDetallePage({
               {gruposNoViajan.length > 0 ? (
                 <details className="group rounded-control border border-borde">
                   <summary className="foco flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control px-4 py-2 text-base font-semibold text-marca-700 [&::-webkit-details-marker]:hidden">
-                    {cuantosNoViajan === 1 ? "Ver el pasajero que no viaja" : `Ver los ${cuantosNoViajan} pasajeros que no viajan`}
+                    {noViajanResumen(cuantosNoViajan)}
                     <IconChevronDown className="size-5 shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
                   </summary>
                   <ul className="flex flex-col divide-y divide-borde border-t border-borde px-4">
@@ -582,60 +592,116 @@ export default async function SalidaDetallePage({
             </div>
             {/* Escritorio y tableta: la tabla va de borde a borde de la tarjeta
                 (sin el marco propio de TableShell, que dejaba un doble borde y
-                robaba el relleno de la tarjeta). */}
-            <div className="-m-5 hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[720px]">
-                <thead className="border-b border-borde bg-lienzo">
-                  <tr>
-                    <th scope="col" className={PANEL_TH_CLASS}>Pasajero</th>
-                    <th scope="col" className={PANEL_TH_CLASS}>Cédula</th>
-                    <th scope="col" className={PANEL_TH_CLASS}>Código de reserva</th>
-                    <th scope="col" className={PANEL_TH_CLASS}>Pago</th>
-                    {mostrarAbordaje ? (
-                      <th scope="col" className={PANEL_TH_CLASS}>Abordaje</th>
-                    ) : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pasajeros.map((p) => (
-                    <tr key={p.id} className="border-b border-borde last:border-0">
-                      <td className={PANEL_TD_CLASS}>
-                        <p className="font-semibold">{p.fullName}</p>
-                        {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
-                      </td>
-                      <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.idNumber}</td>
-                      <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{p.code}</td>
-                      {/* La pastilla no se parte en dos renglones dentro de la tabla.
-                          Quien no viaja lleva una sola pastilla con el motivo, igual
-                          que en el teléfono, que ocupa Pago y Abordaje. */}
-                      {p.estado === "no-viaja" ? (
-                        <td colSpan={mostrarAbordaje ? 2 : 1} className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
-                          <StatusBadge label={noViajaLabel(p.reservationStatus)} tone="neutro" />
-                        </td>
-                      ) : (
-                        <>
-                          <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
-                            <StatusBadge
-                              label={reservationStatusLabel(p.reservationStatus)}
-                              tone={reservationStatusTone(p.reservationStatus)}
-                            />
-                          </td>
-                          {mostrarAbordaje ? (
-                            <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
-                              <AbordajeBadge
-                                estado={p.estado}
-                                boardedAt={p.boardedAt}
-                                ahora={ahora}
-                                embarqueIniciado={embarqueIniciado}
-                              />
-                            </td>
-                          ) : null}
-                        </>
+                robaba el relleno de la tarjeta). Igual que en el teléfono, solo
+                lista a quienes viajan, agrupados por reserva: el código y el
+                pago se ven en la primera fila de cada reserva; quienes no
+                viajan quedan plegados debajo. */}
+            <div className="hidden flex-col gap-5 md:flex">
+              {gruposViajan.length > 0 ? (
+                <div
+                  className={cx(
+                    "-mx-5 overflow-x-auto",
+                    !hayAvisoPago && "-mt-5",
+                    gruposNoViajan.length === 0 ? "-mb-5" : "border-b border-borde",
+                  )}
+                >
+                  <table className="w-full min-w-[720px]">
+                    <thead className="border-b border-borde bg-lienzo">
+                      <tr>
+                        <th scope="col" className={PANEL_TH_CLASS}>Pasajero</th>
+                        <th scope="col" className={PANEL_TH_CLASS}>Cédula</th>
+                        <th scope="col" className={PANEL_TH_CLASS}>Código de reserva</th>
+                        <th scope="col" className={PANEL_TH_CLASS}>Pago</th>
+                        {mostrarAbordaje ? (
+                          <th scope="col" className={PANEL_TH_CLASS}>Abordaje</th>
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gruposViajan.map((g, gi) =>
+                        g.pasajeros.map((p, i) => {
+                          const primera = i === 0;
+                          return (
+                            <tr
+                              key={p.id}
+                              // Una línea más marcada abre cada reserva.
+                              className={cx(
+                                "border-b border-borde last:border-0",
+                                primera && gi > 0 && "border-t-2 border-t-borde-control/40",
+                              )}
+                            >
+                              <td className={PANEL_TD_CLASS}>
+                                <p className="font-semibold">{p.fullName}</p>
+                                {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
+                              </td>
+                              <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.idNumber}</td>
+                              {/* El código y el pago van una vez por reserva; en las
+                                  demás filas quedan solo para el lector de pantalla. */}
+                              <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>
+                                {primera ? g.code : <span className="sr-only">{g.code}</span>}
+                              </td>
+                              <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                                {primera ? (
+                                  <StatusBadge
+                                    label={reservationStatusLabel(g.reservationStatus)}
+                                    tone={reservationStatusTone(g.reservationStatus)}
+                                  />
+                                ) : (
+                                  <span className="sr-only">{reservationStatusLabel(g.reservationStatus)}</span>
+                                )}
+                              </td>
+                              {mostrarAbordaje ? (
+                                <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                                  <AbordajeBadge
+                                    estado={p.estado}
+                                    boardedAt={p.boardedAt}
+                                    ahora={ahora}
+                                    embarqueIniciado={embarqueIniciado}
+                                  />
+                                </td>
+                              ) : null}
+                            </tr>
+                          );
+                        }),
                       )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              {gruposNoViajan.length > 0 ? (
+                <details className="group rounded-control border border-borde">
+                  <summary className="foco flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control px-4 py-2 text-base font-semibold text-marca-700 [&::-webkit-details-marker]:hidden">
+                    {noViajanResumen(cuantosNoViajan)}
+                    <IconChevronDown className="size-5 shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
+                  </summary>
+                  <div className="overflow-x-auto border-t border-borde">
+                    <table className="w-full min-w-[640px]">
+                      <thead className="border-b border-borde bg-lienzo">
+                        <tr>
+                          <th scope="col" className={PANEL_TH_CLASS}>Pasajero</th>
+                          <th scope="col" className={PANEL_TH_CLASS}>Cédula</th>
+                          <th scope="col" className={PANEL_TH_CLASS}>Código de reserva</th>
+                          <th scope="col" className={PANEL_TH_CLASS}>Motivo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gruposNoViajan.flatMap((g) =>
+                          g.pasajeros.map((p) => (
+                            <tr key={p.id} className="border-b border-borde last:border-0">
+                              <td className={cx(PANEL_TD_CLASS, "font-semibold")}>{p.fullName}</td>
+                              <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.idNumber}</td>
+                              <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{g.code}</td>
+                              <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                                <StatusBadge label={noViajaLabel(g.reservationStatus)} tone="neutro" />
+                              </td>
+                            </tr>
+                          )),
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              ) : null}
             </div>
           </>
         )}

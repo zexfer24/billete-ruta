@@ -3,7 +3,9 @@ import { AgencyBadge } from "@/components/agency-badge";
 import { IconBuilding } from "@/components/icons";
 import { EmptyState, MobileCard, StatusBadge, TableShell, panelButtonClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
+import { prisma } from "@/lib/prisma";
 import { listAgencies } from "@/modules/agencies";
+import { OCCUPYING_STATUSES } from "@/modules/booking";
 import { countLabel, formatPhone } from "../_shared/format";
 import { ADMIN_TD_CLASS, ADMIN_TH_CLASS } from "../_shared/lists";
 import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
@@ -74,6 +76,26 @@ function StaffList({ users }: { users: AgencyRow["panelUsers"] }) {
 }
 
 /**
+ * Reservas que siguen ocupando un puesto en salidas futuras de cada agencia
+ * activa, para decir en el diálogo de desactivar cuánta gente queda por
+ * atender. Una consulta por agencia activa: son pocas.
+ */
+async function upcomingReservationsByAgency(agencies: AgencyRow[], now: Date): Promise<Map<string, number>> {
+  const active = agencies.filter((a) => a.active);
+  const counts = await Promise.all(
+    active.map((a) =>
+      prisma.reservation.count({
+        where: {
+          status: { in: [...OCCUPYING_STATUSES] },
+          departure: { departsAt: { gt: now }, route: { agencyId: a.id } },
+        },
+      }),
+    ),
+  );
+  return new Map(active.map((a, index) => [a.id, counts[index] ?? 0]));
+}
+
+/**
  * Lista de agencias: el total, la tabla en escritorio y las tarjetas en
  * móvil. Va en su propio `<Suspense>` para que el panel lateral de registro,
  * que no necesita datos, se abra sin esperar esta consulta.
@@ -81,6 +103,14 @@ function StaffList({ users }: { users: AgencyRow["panelUsers"] }) {
 export async function AgenciesList({ registerHref }: { registerHref: string }) {
   const agencies = await listAgencies();
   const activeCount = agencies.filter((a) => a.active).length;
+  const upcoming = await upcomingReservationsByAgency(agencies, new Date());
+  const statusAgency = (a: AgencyRow) => ({
+    id: a.id,
+    name: a.name,
+    active: a.active,
+    routes: a._count.routes,
+    upcomingReservations: upcoming.get(a.id) ?? 0,
+  });
 
   if (agencies.length === 0) {
     return (
@@ -144,11 +174,7 @@ export async function AgenciesList({ registerHref }: { registerHref: string }) {
                         <StaffList users={a.panelUsers} />
                       </div>
                     </div>
-                    <AgencyStatusAction
-                      agency={{ id: a.id, name: a.name, active: a.active, routes: a._count.routes }}
-                      size="md"
-                      fullWidth
-                    />
+                    <AgencyStatusAction agency={statusAgency(a)} size="md" fullWidth />
                   </div>
                 }
               />
@@ -202,7 +228,7 @@ export async function AgenciesList({ registerHref }: { registerHref: string }) {
                 <td className={ADMIN_TD_CLASS}>
                   {/* flex y no text-right: el texto del diálogo de confirmación no debe heredar la alineación. */}
                   <div className="flex justify-end">
-                    <AgencyStatusAction agency={{ id: a.id, name: a.name, active: a.active, routes: a._count.routes }} />
+                    <AgencyStatusAction agency={statusAgency(a)} />
                   </div>
                 </td>
               </tr>

@@ -79,6 +79,10 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
     preview:
       "Hola {{nombre}}, no pudimos aceptar el comprobante de la reserva {{serial}} del viaje {{ruta}}. Motivo: {{motivo}}. Puedes enviar otro desde tu cuenta.",
   },
+  // `recomendaciones` lo arma `reminderRecommendations`: a una reserva pagada
+  // en parte le antepone lo que todavía debe, porque sin ese pago no recibe el
+  // ticket ni puede abordar. Es la misma plantilla (mismos parámetros fijos,
+  // como pide Meta) y el índice único sigue impidiendo un segundo recordatorio.
   recordatorio_24h: {
     params: ["nombre", "serial", "ruta", "salida", "punto", "recomendaciones"],
     buttons: [],
@@ -189,6 +193,25 @@ const PARAMETROS_DE_MONTO = new Set(["monto", "abonado", "saldo"]);
  */
 function montoSinCorte(valor: string): string {
   return valor.replace(/^(\$|Bs\.|COP|USDT) +/, "$1\u00A0");
+}
+
+/** Recomendación del recordatorio de 24 horas cuando la ruta no tiene una propia. */
+export const DEFAULT_TRAVEL_TIPS = "Llega 30 minutos antes con tu cédula en mano.";
+
+/**
+ * Parámetro `recomendaciones` del recordatorio de 24 horas. Si la reserva
+ * todavía debe dinero (`saldo`, ya formateado: "$ 19,12"), lo primero que lee
+ * el pasajero es cuánto le falta y qué pasa si no paga; después, las
+ * recomendaciones de la ruta (o las de siempre).
+ */
+export function reminderRecommendations(input: {
+  travelTips?: string | null;
+  saldo?: string | null;
+}): string {
+  const consejos = input.travelTips?.trim() || DEFAULT_TRAVEL_TIPS;
+  const saldo = input.saldo?.trim();
+  if (!saldo) return consejos;
+  return `Todavía te falta pagar ${montoSinCorte(saldo)}: sin ese pago no recibes tu ticket y no puedes abordar. Paga desde tu cuenta o en la taquilla. ${consejos}`;
 }
 
 /** Parámetros que guardan una fecha con hora ("01/10/2026 06:00"). */

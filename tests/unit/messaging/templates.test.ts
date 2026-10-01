@@ -7,6 +7,7 @@ import {
   isTemplateKey,
   messageRoute,
   providerParams,
+  reminderRecommendations,
   renderPreview,
   renderStoredPreview,
   templateButtons,
@@ -285,5 +286,46 @@ describe("textos de las plantillas", () => {
     expect(displayParam("salida", "31/02/2026 06:00")).toBe("31/02/2026 06:00");
     expect(displayParam("limite", "01/10/2026 06:00")).toBe("jueves 1 de octubre a las 06:00");
     expect(displayParam("pasajeros", "dos")).toBe("dos");
+  });
+});
+
+describe("recordatorio de 24 horas", () => {
+  const RECORDATORIO = {
+    nombre: "Ana María Pérez",
+    serial: "TR-1001-1PAX-GQS8",
+    ruta: "Caracas → Mérida",
+    salida: "01/10/2026 10:00",
+    punto: "Terminal La Bandera, andén 8",
+  };
+
+  it("a una reserva pagada solo le recuerda llegar con tiempo", () => {
+    const texto = renderPreview("recordatorio_24h", {
+      ...RECORDATORIO,
+      recomendaciones: reminderRecommendations({ travelTips: "Llega 45 minutos antes con tu cédula en mano." }),
+    });
+    expect(texto).toBe(
+      "Hola Ana, tu viaje Caracas → Mérida con la reserva TR-1001-1PAX-GQS8 sale el jueves 1 de octubre a las 10:00 desde Terminal La Bandera, andén 8. Llega 45 minutos antes con tu cédula en mano.",
+    );
+  });
+
+  it("a una reserva pagada en parte le dice primero cuánto le falta y qué pasa si no paga", () => {
+    const texto = renderPreview("recordatorio_24h", {
+      ...RECORDATORIO,
+      recomendaciones: reminderRecommendations({
+        travelTips: "Llega 45 minutos antes con tu cédula en mano.",
+        saldo: "$ 19,12",
+      }),
+    });
+    expect(texto).toBe(
+      "Hola Ana, tu viaje Caracas → Mérida con la reserva TR-1001-1PAX-GQS8 sale el jueves 1 de octubre a las 10:00 desde Terminal La Bandera, andén 8. Todavía te falta pagar $ 19,12: sin ese pago no recibes tu ticket y no puedes abordar. Paga desde tu cuenta o en la taquilla. Llega 45 minutos antes con tu cédula en mano.",
+    );
+  });
+
+  it("sin recomendaciones propias de la ruta usa las de siempre", () => {
+    expect(reminderRecommendations({ travelTips: null })).toBe("Llega 30 minutos antes con tu cédula en mano.");
+    expect(reminderRecommendations({ travelTips: "  " })).toBe("Llega 30 minutos antes con tu cédula en mano.");
+    expect(reminderRecommendations({ travelTips: null, saldo: "" })).toBe(
+      "Llega 30 minutos antes con tu cédula en mano.",
+    );
   });
 });

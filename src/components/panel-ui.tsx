@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { StatusTone } from "@/lib/labels";
 import { IconArrowLeft, IconChevronRight } from "./icons";
 import { Pill } from "./ui";
-import { cx } from "./ui-classes";
+import { cx, PANEL_TAB_ACTIVE_CLASS, PANEL_TAB_INACTIVE_CLASS } from "./ui-classes";
 
 /**
  * Piezas base del panel de agencia y del terminal (spec 2026-09-30, sección
@@ -18,6 +18,8 @@ export {
   panelButtonClass,
   panelInputClass,
   PANEL_LABEL_CLASS,
+  PANEL_TAB_ACTIVE_CLASS,
+  PANEL_TAB_INACTIVE_CLASS,
   type PanelButtonSize,
   type PanelButtonVariant,
 } from "./ui-classes";
@@ -61,7 +63,7 @@ export function PanelPageHeader({
         <div className="min-w-0 max-w-3xl">
           <h1 className="text-balance text-2xl font-bold tracking-tight text-tinta sm:text-3xl">{title}</h1>
           {description ? (
-            <p className="mt-1.5 text-base leading-relaxed text-tinta-suave">{description}</p>
+            <p className="mt-1.5 text-pretty text-base leading-relaxed text-tinta-suave">{description}</p>
           ) : null}
         </div>
         {/* En el teléfono la caja de acciones no pasa del ancho disponible y sus
@@ -184,9 +186,7 @@ export function PanelTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) 
             aria-current={tab.active ? "page" : undefined}
             className={cx(
               "foco inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none sm:grow-0 sm:justify-start",
-              tab.active
-                ? "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200"
-                : "text-tinta-suave hover:bg-lienzo hover:text-tinta",
+              tab.active ? PANEL_TAB_ACTIVE_CLASS : PANEL_TAB_INACTIVE_CLASS,
             )}
           >
             {tab.label}

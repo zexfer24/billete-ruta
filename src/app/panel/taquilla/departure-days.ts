@@ -67,10 +67,24 @@ export function dayChipLabel(date: Date, now: Date): string {
   return `${WEEKDAYS_SHORT[weekday]} ${day} ${MONTHS_SHORT[month]}`;
 }
 
+/**
+ * Texto aún más corto de la ficha para el teléfono: "Hoy", "Mañana" o "Vie 2".
+ * Sin el mes: las fichas cubren 7 días, así que el número del día no se
+ * confunde, y así caben cuatro por fila.
+ */
+export function dayChipShortLabel(date: Date, now: Date): string {
+  const relativo = relativeDay(date, now);
+  if (relativo) return relativo;
+  const { weekday, day } = parts(date);
+  return `${WEEKDAYS_SHORT[weekday]} ${day}`;
+}
+
 export interface DayGroup<T> {
   key: string;
   label: string;
   chipLabel: string;
+  /** Versión corta de `chipLabel` para el teléfono ("Vie 2"). */
+  chipShortLabel: string;
   items: T[];
 }
 
@@ -84,7 +98,13 @@ export function groupByDay<T extends { departsAtIso: string }>(departures: reado
     if (ultimo && ultimo.key === key) {
       ultimo.items.push(d);
     } else {
-      grupos.push({ key, label: dayLabel(fecha, now), chipLabel: dayChipLabel(fecha, now), items: [d] });
+      grupos.push({
+        key,
+        label: dayLabel(fecha, now),
+        chipLabel: dayChipLabel(fecha, now),
+        chipShortLabel: dayChipShortLabel(fecha, now),
+        items: [d],
+      });
     }
   }
   return grupos;

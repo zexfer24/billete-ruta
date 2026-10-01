@@ -2,27 +2,27 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { PanelFeedback } from "@/components/panel-feedback";
 import { Alert } from "@/components/alert";
-import { ConfirmDialog } from "@/components/confirm-dialog";
-import { SubmitButton } from "@/components/submit-button";
-import { EmptyState, PANEL_TD_CLASS, PANEL_TH_CLASS, StatusBadge, panelButtonClass, panelInputClass } from "@/components/panel-ui";
-import { IconCheckCircle, IconSearch, IconXCircle } from "@/components/icons";
+import { EmptyState, PANEL_TD_CLASS, PANEL_TH_CLASS, StatusBadge, panelButtonClass } from "@/components/panel-ui";
+import { IconSearch } from "@/components/icons";
 import { formatMoney } from "@/lib/decimal";
 import { maskIdNumber } from "@/lib/identity";
 import { formatCaracasDateTime24 } from "@/lib/time";
 import { PROOF_STATUS_LABELS, reservationStatusLabel, type StatusTone } from "@/lib/labels";
 import type { ProofCoverage, ProofHistoryItem, ProofReview } from "@/modules/payments";
 import { countLabel } from "../_dashboard/text";
-import { approveProofAction, rejectProofAction } from "./actions";
 import { Disclosure, DetailList } from "./disclosure";
 import { ProofDecisionBar } from "./proof-decision";
 import { ProofImage } from "./proof-image";
 import { showsUsdEquivalent } from "./money";
 import { pasajerosUrlFromHidden } from "./urls";
+import { tripWhenText } from "./trip-text";
+import { departureWhenText } from "../_shared/day-label";
 
 /**
- * Piezas de la revisión de un comprobante, compartidas por el panel lateral
- * de comprobante y por la sección "Comprobantes por revisar" del detalle de
- * reserva, para no duplicar el marcado entre las dos.
+ * Piezas de la revisión de un comprobante. La decisión se toma en un solo
+ * lugar, el panel lateral "Revisar comprobante" (`ProofReviewPanel` con
+ * `ProofDecisionBar`); el detalle de la reserva solo enlaza a él y reutiliza
+ * la pastilla de cobertura y el historial.
  */
 
 /**
@@ -55,16 +55,20 @@ export function afterApproval(coverage: ProofCoverage): string {
     : "Queda pagada";
 }
 
-/** Lo que pasará al aprobar, con los montos: es la descripción de la confirmación. */
+/**
+ * Lo que pasará al aprobar, con los montos: es la descripción de la
+ * confirmación. Usa las mismas palabras que "Si lo apruebas" de la lista y
+ * del panel (`afterApproval`), sin la palabra contable "saldo".
+ */
 function approvalConsequence(coverage: ProofCoverage, amountUsd: Prisma.Decimal): string {
   const suma = `Se sumarán ${formatMoney(amountUsd, "USD")} a lo pagado.`;
   switch (coverage.kind) {
     case "ABONO_PARCIAL":
-      return `${suma} Quedará un saldo de ${formatMoney(coverage.balanceAfterUsd, "USD")}; el ticket se emite cuando el saldo llegue a cero.`;
+      return `${suma} ${afterApproval(coverage)}; el ticket se emite cuando la reserva esté pagada completa.`;
     case "PAGO_COMPLETO":
-      return `${suma} El saldo quedará en ${formatMoney(coverage.balanceAfterUsd, "USD")} y se emitirá el ticket.`;
+      return `${suma} La reserva queda pagada y se emite el ticket.`;
     case "EXCEDE_SALDO":
-      return `Este pago supera el saldo en ${formatMoney(coverage.excessUsd, "USD")}. El saldo quedará en ${formatMoney(coverage.balanceAfterUsd, "USD")} y se emitirá el ticket.`;
+      return `Este pago supera lo que falta por ${formatMoney(coverage.excessUsd, "USD")}. La reserva queda pagada y se emite el ticket.`;
   }
 }
 
@@ -75,82 +79,6 @@ function approveDescription(coverage: ProofCoverage | null, amountUsd: Prisma.De
       {coverage ? approvalConsequence(coverage, amountUsd) : `Se sumarán ${formatMoney(amountUsd, "USD")} a lo pagado.`}{" "}
       Esta acción no se puede deshacer.
     </p>
-  );
-}
-
-/**
- * Decisión sobre un comprobante pendiente. "Aprobar pago" es la acción
- * principal y pide confirmación con sus consecuencias en números, porque no
- * se puede deshacer. "Rechazar" queda plegado: se abre para escribir el
- * motivo, así no se pulsa por error junto al de aprobar.
- */
-export function ProofActions({
-  proofId,
-  code,
-  amountUsd,
-  coverage,
-  hidden,
-}: {
-  proofId: string;
-  code: string;
-  amountUsd: Prisma.Decimal;
-  coverage: ProofCoverage | null;
-  hidden: Record<string, string>;
-}) {
-  const motivoId = `motivo-${proofId}`;
-  const ayudaId = `${motivoId}-ayuda`;
-
-  return (
-    <div className="flex flex-col gap-3">
-      <ConfirmDialog
-        triggerLabel={
-          <>
-            <IconCheckCircle className="size-5" />
-            Aprobar pago
-          </>
-        }
-        triggerClassName={panelButtonClass("exito", "lg", "w-full sm:w-auto")}
-        title={`¿Aprobar el pago de la reserva ${code}?`}
-        description={approveDescription(coverage, amountUsd)}
-        confirmLabel="Sí, aprobar el pago"
-        confirmClassName={panelButtonClass("exito", "lg", "w-full sm:w-auto")}
-        pendingLabel="Aprobando…"
-        action={approveProofAction}
-        fields={{ ...hidden, proofId }}
-      />
-
-      <details className="group rounded-control border border-borde">
-        <summary className="foco flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-control px-4 py-2.5 text-[15px] font-semibold text-peligro hover:bg-peligro-suave [&::-webkit-details-marker]:hidden">
-          <IconXCircle className="size-5 shrink-0" />
-          Rechazar este comprobante
-        </summary>
-        <form action={rejectProofAction} className="flex flex-col gap-3 border-t border-borde px-4 py-4">
-          <input type="hidden" name="proofId" value={proofId} />
-          {Object.entries(hidden).map(([name, value]) => (
-            <input key={name} type="hidden" name={name} value={value} />
-          ))}
-          <label htmlFor={motivoId} className="text-sm font-semibold text-tinta">
-            Motivo del rechazo
-          </label>
-          <textarea
-            id={motivoId}
-            name="reason"
-            required
-            minLength={4}
-            rows={3}
-            aria-describedby={ayudaId}
-            className={panelInputClass("min-h-24 resize-y")}
-          />
-          <p id={ayudaId} className="text-sm text-tinta-suave">
-            El pasajero lo verá. Por ejemplo: «El monto no coincide», «La referencia no aparece en el banco» o
-            «La imagen no se lee».
-          </p>
-          <SubmitButton pendingLabel="Rechazando…" className={panelButtonClass("peligro", "md", "w-full sm:w-fit")}>
-            Rechazar comprobante
-          </SubmitButton>
-        </form>
-      </details>
-    </div>
   );
 }
 
@@ -259,6 +187,8 @@ export function ProofReviewPanel({
   const badge = coverage ? coverageBadge(coverage) : null;
   const verReservaHref = pasajerosUrlFromHidden(hidden, { reserva: reservation.id });
   const imagen = `/api/archivos/${proof.imagePath}`;
+  // Las fechas se dicen como en la lista de fondo ("Hoy 06:00", "Sábado 03/10 19:00").
+  const now = new Date();
 
   return (
     <div className="flex flex-col gap-6">
@@ -287,7 +217,7 @@ export function ProofReviewPanel({
           items={[
             { label: "Referencia", value: <span className="tabular font-semibold">{proof.reference}</span> },
             { label: "Forma de pago", value: proof.paymentMethodName },
-            { label: "Enviado el", value: <span className="tabular">{formatCaracasDateTime24(proof.createdAt)}</span> },
+            { label: "Enviado", value: <span className="tabular">{tripWhenText(proof.createdAt, now)}</span> },
             ...(coverage
               ? [
                   {
@@ -305,7 +235,7 @@ export function ProofReviewPanel({
       {proof.status === "PENDIENTE" ? null : (
         <Alert tone={proof.status === "APROBADO" ? "exito" : "info"} role="none" title="Este comprobante ya se revisó">
           Fue {proof.status === "APROBADO" ? "aprobado" : "rechazado"}
-          {proof.reviewedAt ? ` el ${formatCaracasDateTime24(proof.reviewedAt)}` : ""}.
+          {proof.reviewedAt ? ` ${departureWhenText(proof.reviewedAt, now)}` : ""}.
           {proof.status === "RECHAZADO" && proof.rejectionReason ? ` Motivo: ${proof.rejectionReason}` : ""}
         </Alert>
       )}
@@ -318,7 +248,7 @@ export function ProofReviewPanel({
                 { label: "Ruta", value: `${reservation.origin} → ${reservation.destination}` },
                 {
                   label: "Salida",
-                  value: <span className="tabular">{formatCaracasDateTime24(reservation.departsAt)}</span>,
+                  value: <span className="tabular">{tripWhenText(reservation.departsAt, now)}</span>,
                 },
                 { label: "Personas", value: countLabel(reservation.passengerCount, "persona", "personas") },
                 { label: "Estado", value: reservationStatusLabel(reservation.status) },

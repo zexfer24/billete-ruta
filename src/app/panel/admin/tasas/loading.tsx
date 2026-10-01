@@ -1,7 +1,7 @@
-import { PANEL_LABEL_CLASS, panelButtonClass } from "@/components/panel-ui";
+import { PANEL_LABEL_CLASS } from "@/components/panel-ui";
 import { Skeleton, SkeletonScreen } from "@/components/skeleton";
-import { InputSkeleton, PageHeaderSkeleton } from "../_shared/skeletons";
-import { PAGE_DESCRIPTION, PAGE_TITLE, amountHint } from "./texts";
+import { ButtonSkeleton, InputSkeleton, PageHeaderSkeleton } from "../_shared/skeletons";
+import { PAGE_DESCRIPTION, PAGE_TITLE, RATE_SECTIONS, amountHint } from "./texts";
 
 const CARD = "rounded-tarjeta border border-borde bg-superficie shadow-1";
 
@@ -16,8 +16,8 @@ function CurrentValueSkeleton({ label }: { label: string }) {
   );
 }
 
-/** Campo de la tasa nueva, vacío con su borde, con su etiqueta, su ayuda y el botón reales. */
-function RateFieldSkeleton({ label, example, primary = false }: { label: string; example: string; primary?: boolean }) {
+/** Campo de la tasa nueva con su etiqueta y su ayuda reales; el campo y el botón, con el brillo de carga. */
+function RateFieldSkeleton({ label, example }: { label: string; example: string }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
@@ -26,9 +26,7 @@ function RateFieldSkeleton({ label, example, primary = false }: { label: string;
         <p className="text-sm leading-snug text-tinta-suave">{amountHint(example)}</p>
       </div>
       <div>
-        <span className={panelButtonClass(primary ? "primario" : "secundario", "md", "w-full sm:w-auto")}>
-          Guardar nueva tasa
-        </span>
+        <ButtonSkeleton className="w-full sm:w-auto">Guardar nueva tasa</ButtonSkeleton>
       </div>
     </div>
   );
@@ -68,56 +66,39 @@ function SectionHeader({ title, description }: { title: string; description: str
   );
 }
 
-const EXCHANGE_BLOCKS = [
-  { title: "Bolívar", label: "Nueva tasa, en bolívares por cada dólar", example: "36,74" },
-  { title: "Peso colombiano", label: "Nueva tasa, en pesos por cada dólar", example: "4012,50" },
+/** Las tres tarjetas, en el orden de la página; la tasa de salida suele tener varios cambios. */
+const SECTIONS = [
+  { ...RATE_SECTIONS.tax, historyRows: 3 },
+  { ...RATE_SECTIONS.VES, historyRows: 1 },
+  { ...RATE_SECTIONS.COP, historyRows: 1 },
 ] as const;
 
 /**
- * Silueta de tasas: la tasa de salida y las dos tasas de cambio con su
- * historial. Los títulos, las etiquetas, la ayuda y los botones son textos
- * fijos y se pintan reales, los campos van vacíos con su borde, y los montos
- * y las fechas van en barras.
+ * Silueta de tasas: las tres tarjetas hermanas (tasa de salida, bolívar y
+ * peso colombiano) con la misma disposición que la página. Los títulos, las
+ * etiquetas, la ayuda y el texto de los botones se pintan reales; los campos
+ * y los botones llevan el brillo de carga, y los montos y las fechas van en
+ * barras.
  */
 export default function TasasAdminLoading() {
   return (
     <SkeletonScreen label="Cargando las tasas…" className="flex flex-col gap-6">
       <PageHeaderSkeleton title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
 
-      <div aria-hidden="true" className={CARD}>
-        <SectionHeader
-          title="Tasa de salida"
-          description="La cobra el terminal a cada pasajero, aparte de la tarifa de la agencia."
-        />
-        <div className="p-5">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <CurrentValueSkeleton label="Vigente, por pasajero" />
-            <RateFieldSkeleton label="Nueva tasa de salida, en dólares por pasajero" example="2,50" primary />
-          </div>
-          <div className="mt-6 border-t border-borde pt-4">
-            <HistorySkeleton rows={3} />
-          </div>
-        </div>
-      </div>
-
-      <div aria-hidden="true" className={CARD}>
-        <SectionHeader
-          title="Tasas de cambio"
-          description="Cuántos bolívares o pesos equivalen a un dólar. Se usan para convertir los pagos en esas monedas."
-        />
-        <div className="grid grid-cols-1 gap-8 p-5 lg:grid-cols-2 lg:gap-6">
-          {EXCHANGE_BLOCKS.map((block) => (
-            <div key={block.title} className="flex flex-col gap-5 rounded-control border border-borde p-4">
-              <p className="text-base font-semibold text-tinta">{block.title}</p>
-              <CurrentValueSkeleton label="Vigente, por cada dólar" />
-              <RateFieldSkeleton label={block.label} example={block.example} />
-              <div className="border-t border-borde pt-4">
-                <HistorySkeleton rows={1} />
-              </div>
+      {SECTIONS.map((section) => (
+        <div key={section.title} aria-hidden="true" className={CARD}>
+          <SectionHeader title={section.title} description={section.description} />
+          <div className="p-5">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <CurrentValueSkeleton label={section.currentLabel} />
+              <RateFieldSkeleton label={section.fieldLabel} example={section.example} />
             </div>
-          ))}
+            <div className="mt-6 border-t border-borde pt-4">
+              <HistorySkeleton rows={section.historyRows} />
+            </div>
+          </div>
         </div>
-      </div>
+      ))}
     </SkeletonScreen>
   );
 }

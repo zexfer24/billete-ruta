@@ -6,7 +6,7 @@ import { requirePassenger } from "@/modules/auth";
 import { formatInTimeZone } from "date-fns-tz";
 import { es } from "date-fns/locale/es";
 import { BUSINESS_TZ, formatCaracasTime24 } from "@/lib/time";
-import { dayTimePhrase } from "@/components/passenger-copy";
+import { whenPhrase } from "@/components/passenger-copy";
 import { Alert } from "@/components/alert";
 import { ClearFeedbackParams } from "@/components/clear-feedback-params";
 import { FileField } from "@/components/file-field";
@@ -44,15 +44,16 @@ const paramsSchema = z.object({
 type Documento = Awaited<ReturnType<typeof listDocuments>>[number];
 
 /**
- * "Guardada hoy a las 09:13", "Guardada ayer a las 19:00" o, más atrás, con
- * el día en palabras como en el ticket: "Guardada el 2 de julio a las 09:13"
- * (con el año solo si no es el actual). Nunca "02/07/2026".
+ * "Guardada hoy a las 09:13", "Guardada ayer a las 19:00" o "Guardada el vie
+ * 3 jul a las 01:14": el mismo formato de día y hora del resto de la app
+ * (`whenPhrase`). Una foto de otro año agrega el año ("el vie 3 jul de 2025 a
+ * las 01:14"), para no confundirla con una reciente. Nunca "03/07/2026".
  */
 function guardadoEl(date: Date, now: Date = new Date()): string {
-  const frase = dayTimePhrase(date, now);
-  if (/^(hoy|ayer) /.test(frase)) return `Guardada ${frase}`;
+  const frase = whenPhrase(date, now);
   const mismoAno = formatInTimeZone(date, BUSINESS_TZ, "yyyy") === formatInTimeZone(now, BUSINESS_TZ, "yyyy");
-  const dia = formatInTimeZone(date, BUSINESS_TZ, mismoAno ? "d 'de' MMMM" : "d 'de' MMMM 'de' yyyy", { locale: es });
+  if (mismoAno || !frase.startsWith("el ")) return `Guardada ${frase}`;
+  const dia = formatInTimeZone(date, BUSINESS_TZ, "EEE d MMM 'de' yyyy", { locale: es });
   return `Guardada el ${dia} a las ${formatCaracasTime24(date)}`;
 }
 

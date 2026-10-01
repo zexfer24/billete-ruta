@@ -2,6 +2,7 @@ import type { UnitDeparture } from "@/modules/reports";
 import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
 import { caracasDayHeading } from "./day-label";
 import { departureNotice } from "./departure-notice";
+import { arrowRouteName } from "./route-text";
 
 /**
  * Cuántas próximas salidas trae como mucho `unitStateOf` en `upcoming`. La
@@ -24,13 +25,13 @@ function formatInstant(date: Date, now: Date): string {
 }
 
 /**
- * Día y hora de una próxima salida con las mismas palabras que la lista de
- * salidas: "Hoy 11:00", "Mañana 07:00" o "02/10 14:30".
+ * Día y hora de una próxima salida con las mismas palabras que las cabeceras
+ * de la lista de salidas: "Hoy 11:00", "Mañana 07:00" o "Sábado 03/10 07:00".
+ * El día de la semana va delante de la fecha corta para que "03/10" no se lea
+ * suelto (ni como 10 de marzo) junto a "Hoy" y "Mañana".
  */
 function formatUpcoming(date: Date, now: Date): string {
-  const dia = caracasDayHeading(date, now);
-  const prefijo = dia === "Hoy" || dia === "Mañana" ? dia : formatCaracas(date, "dd/MM");
-  return `${prefijo} ${formatCaracasTime24(date)}`;
+  return `${caracasDayHeading(date, now)} ${formatCaracasTime24(date)}`;
 }
 
 /** Lo que se agrega a la próxima salida: cuántas más hay en los 7 días, sin inventar una cifra. */
@@ -46,7 +47,8 @@ function restantesText(upcoming: readonly UnitDeparture[], upcomingCount: number
  * (chofer o vehículo), compartida por la tabla de flota y el bloque "Flota
  * en operación" del tablero para no duplicar la lógica entre pantallas.
  *
- * Mismas reglas que ya traía `TripCell` en `src/app/panel/flota/page.tsx`:
+ * El título es la ruta con flecha (`arrowRouteName`), como en el resto del
+ * panel. Mismas reglas que ya traía `TripCell` en `src/app/panel/flota/page.tsx`:
  * - En ruta: el título es la ruta y el detalle "Salió HH:mm", con la llegada
  *   estimada si se conoce.
  * - Atrasada (su hora ya pasó y sigue programada, `current.overdue`, o con
@@ -58,7 +60,7 @@ function restantesText(upcoming: readonly UnitDeparture[], upcomingCount: number
  *   `upcoming` es la que se muestra.
  * - Embarcando: "Embarcando · sale HH:mm".
  * - Sin viaje en curso, con próximas salidas: "Hoy HH:mm", "Mañana HH:mm"
- *   o "dd/MM HH:mm" de la más próxima, con "· N salidas más en 7 días" si hay
+ *   o "Sábado dd/MM HH:mm" de la más próxima, con "· N salidas más en 7 días" si hay
  *   más de una. `upcomingCount` es el total real de los 7 días (`upcoming`
  *   puede venir recortada); sin él y con la lista en el tope, se dice "y
  *   otras salidas" sin cifra, para no dar un número falso.
@@ -86,17 +88,17 @@ export function describeUnitTrip(
     const detail = current.estimatedArrivalAt
       ? `Salió ${formatInstant(salioInstant, now)} · llegada estimada ${formatInstant(current.estimatedArrivalAt, now)}`
       : `Salió ${formatInstant(salioInstant, now)}`;
-    return { title: current.routeName, detail };
+    return { title: arrowRouteName(current.routeName), detail };
   }
 
   if (current?.overdue || current?.status === "MANIFIESTO_CERRADO") {
     const aviso = departureNotice(current, now);
-    if (aviso?.kind === "atrasada") return { title: current.routeName, detail: aviso.text, late: true };
+    if (aviso?.kind === "atrasada") return { title: arrowRouteName(current.routeName), detail: aviso.text, late: true };
   }
 
   if (current?.status === "MANIFIESTO_CERRADO") {
     return {
-      title: current.routeName,
+      title: arrowRouteName(current.routeName),
       detail: `Embarcando · sale ${formatInstant(current.departsAt, now)}`,
     };
   }
@@ -104,7 +106,7 @@ export function describeUnitTrip(
   const proxima = upcoming[0];
   if (proxima) {
     return {
-      title: proxima.routeName,
+      title: arrowRouteName(proxima.routeName),
       detail: `${formatUpcoming(proxima.departsAt, now)}${restantesText(upcoming, upcomingCount)}`,
     };
   }

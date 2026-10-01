@@ -14,7 +14,9 @@ export function LoginCard({ children, footer }: { children: ReactNode; footer: R
     <PublicShell>
       <PublicCard
         title="Acceso del personal"
-        description="Para operadores de agencia y administradores del terminal."
+        // `block text-balance`: en escritorio el texto no deja una palabra sola
+        // en la última línea.
+        description={<span className="block text-balance">Para el personal de las agencias y del terminal.</span>}
       >
         {children}
       </PublicCard>
@@ -30,14 +32,17 @@ export function LoginCard({ children, footer }: { children: ReactNode; footer: R
 export function StaffLoginFooter({ still = false }: { still?: boolean }) {
   return (
     <div className="flex flex-col gap-1 text-center text-base text-tinta-suave">
-      <p>¿No puedes entrar? Pide ayuda al administrador del terminal.</p>
+      {/* Vale para los dos perfiles: el administrador también entra por aquí. */}
+      <p className="text-balance">
+        ¿No puedes entrar? Pide ayuda a la administración del terminal o al responsable de tu agencia.
+      </p>
       <p>
         ¿Eres pasajero?{" "}
         {still ? (
-          <span className={PUBLIC_TEXT_LINK_CLASS}>Entra por aquí</span>
+          <span className={PUBLIC_TEXT_LINK_CLASS}>Ingresa aquí</span>
         ) : (
           <Link href="/ingresar" className={PUBLIC_TEXT_LINK_CLASS}>
-            Entra por aquí
+            Ingresa aquí
           </Link>
         )}
       </p>

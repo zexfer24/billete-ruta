@@ -95,8 +95,8 @@ export interface PanelNavProps {
  * Insignia de trabajo pendiente de un enlace del menú. Es ámbar (alerta), no
  * roja: indica tareas por hacer, no un error. El número se ve y el lector de
  * pantalla oye la frase completa. Con cero no pinta nada. Dentro del botón
- * "Menú" (contenedor `insignia-barra`) suma un texto corto visible
- * ("73 por revisar").
+ * "Menú" (contenedor `insignia-barra`) suma, desde `sm`, un texto corto
+ * visible ("73 por revisar"); en el teléfono queda solo el número.
  */
 export function PanelNavBadge({ count, badgeKey }: { count: number; badgeKey: PanelNavBadgeKey }) {
   if (!Number.isFinite(count) || count <= 0) return null;
@@ -107,7 +107,7 @@ export function PanelNavBadge({ count, badgeKey }: { count: number; badgeKey: Pa
         className="tabular inline-flex h-6 min-w-6 items-center justify-center gap-1 rounded-pastilla bg-alerta px-1.5 text-xs font-bold text-white [.insignia-barra_&]:px-2.5 [.insignia-barra_&]:text-sm"
       >
         {count > 99 ? "99+" : count}
-        <span className="hidden font-semibold [.insignia-barra_&]:inline">
+        <span className="hidden font-semibold sm:[.insignia-barra_&]:inline">
           {BADGE_SHORT_LABELS[badgeKey]}
         </span>
       </span>
@@ -297,15 +297,15 @@ export function PanelNav({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  // En el botón "Menú" la insignia lleva texto visible ("73 por revisar"),
-  // porque ahí no está junto a su enlace. En el teléfono no cabe al lado del
-  // logo y no se muestra: sigue dentro del menú, junto a su enlace, y el
-  // tablero ya avisa de los comprobantes por revisar.
+  // En el botón "Menú" la insignia avisa del trabajo pendiente aunque el menú
+  // esté cerrado. Desde `sm` lleva texto visible ("73 por revisar"), porque ahí
+  // no está junto a su enlace; en el teléfono solo el número, para que quepa
+  // junto al logo. El lector de pantalla oye la frase completa en ambos casos.
   const pendingBadges = groups
     .flatMap((group) => group.links)
     .filter((link) => link.badgeKey)
     .map((link) => (
-      <span key={link.href} className={`${TOP_BAR_BADGE_CLASS} hidden sm:inline-flex`}>
+      <span key={link.href} className={`${TOP_BAR_BADGE_CLASS} inline-flex`}>
         {renderBadge(link.badgeKey as PanelNavBadgeKey, badges)}
       </span>
     ));

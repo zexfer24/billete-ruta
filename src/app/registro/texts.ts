@@ -58,8 +58,12 @@ export function registerDescription(mode: RegisterMode, next: string | null | un
   return REGISTER_TEXTS[mode].description;
 }
 
-/** Ayuda de la cédula, la misma en ingresar y en registro. */
-export const ID_NUMBER_HINT = "La letra y el número, por ejemplo V12345678. Con o sin puntos.";
+/**
+ * Ayuda de la cédula, la misma en ingresar y en registro. "Con o sin puntos"
+ * va unido con espacios que no se cortan (U+00A0), para que no quede "Con o"
+ * colgando al final de la línea.
+ */
+export const ID_NUMBER_HINT = "La letra y el número, por ejemplo V12345678. Con o sin puntos.";
 
 /**
  * Error de la cédula vacía, el mismo en ingresar y en registro. Reemplaza a la
@@ -76,13 +80,16 @@ export const REGISTER_GROUPS = {
 
 /**
  * Ayudas de los campos. El ejemplo del teléfono lleva un guion que no se
- * corta (U+2011) para que "0412‑1234567" no quede partido en dos líneas.
+ * corta (U+2011) para que "0412‑1234567" no quede partido en dos líneas, y
+ * los finales de frase van unidos con espacios que no se cortan (U+00A0)
+ * para que bajen enteros a la línea siguiente en vez de partirse ("Elige una
+ * que / puedas recordar").
  */
 export const REGISTER_HINTS = {
   idNumber: ID_NUMBER_HINT,
   givenNames: "Como aparecen en tu cédula.",
-  birthYear: "Solo el año, con cuatro números. Sirve para confirmar que eres tú.",
+  birthYear: "Solo el año, con cuatro números. Sirve para confirmar que eres tú.",
   phone: "Con el código de área, por ejemplo 0412‑1234567. Aquí te enviaremos los avisos de tu viaje.",
-  password: "Mínimo 8 caracteres. Elige una que puedas recordar.",
+  password: "Mínimo 8 caracteres. Elige una que puedas recordar.",
   confirmPassword: "Escríbela otra vez, para evitar errores.",
 } as const;

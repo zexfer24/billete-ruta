@@ -3,6 +3,7 @@ import { Alert } from "@/components/alert";
 import { PANEL_LABEL_CLASS, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { SubmitButton } from "@/components/submit-button";
 import { createAgencyAction } from "./actions";
+import { OperatorPasswordField } from "./operator-password-field";
 
 function TextField({
   label,
@@ -16,7 +17,7 @@ function TextField({
   label: string;
   name: string;
   hint?: string;
-  type?: "text" | "email" | "tel" | "password";
+  type?: "text" | "email" | "tel";
   autoComplete?: string;
   minLength?: number;
   inputMode?: "text" | "email" | "tel";
@@ -83,29 +84,26 @@ export function AgencyForm({ error, closeHref }: { error?: string; closeHref: st
       </fieldset>
 
       <div className="border-t border-borde pt-5">
-      <fieldset className="flex flex-col gap-4">
-        <legend className="mb-3 text-base font-semibold text-tinta">Primer operador</legend>
-        <p className="text-sm leading-snug text-tinta-suave">
-          Es la persona de la agencia que usará el panel para vender y controlar sus salidas.
-        </p>
-        <TextField label="Nombre del operador" name="operatorName" autoComplete="off" />
-        <TextField
-          label="Correo del operador"
-          name="operatorEmail"
-          type="email"
-          inputMode="email"
-          autoComplete="off"
-          hint="Con este correo entrará al panel."
-        />
-        <TextField
-          label="Contraseña inicial"
-          name="operatorPassword"
-          type="password"
-          autoComplete="new-password"
-          minLength={8}
-          hint="Al menos 8 caracteres. Entrégasela al operador en persona, nunca por mensaje."
-        />
-      </fieldset>
+        <fieldset className="flex flex-col gap-4">
+          <legend className="mb-3 text-base font-semibold text-tinta">Primer operador</legend>
+          <p className="text-sm leading-snug text-tinta-suave">
+            Es la persona de la agencia que usará el panel para vender y controlar sus salidas.
+          </p>
+          <TextField label="Nombre del operador" name="operatorName" autoComplete="off" />
+          <TextField
+            label="Correo del operador"
+            name="operatorEmail"
+            type="email"
+            inputMode="email"
+            autoComplete="off"
+            hint="Con este correo entrará al panel."
+          />
+          <OperatorPasswordField
+            label="Contraseña inicial"
+            name="operatorPassword"
+            hint="Al menos 8 caracteres. Revísala antes de registrar y entrégasela al operador en persona, nunca por mensaje."
+          />
+        </fieldset>
       </div>
 
       <div className="flex flex-col-reverse gap-3 border-t border-borde pt-5 sm:flex-row sm:justify-end">

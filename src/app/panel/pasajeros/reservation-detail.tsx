@@ -4,7 +4,7 @@ import { Alert } from "@/components/alert";
 import { EmptyState, ProgressBar, StatusBadge, panelButtonClass } from "@/components/panel-ui";
 import { IconDownload, IconSearch } from "@/components/icons";
 import { formatMoney } from "@/lib/decimal";
-import { formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
+import { formatCaracasTime24 } from "@/lib/time";
 import {
   departureStatusLabel,
   departureStatusTone,
@@ -14,9 +14,12 @@ import {
 import type { AgencyReservationDetail } from "@/modules/reports";
 import { CashPaymentForm } from "@/app/panel/_forms/cash-payment-form";
 import { countLabel } from "../_dashboard/text";
-import { coverageBadge, PaymentHistory, ProofActions } from "./proof-review";
+import { coverageBadge, PaymentHistory } from "./proof-review";
 import { showsUsdEquivalent } from "./money";
 import { Disclosure, DetailList } from "./disclosure";
+import { tripWhenText } from "./trip-text";
+import { pasajerosUrlFromHidden } from "./urls";
+import { departureWhenText } from "../_shared/day-label";
 
 /** Título de una sección del panel lateral. */
 function PanelSectionTitle({ children }: { children: string }) {
@@ -42,7 +45,8 @@ export function ReservationNotFound({ closeHref }: { closeHref: string }) {
 /**
  * Detalle de una reserva en el panel lateral (`?reserva=<id>`). Arriba el
  * resumen con cuánto se pagó y cuánto falta; después la acción que toca
- * (revisar un comprobante, cobrar el saldo o descargar el ticket); luego el
+ * (abrir la revisión de un comprobante, cobrar lo que falta o descargar el
+ * ticket); luego el
  * viaje y los pasajeros; y plegados, el desglose del precio y el historial.
  */
 export function ReservationDetailPanel({
@@ -57,10 +61,12 @@ export function ReservationDetailPanel({
   ok?: string;
 }) {
   const { reservation, holder, departure, passengers, ticket, pendingProofs, history, canRegisterCash } = detail;
+  // Las fechas se dicen como en la lista de fondo ("Hoy 19:00", "Sábado 03/10 19:00").
+  const now = new Date();
   const seLibera =
     reservation.status === "PENDIENTE_PAGO" &&
     reservation.expiresAt !== null &&
-    reservation.expiresAt.getTime() > Date.now();
+    reservation.expiresAt.getTime() > now.getTime();
   const saldoCero = reservation.balanceUsd.isZero() || reservation.balanceUsd.isNegative();
 
   return (
@@ -75,8 +81,8 @@ export function ReservationDetailPanel({
               {holder.fullName} <span className="tabular text-tinta-suave">· {holder.maskedIdNumber}</span>
             </p>
             <p className="text-sm text-tinta-suave">
-              {reservation.salesChannel === "TAQUILLA" ? "Vendida en taquilla" : "Reservada en la app"} el{" "}
-              <span className="tabular">{formatCaracasDateTime24(reservation.createdAt)}</span>
+              {reservation.salesChannel === "TAQUILLA" ? "Vendida en taquilla" : "Reservada en la app"}{" "}
+              <span className="tabular">{departureWhenText(reservation.createdAt, now)}</span>
             </p>
           </div>
           <StatusBadge
@@ -105,45 +111,33 @@ export function ReservationDetailPanel({
           </PanelSectionTitle>
           {pendingProofs.map((p) => {
             const badge = coverageBadge(p.coverage);
-            const imagen = `/api/archivos/${p.imagePath}`;
             return (
-              <div key={p.id} className="flex flex-col gap-4 rounded-tarjeta border border-borde p-4">
-                <div className="flex flex-wrap items-start gap-4">
-                  <a
-                    href={imagen}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="foco shrink-0 rounded-control"
-                  >
-                    {/* Imagen subida por el pasajero y servida por /api/archivos: no pasa por next/image. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={imagen}
-                      alt={`Comprobante con referencia ${p.reference}, abrir en tamaño completo`}
-                      className="size-24 rounded-control border border-borde object-cover"
-                    />
-                  </a>
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <p className="tabular text-xl font-bold text-tinta">{formatMoney(p.amount, p.currency)}</p>
-                    {showsUsdEquivalent(p.currency) ? (
-                      <p className="tabular text-sm text-tinta-suave">Equivale a {formatMoney(p.amountUsd, "USD")}</p>
-                    ) : null}
-                    <p className="text-sm text-tinta-suave">
-                      Referencia <span className="tabular font-semibold text-tinta">{p.reference}</span> ·{" "}
-                      {p.paymentMethodName}
-                    </p>
-                    <div className="mt-1">
-                      <StatusBadge label={badge.label} tone={badge.tone} />
-                    </div>
+              <div key={p.id} className="flex flex-col gap-3 rounded-tarjeta border border-borde p-4">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <p className="tabular text-xl font-bold text-tinta">{formatMoney(p.amount, p.currency)}</p>
+                  {showsUsdEquivalent(p.currency) ? (
+                    <p className="tabular text-sm text-tinta-suave">Equivale a {formatMoney(p.amountUsd, "USD")}</p>
+                  ) : null}
+                  <p className="text-sm text-tinta-suave">
+                    Referencia <span className="tabular font-semibold text-tinta">{p.reference}</span> ·{" "}
+                    {p.paymentMethodName}
+                  </p>
+                  <div className="mt-1">
+                    <StatusBadge label={badge.label} tone={badge.tone} />
                   </div>
                 </div>
-                <ProofActions
-                  proofId={p.id}
-                  code={reservation.code}
-                  amountUsd={p.amountUsd}
-                  coverage={p.coverage}
-                  hidden={hidden}
-                />
+                {/* Se decide en un solo lugar: el panel "Revisar comprobante",
+                    con la imagen a lo ancho y la barra de decisión. */}
+                <Link
+                  href={pasajerosUrlFromHidden(hidden, { comprobante: p.id })}
+                  scroll={false}
+                  className={panelButtonClass("primario", "lg", "w-full sm:w-fit")}
+                >
+                  Revisar este comprobante
+                  {pendingProofs.length > 1 ? (
+                    <span className="sr-only"> con referencia {p.reference}</span>
+                  ) : null}
+                </Link>
               </div>
             );
           })}
@@ -159,14 +153,6 @@ export function ReservationDetailPanel({
             balanceUsd={reservation.balanceUsd.toString()}
             currency={reservation.currency}
             holderName={holder.fullName}
-            amountInCurrencyHint={
-              reservation.currency !== "USD"
-                ? `Total de la reserva en ${reservation.currency}: ${formatMoney(
-                    reservation.amountInCurrency,
-                    reservation.currency,
-                  )}.`
-                : undefined
-            }
             hidden={hidden}
           />
         </section>
@@ -177,7 +163,7 @@ export function ReservationDetailPanel({
         {ticket ? (
           <div className="flex flex-col gap-3">
             <p className="text-[15px] text-tinta">
-              Emitido el <span className="tabular">{formatCaracasDateTime24(ticket.issuedAt)}</span>.
+              Emitido <span className="tabular">{departureWhenText(ticket.issuedAt, now)}</span>.
             </p>
             <a
               href={`/api/archivos/${ticket.pdfPath}`}
@@ -191,7 +177,7 @@ export function ReservationDetailPanel({
             </a>
           </div>
         ) : (
-          <p className="text-[15px] text-tinta-suave">El ticket se emite solo cuando el saldo llegue a cero.</p>
+          <p className="text-[15px] text-tinta-suave">El ticket se emite cuando la reserva esté pagada completa.</p>
         )}
       </section>
 
@@ -202,7 +188,7 @@ export function ReservationDetailPanel({
             { label: "Ruta", value: `${departure.origin} → ${departure.destination}` },
             {
               label: "Fecha y hora",
-              value: <span className="tabular">{formatCaracasDateTime24(departure.departsAt)}</span>,
+              value: <span className="tabular">{tripWhenText(departure.departsAt, now)}</span>,
             },
             { label: "Bus", value: <span className="tabular">{departure.vehiclePlate}</span> },
             {

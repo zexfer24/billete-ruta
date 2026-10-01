@@ -116,10 +116,15 @@ export function fieldControlClass(hasError: boolean, extra?: string): string {
   );
 }
 
-/** Clases de un campo del panel (44 px de alto); el error se marca con `aria-invalid="true"`. */
+/**
+ * Clases de un campo del panel (44 px de alto); el error se marca con
+ * `aria-invalid="true"`. La marca `campo-panel` hace que un `<select>` con
+ * estas clases cambie la flecha nativa del navegador por el chevron de la
+ * marca (regla en `globals.css`), sin que cada pantalla tenga que dibujarlo.
+ */
 export function panelInputClass(extra?: string): string {
   return cx(
-    "min-h-11 rounded-control px-3 py-2",
+    "campo-panel min-h-11 rounded-control px-3 py-2",
     INPUT_STATES,
     "border-borde-control hover:border-tinta-suave aria-[invalid=true]:border-peligro",
     extra,
@@ -128,6 +133,25 @@ export function panelInputClass(extra?: string): string {
 
 /** Clases de la etiqueta de un campo del panel, que envuelve al control. */
 export const PANEL_LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-semibold text-tinta";
+
+// ---------------------------------------------------------------------------
+// Pestañas del panel.
+// ---------------------------------------------------------------------------
+
+/**
+ * Pestaña activa del panel: fondo marca-50, texto marca-800 y una barra
+ * inferior de 3 px en marca-600 (8,7:1 sobre blanco y sobre marca-50). La
+ * barra es la señal que no depende del tono (WCAG 1.4.1 y 1.4.11); va en un
+ * pseudoelemento absoluto, así no cambia la caja ni mueve a las vecinas, y no
+ * se confunde con el anillo de foco. El peso de la letra es el mismo que el de
+ * la inactiva para que el ancho no salte al cambiar de pestaña. La comparten
+ * `PanelTabs`, las pestañas propias de pasajeros y del terminal y sus skeletons.
+ */
+export const PANEL_TAB_ACTIVE_CLASS =
+  "relative bg-marca-50 text-marca-800 after:pointer-events-none after:absolute after:inset-x-3 after:bottom-0.5 after:h-[3px] after:rounded-pastilla after:bg-marca-600";
+
+/** Pestaña inactiva del panel: texto secundario sobre la superficie, con fondo lienzo al pasar el puntero. */
+export const PANEL_TAB_INACTIVE_CLASS = "text-tinta-suave hover:bg-lienzo hover:text-tinta";
 
 // ---------------------------------------------------------------------------
 // Tonos de estado (Pill, StatusBadge, Alert, ProgressBar).

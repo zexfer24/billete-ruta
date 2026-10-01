@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deadlineBeforePhrase,
   deadlinePhrase,
   estimatedOnlineDeadline,
   heroDepartsSoon,
@@ -62,10 +63,29 @@ describe("ticketDeadline", () => {
     expect(ticketDeadline({ status: "PAGO_EN_SITIO", departsAt: en(72 * HORA), expiresAt: null }, AHORA)).toBeNull();
   });
 
-  it("dice qué hacer y hasta cuándo", () => {
+  it("dice qué hacer y hasta cuándo, con el día separado de la hora", () => {
     const plazo = { at: en(43 * MIN), boundByDeparture: false };
-    expect(ticketDeadlineLabel("PENDIENTE_PAGO", plazo, AHORA)).toBe("Paga antes de hoy a las 21:02");
-    expect(ticketDeadlineLabel("PAGO_EN_SITIO", plazo, AHORA)).toBe("Paga en la taquilla antes de hoy a las 21:02");
+    expect(ticketDeadlineLabel("PENDIENTE_PAGO", plazo, AHORA)).toBe("Paga hoy antes de las 21:02");
+    expect(ticketDeadlineLabel("PAGO_EN_SITIO", plazo, AHORA)).toBe("Paga en la taquilla hoy antes de las 21:02");
+  });
+});
+
+describe("deadlineBeforePhrase", () => {
+  it("nunca dice «antes de hoy»: el día va antes y la hora detrás de «antes de las»", () => {
+    expect(deadlineBeforePhrase({ at: en(43 * MIN), boundByDeparture: false }, AHORA)).toBe("hoy antes de las 21:02");
+    expect(deadlineBeforePhrase({ at: en(18 * HORA), boundByDeparture: false }, AHORA)).toBe(
+      "mañana antes de las 14:19",
+    );
+    // 2026-10-12 08:00 en Caracas.
+    expect(deadlineBeforePhrase({ at: new Date("2026-10-12T12:00:00.000Z"), boundByDeparture: false }, AHORA)).toBe(
+      "el lun 12 oct antes de las 08:00",
+    );
+  });
+
+  it("si el plazo lo pone la salida, lo dice", () => {
+    expect(deadlineBeforePhrase({ at: en(39 * MIN), boundByDeparture: true }, AHORA)).toBe(
+      "hoy antes de las 20:58, cuando sale el bus",
+    );
   });
 });
 
@@ -87,9 +107,27 @@ describe("pickHeroReservation", () => {
     expect(eleccion).toEqual({ hero: barinas, soonest: merida, promoted: true });
   });
 
-  it("si el viaje más cercano pide pagar, se queda en grande", () => {
+  it("una pagada en parte que sale en 5 horas cede ante un puesto que se libera en 43 min", () => {
     const abonada: HeroCandidate = { ...merida, status: "ABONADA" };
+    expect(pickHeroReservation([barinas, abonada], AHORA)).toEqual({ hero: barinas, soonest: abonada, promoted: true });
+  });
+
+  it("una pagada en parte que sale dentro de 3 horas no cede", () => {
+    const abonada: HeroCandidate = { ...merida, status: "ABONADA", departsAt: en(2 * HORA) };
     expect(pickHeroReservation([barinas, abonada], AHORA)).toEqual({ hero: abonada, soonest: abonada, promoted: false });
+  });
+
+  it("un pago en la taquilla lejano cede ante una reserva sin pago", () => {
+    const taquilla: HeroCandidate = { code: "TR-C", status: "PAGO_EN_SITIO", departsAt: en(84 * HORA), expiresAt: null };
+    const sinPago: HeroCandidate = { ...barinas, departsAt: en(90 * HORA) };
+    expect(pickHeroReservation([taquilla, sinPago], AHORA)).toEqual({ hero: sinPago, soonest: taquilla, promoted: true });
+  });
+
+  it("entre dos sin pago sube la que vence antes, aunque salga después", () => {
+    const cercana: HeroCandidate = { code: "TR-F", status: "PENDIENTE_PAGO", departsAt: en(6 * HORA), expiresAt: en(HORA) };
+    expect(pickHeroReservation([cercana, barinas], AHORA)).toEqual({ hero: barinas, soonest: cercana, promoted: true });
+    const tardia: HeroCandidate = { ...barinas, expiresAt: en(90 * MIN) };
+    expect(pickHeroReservation([cercana, tardia], AHORA)?.promoted).toBe(false);
   });
 
   it("un ticket pagado que sale dentro de 3 horas nunca cede su lugar", () => {

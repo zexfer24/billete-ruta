@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import {
+  DASHBOARD_SECTION_ACTION_CLASS,
+  DASHBOARD_SECTION_HEADER_CLASS,
+  DASHBOARD_SECTION_TEXT_CLASS,
+  DashboardSection,
+} from "@/app/panel/_dashboard/section-card";
+import { ClickableRow } from "@/components/clickable-row";
 import { IconBus, IconChevronRight, IconRoute, IconUsers } from "@/components/icons";
 import {
   EmptyState,
@@ -12,7 +19,8 @@ import {
 } from "@/components/panel-ui";
 import { Skeleton } from "@/components/skeleton";
 import { cx } from "@/components/ui-classes";
-import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
+import { prisma } from "@/lib/prisma";
+import { formatCaracas, formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
 import { departureTaxByHour, listNewAccounts, listTerminalTrips } from "@/modules/reports";
 import { countLabel, formatCount } from "../_shared/format";
 import {
@@ -20,7 +28,6 @@ import {
   DISCLOSURE_SUMMARY_CLASS,
   DisclosureChevron,
   MobileCardList,
-  SECTION_LINK_CLASS,
   TimeCell,
 } from "../_shared/lists";
 import {
@@ -30,7 +37,8 @@ import {
   withQuery,
   type AdminRange,
 } from "../_shared/period";
-import { SectionHeadingSkeleton, StatCardSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { ButtonSkeleton, StatCardSkeleton, TableSkeleton } from "../_shared/skeletons";
+import { movementsHref as tripDetailHref } from "../movimientos/movements";
 import {
   CHART_CAPTION,
   CHART_DETAIL_LABEL,
@@ -68,19 +76,56 @@ function ScrollArea({ label, long, children }: { label: string; long: boolean; c
 const MOBILE_INITIAL = 5;
 
 /** Cabeceras de las dos tablas, compartidas con su silueta de carga. */
-const TRIP_COLUMNS = ["Salió", "Ruta", "Agencia"] as const;
+const TRIP_COLUMNS = ["Salió", "Llegó", "Ruta", "Agencia", ""] as const;
 const NEW_ACCOUNT_COLUMNS = ["Registro", "Cédula", "Primer nombre", "Primer apellido"] as const;
+
+/** Etiquetas fijas de los datos de la tarjeta de un usuario nuevo, compartidas con su silueta. */
+const NEW_ACCOUNT_MOBILE_LABELS = ["Registro"] as const;
 
 /** Títulos y frases fijas de las secciones, compartidos con su silueta de carga. */
 const TRIPS_TITLE = "Últimos viajes completados";
 const TRIPS_DESCRIPTION =
-  "Viajes que ya llegaron a su destino, con su ruta y su punto de encuentro. Primero el que salió más recientemente.";
+  "Viajes que llegaron a su destino en este periodo, con su ruta y su punto de encuentro. Primero el que llegó más recientemente.";
 const MOVEMENTS_LINK_LABEL = "Ver todos los movimientos";
 const AUDIT_TEXT = "Esta lista muestra datos personales: cada vez que se abre queda registrada con tu nombre.";
 const NEW_ACCOUNTS_TITLE = "Usuarios nuevos";
 const NEW_ACCOUNTS_DESCRIPTION =
   "Pasajeros que crearon su cuenta, o a quienes se la crearon en taquilla, en este periodo.";
 const CHART_TITLE = "Tasa cobrada por hora del día";
+
+/** Texto del enlace de cada viaje a su detalle en Movimientos, como allá. */
+const TRIP_DETAIL_LABEL = "Ver pasajeros a bordo";
+
+/** "29/09 21:59": el día y la hora juntos, para la línea de horas de la tarjeta. */
+function dayAndTime(date: Date): string {
+  return `${formatCaracas(date, "dd/MM")} ${formatCaracasTime24(date)}`;
+}
+
+/**
+ * Horas del viaje en una línea para la tarjeta del teléfono, como en
+ * Movimientos: "Salió 29/09 13:57 · Llegó 30/09 05:04". Las dos llevan su
+ * fecha: el periodo cuenta por la llegada y la salida puede caer antes.
+ */
+function tripHoursLine(departedAt: Date | null, arrivedAt: Date | null): string {
+  const parts: string[] = [];
+  if (departedAt) parts.push(`Salió ${dayAndTime(departedAt)}`);
+  if (arrivedAt) parts.push(`Llegó ${dayAndTime(arrivedAt)}`);
+  return parts.join(" · ");
+}
+
+/**
+ * Hora de llegada de cada viaje de la lista. `listTerminalTrips` filtra por
+ * la llegada pero no la devuelve; sin ella, un viaje que salió el día antes
+ * parecía fuera del periodo.
+ */
+async function arrivalsOf(tripLogIds: string[]): Promise<Map<string, Date | null>> {
+  if (tripLogIds.length === 0) return new Map();
+  const logs = await prisma.tripLog.findMany({
+    where: { id: { in: tripLogIds } },
+    select: { id: true, arrivedAt: true },
+  });
+  return new Map(logs.map((log) => [log.id, log.arrivedAt]));
+}
 
 /**
  * Título de la sección del periodo, con las pestañas a su derecha, como
@@ -109,6 +154,15 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
   const rangeText = describeAdminRange(range);
   const wider = widerPeriodHref(range);
   const movementsHref = withQuery("/panel/admin/movimientos", periodQuery(range));
+  const arrivals = await arrivalsOf(trips.rows.map((t) => t.tripLogId));
+  // Por llegada, la más reciente primero: es la hora que decide el periodo.
+  const tripRows = trips.rows
+    .map((t) => ({
+      ...t,
+      arrivedAt: arrivals.get(t.tripLogId) ?? null,
+      href: tripDetailHref(range, undefined, t.tripLogId),
+    }))
+    .sort((a, b) => (b.arrivedAt?.getTime() ?? 0) - (a.arrivedAt?.getTime() ?? 0));
 
   return (
     <div className="flex flex-col gap-6">
@@ -131,23 +185,18 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
         />
       </div>
 
-      <section aria-labelledby="recorridos-titulo" className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
-          <div className="min-w-0">
-            <h2 id="recorridos-titulo" className="text-lg font-semibold text-tinta">
-              {TRIPS_TITLE}
-            </h2>
-            <p className="text-sm leading-snug text-tinta-suave">{TRIPS_DESCRIPTION}</p>
-          </div>
-          {trips.total > 0 ? (
-            <Link href={movementsHref} className={SECTION_LINK_CLASS}>
+      <DashboardSection
+        title={TRIPS_TITLE}
+        description={TRIPS_DESCRIPTION}
+        action={
+          trips.total > 0 ? (
+            <Link href={movementsHref} className={panelButtonClass("secundario")}>
               {MOVEMENTS_LINK_LABEL}
-              <IconChevronRight className="size-4 shrink-0" />
             </Link>
-          ) : null}
-        </div>
-
-        {trips.rows.length === 0 ? (
+          ) : undefined
+        }
+      >
+        {tripRows.length === 0 ? (
           <EmptyState
             icon={<IconRoute />}
             title="No hay recorridos completados en este periodo"
@@ -161,81 +210,107 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
             }
           />
         ) : (
-          <TableShell
-            mobile={
-              <MobileCardList
-                label={TRIPS_TITLE}
-                initial={MOBILE_INITIAL}
-                moreNoun={["recorrido", "recorridos"]}
-                items={trips.rows.map((t) => (
-                  <MobileCard
-                    key={t.tripLogId}
-                    title={`${t.origin} → ${t.destination}`}
-                    subtitle={t.agencyName}
-                    details={[
-                      {
-                        label: "Salió",
-                        value: t.departedAt ? formatCaracasDateTime24(t.departedAt) : "Sin registrar",
-                      },
-                      { label: "Punto de encuentro", value: t.meetingPoint },
-                    ]}
-                  />
-                ))}
-              />
-            }
-          >
-            <ScrollArea label="Lista de viajes completados" long={trips.rows.length > SCROLL_AFTER_ROWS}>
-              <table className="w-full text-left">
-                <caption className="sr-only">
-                  {TRIPS_TITLE}. {rangeText}.
-                </caption>
-                <thead>
-                  <tr>
-                    {TRIP_COLUMNS.map((column) => (
-                      <th key={column} scope="col" className={STICKY_TH}>
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {trips.rows.map((t) => (
-                    <tr key={t.tripLogId} className="border-t border-borde">
-                      <td className={PANEL_TD_CLASS}>
-                        <TimeCell
-                          time={t.departedAt ? formatCaracasTime24(t.departedAt) : undefined}
-                          date={t.departedAt ? formatCaracasDate(t.departedAt) : undefined}
-                        />
-                      </td>
-                      <td className={PANEL_TD_CLASS}>
-                        <span className="block font-semibold">
-                          {t.origin} → {t.destination}
+          <div className="flex flex-col gap-3">
+            <TableShell
+              mobile={
+                <MobileCardList
+                  label={TRIPS_TITLE}
+                  initial={MOBILE_INITIAL}
+                  moreNoun={["recorrido", "recorridos"]}
+                  items={tripRows.map((t) => (
+                    // Toda la tarjeta abre el viaje en Movimientos, como allá.
+                    <li key={t.tripLogId}>
+                      <Link
+                        href={t.href}
+                        className="foco flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-colors duration-150 ease-out hover:border-marca-600 motion-reduce:transition-none"
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col gap-2">
+                          <span className="min-w-0">
+                            <span className="sr-only">{TRIP_DETAIL_LABEL}: </span>
+                            <span className="block break-words text-base font-semibold text-tinta">
+                              {t.origin} → {t.destination}
+                            </span>
+                            <span className="block text-sm text-tinta-suave">{t.agencyName}</span>
+                          </span>
+                          <span className="flex flex-col">
+                            <span className="tabular text-[15px] font-medium text-tinta">
+                              {tripHoursLine(t.departedAt, t.arrivedAt)}
+                            </span>
+                            <span className="text-sm text-tinta-suave">{t.meetingPoint}</span>
+                          </span>
                         </span>
-                        <span className="block text-sm text-tinta-suave">{t.meetingPoint}</span>
-                      </td>
-                      <td className={PANEL_TD_CLASS}>{t.agencyName}</td>
-                    </tr>
+                        <IconChevronRight className="size-5 shrink-0 text-marca-700" />
+                      </Link>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            </ScrollArea>
-          </TableShell>
+                />
+              }
+            >
+              <ScrollArea label="Lista de viajes completados" long={tripRows.length > SCROLL_AFTER_ROWS}>
+                {/* `relative`: la cabecera "Detalle" solo para lectores de pantalla es absoluta. */}
+                <table className="relative w-full text-left">
+                  <caption className="sr-only">
+                    {TRIPS_TITLE}. {rangeText}.
+                  </caption>
+                  <thead>
+                    <tr>
+                      {TRIP_COLUMNS.map((column, index) => (
+                        <th key={index} scope="col" className={STICKY_TH}>
+                          {column || <span className="sr-only">Detalle</span>}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tripRows.map((t) => (
+                      <ClickableRow key={t.tripLogId} href={t.href} className="cursor-pointer border-t border-borde">
+                        <td className={PANEL_TD_CLASS}>
+                          <TimeCell
+                            time={t.departedAt ? formatCaracasTime24(t.departedAt) : undefined}
+                            date={t.departedAt ? formatCaracasDate(t.departedAt) : undefined}
+                          />
+                        </td>
+                        <td className={PANEL_TD_CLASS}>
+                          <TimeCell
+                            time={t.arrivedAt ? formatCaracasTime24(t.arrivedAt) : undefined}
+                            date={t.arrivedAt ? formatCaracasDate(t.arrivedAt) : undefined}
+                          />
+                        </td>
+                        <td className={PANEL_TD_CLASS}>
+                          <span className="block font-semibold">
+                            {t.origin} → {t.destination}
+                          </span>
+                          <span className="block text-sm text-tinta-suave">{t.meetingPoint}</span>
+                        </td>
+                        <td className={PANEL_TD_CLASS}>{t.agencyName}</td>
+                        <td className={cx(PANEL_TD_CLASS, "px-2 text-right")}>
+                          {/* Toda la fila abre el viaje; este enlace lo deja al alcance del teclado. */}
+                          <Link
+                            href={t.href}
+                            aria-label={`${TRIP_DETAIL_LABEL}: ${t.agencyName}, ${t.origin} a ${t.destination}`}
+                            className={panelButtonClass("fantasma", "sm", "px-2")}
+                          >
+                            <IconChevronRight className="size-5 shrink-0" />
+                          </Link>
+                        </td>
+                      </ClickableRow>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollArea>
+            </TableShell>
+            {trips.total > tripRows.length ? (
+              <p className="text-sm text-tinta-suave">
+                Se muestran los {formatCount(tripRows.length)} más recientes de{" "}
+                {countLabel(trips.total, "recorrido", "recorridos")}.
+              </p>
+            ) : null}
+          </div>
         )}
-        {trips.total > trips.rows.length ? (
-          <p className="text-sm text-tinta-suave">
-            Se muestran los {formatCount(trips.rows.length)} más recientes de {countLabel(trips.total, "recorrido", "recorridos")}.
-          </p>
-        ) : null}
-      </section>
+      </DashboardSection>
 
-      <section aria-labelledby="usuarios-nuevos-titulo" className="flex flex-col gap-3">
-        <div className="min-w-0">
-          <h2 id="usuarios-nuevos-titulo" className="text-lg font-semibold text-tinta">
-            {NEW_ACCOUNTS_TITLE}
-          </h2>
-          <p className="text-sm leading-snug text-tinta-suave">{NEW_ACCOUNTS_DESCRIPTION}</p>
-        </div>
-
+      <DashboardSection title={NEW_ACCOUNTS_TITLE} description={NEW_ACCOUNTS_DESCRIPTION}>
+        <div className="flex flex-col gap-3">
         {newAccounts.rows.length === 0 ? (
           <EmptyState
             icon={<IconUsers />}
@@ -261,7 +336,7 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
                     key={a.id}
                     title={`${a.firstName} ${a.firstSurname}`}
                     subtitle={`Cédula ${a.idNumber}`}
-                    details={[{ label: "Registro", value: formatCaracasDateTime24(a.createdAt) }]}
+                    details={[{ label: NEW_ACCOUNT_MOBILE_LABELS[0], value: formatCaracasDateTime24(a.createdAt) }]}
                   />
                 ))}
               />
@@ -304,9 +379,39 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
           </p>
         ) : null}
         <AuditNote>{AUDIT_TEXT}</AuditNote>
-      </section>
+        </div>
+      </DashboardSection>
 
       <TaxByHourChart title={CHART_TITLE} hours={byHour} severalDays={range.period !== "24h" && spansSeveralDays(range)} />
+    </div>
+  );
+}
+
+/**
+ * Tarjeta de sección (`DashboardSection`) en la silueta, con las mismas
+ * clases de cabecera: título, frase y acción reales, quietos.
+ */
+function SectionCardSkeleton({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div aria-hidden="true" className="rounded-tarjeta border border-borde bg-superficie shadow-1">
+      <div className={DASHBOARD_SECTION_HEADER_CLASS}>
+        <div className={DASHBOARD_SECTION_TEXT_CLASS}>
+          <p className="text-lg font-semibold text-tinta">{title}</p>
+          <p className="mt-1 text-sm leading-snug text-tinta-suave">{description}</p>
+        </div>
+        {action ? <div className={DASHBOARD_SECTION_ACTION_CLASS}>{action}</div> : null}
+      </div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
@@ -325,26 +430,27 @@ export function PeriodDataSkeleton({ severalDays = false }: { severalDays?: bool
         <StatCardSkeleton label="Recorridos completados" icon={<IconBus />} />
         <StatCardSkeleton label="Usuarios nuevos" icon={<IconUsers />} />
       </div>
-      <div className="flex flex-col gap-3">
-        <SectionHeadingSkeleton
-          title={TRIPS_TITLE}
-          description={TRIPS_DESCRIPTION}
-          action={
-            <span className={SECTION_LINK_CLASS}>
-              {MOVEMENTS_LINK_LABEL}
-              <IconChevronRight className="size-4 shrink-0" />
-            </span>
-          }
-        />
-        <TableSkeleton columns={TRIP_COLUMNS} rows={5} mobileDetails={2} />
-      </div>
-      <div className="flex flex-col gap-3">
-        <SectionHeadingSkeleton title={NEW_ACCOUNTS_TITLE} description={NEW_ACCOUNTS_DESCRIPTION} />
-        <TableSkeleton columns={NEW_ACCOUNT_COLUMNS} rows={4} mobileCards={2} mobileDetails={1} />
-        <div aria-hidden="true">
+      <SectionCardSkeleton
+        title={TRIPS_TITLE}
+        description={TRIPS_DESCRIPTION}
+        action={<ButtonSkeleton>{MOVEMENTS_LINK_LABEL}</ButtonSkeleton>}
+      >
+        {/* Como la tarjeta real: ruta, agencia, la línea de horas y el punto
+            de encuentro, con su flecha. */}
+        <TableSkeleton columns={TRIP_COLUMNS} rows={5} mobileDetails={0} mobileSubtitleLines={3} mobileChevron />
+      </SectionCardSkeleton>
+      <SectionCardSkeleton title={NEW_ACCOUNTS_TITLE} description={NEW_ACCOUNTS_DESCRIPTION}>
+        <div className="flex flex-col gap-3">
+          <TableSkeleton
+            columns={NEW_ACCOUNT_COLUMNS}
+            rows={4}
+            mobileCards={2}
+            mobileDetails={1}
+            mobileDetailLabels={NEW_ACCOUNT_MOBILE_LABELS}
+          />
           <AuditNote>{AUDIT_TEXT}</AuditNote>
         </div>
-      </div>
+      </SectionCardSkeleton>
       <div aria-hidden="true" className="rounded-tarjeta border border-borde bg-superficie shadow-1">
         <div className="border-b border-borde px-5 py-4">
           <p className="text-lg font-semibold text-tinta">{CHART_TITLE}</p>
@@ -355,8 +461,8 @@ export function PeriodDataSkeleton({ severalDays = false }: { severalDays?: bool
           <div className="flex flex-col gap-2">
             <div className="flex gap-2 sm:gap-3">
               <div className="flex h-44 w-14 shrink-0 flex-col justify-between">
-                <Skeleton className="h-4 w-full rounded-pastilla" />
-                <Skeleton className="h-4 w-full rounded-pastilla" />
+                <Skeleton className="h-4 w-full -translate-y-1/2 rounded-pastilla" />
+                <Skeleton className="h-4 w-full translate-y-1/2 rounded-pastilla" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex h-44 items-end gap-px border-b border-borde-control sm:gap-1">

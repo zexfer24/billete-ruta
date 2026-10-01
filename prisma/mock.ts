@@ -20,6 +20,7 @@ import argon2 from "argon2";
 import { formatMoney } from "@/lib/decimal";
 import { getEnv } from "@/lib/env";
 import { formatCaracasDateTime24 } from "@/lib/time";
+import { MAX_SEND_ATTEMPTS } from "@/modules/scheduler";
 
 const prisma = new PrismaClient();
 
@@ -31,8 +32,9 @@ const CUENTAS = 1500;
 const ANTIGUEDAD_MAX_DIAS = 180;
 
 /**
- * Cuentas documentadas en el README. Se recrean siempre, porque el reinicio
- * borra las que dejó el seed y sin ellas nadie puede entrar como pasajero.
+ * Cuentas documentadas en el README. Si el seed ya las creó se reutilizan (la
+ * cédula es única); si el reinicio las borró, se crean de nuevo, porque sin
+ * ellas nadie puede entrar como pasajero.
  */
 const PASAJEROS_FIJOS = [
   {
@@ -509,6 +511,21 @@ async function main(): Promise<void> {
   }
 
   const ahora = new Date();
+
+  // Cuentas del README que ya existen (las crea el seed): se reutilizan con su
+  // id, sin duplicar su cédula, y se respetan sus reservas y documentos.
+  const fijasExistentes = new Map(
+    (
+      await prisma.passengerAccount.findMany({
+        where: { idNumber: { in: PASAJEROS_FIJOS.map((p) => p.idNumber) } },
+        include: {
+          documents: { where: { type: "CEDULA" }, select: { id: true } },
+          reservations: { select: { departureId: true } },
+        },
+      })
+    ).map((cuenta) => [cuenta.idNumber, cuenta]),
+  );
+
   const tasaSalida = await prisma.departureTax.findFirstOrThrow({
     orderBy: { effectiveFrom: "desc" },
   });
@@ -650,19 +667,6 @@ async function main(): Promise<void> {
     });
   }
 
-  await prisma.departure.createMany({
-    data: salidasFiltradas.map((s) => ({
-      id: s.id,
-      routeId: s.routeId,
-      vehicleId: s.vehicleId,
-      driverId: s.driverId,
-      departsAt: s.departsAt,
-      capacity: s.capacity,
-      status: "FINALIZADA" as const,
-      manifestClosedAt: new Date(s.departsAt.getTime() - 40 * MIN),
-    })),
-  });
-
   // --- Salidas futuras ya sembradas --------------------------------------
   const todas: SalidaMock[] = [
     ...salidasFiltradas,
@@ -694,22 +698,27 @@ async function main(): Promise<void> {
 
   const cedulasUsadas = new Set<string>(PASAJEROS_FIJOS.map((p) => p.idNumber));
 
+  // Se registran 90 días atrás para que sus reservas de días anteriores no
+  // queden antes de la creación de la cuenta. Una cuenta ya existente conserva
+  // su id, sus datos y su contraseña; solo se adelanta su fecha de registro.
   const cuentasFijas = PASAJEROS_FIJOS.map((fijo) => {
-    const registro = new Date(ahora.getTime() - 90 * DIA);
+    const existente = fijasExistentes.get(fijo.idNumber);
+    const registro = minFecha(new Date(ahora.getTime() - 90 * DIA), existente?.createdAt ?? ahora);
     return {
-      id: randomUUID(),
+      id: existente?.id ?? randomUUID(),
       idNumber: fijo.idNumber,
-      givenNames: fijo.givenNames,
-      surnames: fijo.surnames,
-      fullName: fijo.fullName,
-      phone: fijo.phone,
-      birthYear: fijo.birthYear,
-      passwordHash: hashCompartido,
+      givenNames: existente?.givenNames ?? fijo.givenNames,
+      surnames: existente?.surnames ?? fijo.surnames,
+      fullName: existente?.fullName ?? fijo.fullName,
+      phone: existente?.phone ?? fijo.phone,
+      birthYear: existente?.birthYear ?? fijo.birthYear,
+      passwordHash: existente?.passwordHash ?? hashCompartido,
       createdAt: registro,
       updatedAt: registro,
-      lastLoginAt: new Date(ahora.getTime() - entero(1, 48) * HORA),
+      lastLoginAt: existente?.lastLoginAt ?? new Date(ahora.getTime() - entero(1, 48) * HORA),
     };
   });
+  const idsFijasExistentes = new Set([...fijasExistentes.values()].map((c) => c.id));
 
   const cuentasAleatorias = Array.from({ length: CUENTAS - cuentasFijas.length }, () => {
     const registro = new Date(
@@ -737,14 +746,12 @@ async function main(): Promise<void> {
 
   const cuentas = [...cuentasFijas, ...cuentasAleatorias];
 
-  for (let i = 0; i < cuentas.length; i += 500) {
-    await prisma.passengerAccount.createMany({ data: cuentas.slice(i, i + 500) });
-  }
-
-  // Casi todos tienen la cédula cargada; algunos aún no la suben.
-  const documentos = cuentas
-    .filter((c) => PASAJEROS_FIJOS.some((f) => f.idNumber === c.idNumber) || suerte(0.92))
-    .map((c) => ({
+  // Casi todos tienen la cédula cargada; algunos aún no la suben. Las cuentas
+  // del README siempre la tienen: se les crea solo si no la habían subido ya.
+  const documentos = [
+    ...cuentasFijas.filter((c) => !fijasExistentes.get(c.idNumber)?.documents.length),
+    ...cuentasAleatorias.filter(() => suerte(0.92)),
+  ].map((c) => ({
       id: randomUUID(),
       accountId: c.id,
       type: "CEDULA" as const,
@@ -752,9 +759,6 @@ async function main(): Promise<void> {
       originalName: "cedula.png",
       uploadedAt: c.createdAt,
     }));
-  for (let i = 0; i < documentos.length; i += 500) {
-    await prisma.passengerDocument.createMany({ data: documentos.slice(i, i + 500) });
-  }
 
   // Sin la foto de la cédula no se puede reservar. Las cuentas del README
   // quedan fuera del reparto al azar: sus reservas se eligen más abajo.
@@ -824,6 +828,20 @@ async function main(): Promise<void> {
   /** Estados con algún pago registrado. */
   const CON_PAGO = new Set<ReservationStatus>([...PAGO_COMPLETO, "ABONADA", "CANCELADA"]);
 
+  /** Puestos que ya ocupan las reservas hechas a mano antes del mock, por salida. */
+  const ocupadosPrevios = new Map(
+    (
+      await prisma.reservation.groupBy({
+        by: ["departureId"],
+        where: { status: { notIn: [...SIN_PUESTO] } },
+        _sum: { passengerCount: true },
+      })
+    ).map((g) => [g.departureId, g._sum.passengerCount ?? 0]),
+  );
+
+  /** Reservas con un mensaje FALLIDO: el panel pide contactar al pasajero a mano. */
+  const contactoManual = new Set<string>();
+
   // Marca las dos primeras reservas pagadas con método físico en salidas
   // próximas como vendidas en taquilla, para ver ese canal en el panel.
   let ventasEnTaquillaMarcadas = 0;
@@ -842,11 +860,10 @@ async function main(): Promise<void> {
           ? entero(30, 70) / 100
           : entero(8, 40) / 100;
 
-    let ocupados = 0;
+    let ocupados = ocupadosPrevios.get(salida.id) ?? 0;
     const limite = Math.floor(salida.capacity * ocupacionObjetivo);
     let abordados = 0;
     const corte12 = masMinutos(salida.departsAt, -12 * 60);
-    const estadoMensaje = salida.pasada ? ("LEIDO" as const) : ("ENTREGADO" as const);
     const salidaTexto = formatCaracasDateTime24(salida.departsAt);
     /** Cuentas que ya tienen una reserva en esta salida. */
     const cuentasEnSalida = new Set<string>();
@@ -1128,21 +1145,40 @@ async function main(): Promise<void> {
 
       // --- Mensajes: los mismos que envían los flujos y barridos reales, en
       // el orden en que ocurren y nunca con fecha posterior a ahora.
+      // Solo los estados que produce el proveedor falso del MVP: ENVIADO; ENCOLADO
+      // si el worker aún no pasa (los de los últimos minutos); y FALLIDO, raro,
+      // tras agotar los reintentos, con la reserva marcada para contacto manual.
       const avisar = (templateKey: string, payload: Record<string, string>, momento: Date): void => {
         const enviado = minFecha(momento, ahora);
-        mensajes.push({
+        const base = {
           id: randomUUID(),
           reservationId,
           phone: cuenta.phone,
           templateKey,
           payload: { nombre: cuenta.fullName, serial: code, ruta: salida.viaje, ...payload },
-          status: estadoMensaje,
-          providerMessageId: `mock-${randomUUID()}`,
-          attempts: 1,
           scheduledFor: enviado,
-          sentAt: enviado,
           createdAt: enviado,
-        });
+        };
+        if (enviado.getTime() > ahora.getTime() - 10 * MIN) {
+          mensajes.push({ ...base, status: "ENCOLADO", attempts: 0, sentAt: null });
+        } else if (!salida.pasada && suerte(0.005)) {
+          mensajes.push({
+            ...base,
+            status: "FALLIDO",
+            attempts: MAX_SEND_ATTEMPTS,
+            lastError: "Fallo simulado del proveedor de WhatsApp",
+            sentAt: null,
+          });
+          contactoManual.add(reservationId);
+        } else {
+          mensajes.push({
+            ...base,
+            status: "ENVIADO",
+            providerMessageId: `fake-${randomUUID()}`,
+            attempts: 1,
+            sentAt: enviado,
+          });
+        }
       };
 
       // Al reservar en la app (la venta en taquilla no envía este aviso).
@@ -1314,7 +1350,11 @@ async function main(): Promise<void> {
   const ESTADOS_DE_SALIDAS_PASADAS = new Set<ReservationStatus>(["ABORDADA", "NO_SHOW"]);
 
   function reasignar(cuenta: (typeof cuentas)[number], estados: ReservationStatus[]): void {
-    const salidasUsadas = new Set<string>();
+    // Las salidas en las que la cuenta ya reservó antes del mock también cuentan
+    // como usadas: la persona no figura dos veces en la hoja de un bus.
+    const salidasUsadas = new Set<string>(
+      fijasExistentes.get(cuenta.idNumber)?.reservations.map((r) => r.departureId) ?? [],
+    );
     const diasUsados = new Set<string>();
     const diaDe = (reserva: Prisma.ReservationCreateManyInput) =>
       diaCaracas(salidaPorId.get(reserva.departureId)!.departsAt);
@@ -1379,6 +1419,9 @@ async function main(): Promise<void> {
   for (const cuenta of cuentasFijas) {
     reasignar(cuenta, estadosDemo);
   }
+  for (const reserva of reservas) {
+    if (contactoManual.has(reserva.id as string)) reserva.manualContactRequired = true;
+  }
 
   verificarCoherencia({
     ahora,
@@ -1397,44 +1440,85 @@ async function main(): Promise<void> {
     bitacora,
   });
 
+  // Todo se escribe en una sola transacción y solo después de verificar los
+  // datos: si algo falla no quedan salidas finalizadas huérfanas ni cuentas a
+  // medias, y se puede volver a intentar sin `--reset`.
+  process.stdout.write("Guardando los datos...\n");
+  await prisma.$transaction(
+    async (tx) => {
+      async function insertar<T>(
+        nombre: string,
+        filas: T[],
+        fn: (lote: T[]) => Promise<unknown>,
+      ): Promise<void> {
+        for (let i = 0; i < filas.length; i += 500) {
+          await fn(filas.slice(i, i + 500));
+        }
+        process.stdout.write(`  ${nombre}: ${filas.length}\n`);
+      }
 
-  async function insertar<T>(
-    nombre: string,
-    filas: T[],
-    fn: (lote: T[]) => Promise<unknown>,
-  ): Promise<void> {
-    for (let i = 0; i < filas.length; i += 500) {
-      await fn(filas.slice(i, i + 500));
-    }
-    process.stdout.write(`  ${nombre}: ${filas.length}\n`);
-  }
-
-  await insertar("Reservas", reservas, (l) =>
-    prisma.reservation.createMany({ data: l, skipDuplicates: true }),
-  );
-  await insertar("Pasajeros", pasajeros, (l) =>
-    prisma.passenger.createMany({ data: l, skipDuplicates: true }),
-  );
-  await insertar("Comprobantes", comprobantes, (l) =>
-    prisma.paymentProof.createMany({ data: l, skipDuplicates: true }),
-  );
-  await insertar("Cobros en efectivo", efectivo, (l) =>
-    prisma.cashPayment.createMany({ data: l, skipDuplicates: true }),
-  );
-  await insertar("Tickets", tickets, (l) =>
-    prisma.ticket.createMany({ data: l, skipDuplicates: true }),
-  );
-  await insertar("Recorridos", viajes, (l) =>
-    prisma.tripLog.createMany({ data: l, skipDuplicates: true }),
-  );
-  await insertar("Lista de espera", espera, (l) =>
-    prisma.waitlistEntry.createMany({ data: l, skipDuplicates: true }),
-  );
-  await insertar("Mensajes", mensajes, (l) =>
-    prisma.outboundMessage.createMany({ data: l, skipDuplicates: true }),
-  );
-  await insertar("Bitácora", bitacora, (l) =>
-    prisma.auditLog.createMany({ data: l, skipDuplicates: true }),
+      await insertar(
+        "Salidas finalizadas",
+        salidasFiltradas.map((s) => ({
+          id: s.id,
+          routeId: s.routeId,
+          vehicleId: s.vehicleId,
+          driverId: s.driverId,
+          departsAt: s.departsAt,
+          capacity: s.capacity,
+          status: "FINALIZADA" as const,
+          manifestClosedAt: new Date(s.departsAt.getTime() - 40 * MIN),
+        })),
+        (l) => tx.departure.createMany({ data: l }),
+      );
+      // Las cuentas del README que dejó el seed se actualizan; las demás se crean.
+      for (const cuenta of cuentasFijas.filter((c) => idsFijasExistentes.has(c.id))) {
+        await tx.passengerAccount.update({
+          where: { id: cuenta.id },
+          data: {
+            createdAt: cuenta.createdAt,
+            lastLoginAt: cuenta.lastLoginAt,
+            passwordHash: cuenta.passwordHash,
+          },
+        });
+      }
+      await insertar(
+        "Cuentas de pasajero",
+        cuentas.filter((c) => !idsFijasExistentes.has(c.id)),
+        (l) => tx.passengerAccount.createMany({ data: l }),
+      );
+      await insertar("Documentos", documentos, (l) =>
+        tx.passengerDocument.createMany({ data: l }),
+      );
+      await insertar("Reservas", reservas, (l) =>
+        tx.reservation.createMany({ data: l, skipDuplicates: true }),
+      );
+      await insertar("Pasajeros", pasajeros, (l) =>
+        tx.passenger.createMany({ data: l, skipDuplicates: true }),
+      );
+      await insertar("Comprobantes", comprobantes, (l) =>
+        tx.paymentProof.createMany({ data: l, skipDuplicates: true }),
+      );
+      await insertar("Cobros en efectivo", efectivo, (l) =>
+        tx.cashPayment.createMany({ data: l, skipDuplicates: true }),
+      );
+      await insertar("Tickets", tickets, (l) =>
+        tx.ticket.createMany({ data: l, skipDuplicates: true }),
+      );
+      await insertar("Recorridos", viajes, (l) =>
+        tx.tripLog.createMany({ data: l, skipDuplicates: true }),
+      );
+      await insertar("Lista de espera", espera, (l) =>
+        tx.waitlistEntry.createMany({ data: l, skipDuplicates: true }),
+      );
+      await insertar("Mensajes", mensajes, (l) =>
+        tx.outboundMessage.createMany({ data: l, skipDuplicates: true }),
+      );
+      await insertar("Bitácora", bitacora, (l) =>
+        tx.auditLog.createMany({ data: l, skipDuplicates: true }),
+      );
+    },
+    { maxWait: 10_000, timeout: 10 * 60_000 },
   );
 
   process.stdout.write("Escribiendo imágenes de demostración...\n");

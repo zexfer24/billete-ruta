@@ -290,7 +290,7 @@ Proceso `worker` con pg-boss sobre la misma base de datos. Un barrido cada 5 min
 | Job | Regla |
 |---|---|
 | `sweep-expire-unpaid` | Reservas `PENDIENTE_PAGO` con `expiresAt` vencido → `LIBERADA` y se procesa la lista de espera |
-| `sweep-24h` | Salidas entre 12 h y 24 h 5 min en el futuro: `recordatorio_24h` a las pagadas y abonadas, `reconfirmacion_pago_sitio` a las de pago en sitio |
+| `sweep-24h` | Salidas entre 12 h y 24 h 5 min en el futuro: `recordatorio_24h` a las pagadas y abonadas (a las abonadas, con el saldo que les falta para recibir el ticket), `reconfirmacion_pago_sitio` a las de pago en sitio |
 | `sweep-12h-release` | Salidas a 12 h o menos: reservas `PAGO_EN_SITIO` sin `reconfirmedAt` → `LIBERADA` |
 | `sweep-2h` | Salidas entre 30 min y 2 h 5 min: `confirmacion_2h` |
 | `waitlist-expire` | Entradas notificadas con `claimExpiresAt` vencido → `EXPIRADO`, se notifica al siguiente |

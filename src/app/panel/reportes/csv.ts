@@ -36,7 +36,7 @@ function montoCsv(value: Prisma.Decimal): string {
 /** Recaudación por ruta en el rango. */
 export function revenueCsv(filas: readonly RouteRevenueRow[]): string {
   return toCsv([
-    ["Ruta", "Origen", "Destino", "Total cobrado (USD)", "Pagos"],
+    ["Ruta", "Origen", "Destino", "Recaudado (USD)", "Pagos"],
     ...filas.map((f) => [f.routeName, f.origin, f.destination, montoCsv(f.totalUsd), String(f.payments)]),
   ]);
 }

@@ -2,6 +2,7 @@ import { agencyColor } from "@/lib/brand";
 import { minutesUntil } from "@/lib/time";
 import { departureWhenLabel, tripDurationLabel, URGENT_DEPARTURE_MINUTES } from "@/components/departure-format";
 import { IconClock } from "@/components/icons";
+import { whenPhrase } from "@/components/passenger-copy";
 import type { DepartureVM } from "./booking-form";
 
 /**
@@ -10,7 +11,9 @@ import type { DepartureVM } from "./booking-form";
  * `DepartureRow`. Sin precio ni puestos libres: el costo ya lo dicen el
  * resumen de abajo y el recibo, y los puestos dejaron de importar al elegir
  * quiénes viajan. Así el precio por persona, sin la tasa, no se confunde con
- * el total. Sin hooks: se usa desde componentes de cliente.
+ * el total. Aquí no hay encabezado de día, así que la hora siempre lleva el
+ * día ("Sale hoy a las 06:00"), salvo que salga en minutos ("Sale en 15
+ * min"). Sin hooks: se usa desde componentes de cliente.
  */
 export function ChosenDeparture({ departure, now }: { departure: DepartureVM; now: Date }) {
   const departsAt = new Date(departure.departsAtIso);
@@ -44,7 +47,9 @@ export function ChosenDeparture({ departure, now }: { departure: DepartureVM; no
           }`}
         >
           {urgente ? <IconClock aria-hidden="true" className="size-5 shrink-0" /> : null}
-          <span className="break-words">{departureWhenLabel(departsAt, now)}</span>
+          <span className="break-words">
+            {urgente ? departureWhenLabel(departsAt, now) : `Sale ${whenPhrase(departsAt, now)}`}
+          </span>
         </p>
         <p className="tabular text-sm text-tinta-suave">{tripDurationLabel(departure.estimatedMinutes)}</p>
       </div>

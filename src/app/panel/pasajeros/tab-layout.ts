@@ -3,19 +3,18 @@
  * por `ViewTabs` y su silueta (`TabsSkeleton`). Módulo puro, sin React.
  *
  * Desde `sm` las pestañas van en una fila que baja de línea si no cabe. Por
- * debajo, las cinco pestañas se repartían 2 + 2 + 1 y "Todas" quedaba sola en
- * una tercera fila, como un error de maquetación. Ahora van en dos filas
- * parejas, sin desplazarse de lado: arriba las dos de trabajo ("Por revisar"
- * y "Por cobrar"), cada una de medio ancho, y abajo las otras tres, de un
- * tercio cada una, con el contador debajo de la etiqueta para que quepan.
+ * debajo, van en una rejilla de dos columnas parejas, sin desplazarse de
+ * lado y con un solo diseño para las cinco: el contador al lado de la
+ * etiqueta y 44 px de alto. Con un número impar de pestañas, la última
+ * ("Todas") ocupa el ancho completo de su fila, a propósito, para que no
+ * quede media fila vacía como un error de maquetación.
  */
 
-/** Contenedor: rejilla de 6 columnas en el teléfono, fila flexible desde `sm`. */
+/** Contenedor: rejilla de 2 columnas en el teléfono, fila flexible desde `sm`. */
 export const TABS_CONTAINER_CLASS =
-  "grid w-full grid-cols-6 gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1 sm:flex sm:flex-wrap";
+  "grid w-full grid-cols-2 gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1 sm:flex sm:flex-wrap";
 
 /** Clases de la pestaña `index` de `total` en el teléfono (se ignoran desde `sm`). */
 export function tabItemLayoutClass(index: number, total: number): string {
-  if (total === 5 && index >= 2) return "col-span-2 max-sm:flex-col max-sm:gap-0.5 max-sm:px-2 max-sm:py-1";
-  return "col-span-3";
+  return total % 2 === 1 && index === total - 1 ? "col-span-2" : "col-span-1";
 }

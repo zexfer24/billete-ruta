@@ -1,4 +1,5 @@
 import type { MessageStatus } from "@prisma/client";
+import { isValidIdNumber, isValidPhone, normalizePhone } from "@/lib/identity";
 import { MESSAGE_STATUS_LABELS } from "@/lib/labels";
 
 /**
@@ -56,4 +57,51 @@ export function payloadToParams(payload: unknown): Record<string, string> {
     params[key] = typeof value === "string" ? value : String(value);
   }
   return params;
+}
+
+/**
+ * Qué busca el administrador en la bandeja (`?q=`), ya interpretado. Es
+ * `null` si lo escrito no es un código de reserva, un teléfono ni una cédula,
+ * para decirle qué se acepta. Si no lo es, trae una o más de estas pistas, y
+ * se muestran los mensajes que coinciden con cualquiera de ellas:
+ * - `code`: un código de reserva (`TR-0914-1PAX-SA7D`), en mayúsculas;
+ * - `phones`: teléfonos en E.164, como se guardan (`0412 123 4567` → `+584121234567`);
+ * - `idNumbers`: las formas en que puede estar guardada una cédula escrita
+ *   sin letra (`12345678` → `V12345678`, `E12345678`…).
+ */
+export interface MessageSearch {
+  code?: string;
+  phones: string[];
+  idNumbers: string[];
+}
+
+/** Letras con que puede empezar un documento guardado (las de `identity.ts`). */
+const ID_PREFIXES = ["V", "E", "P", "J", "CC", "TI", "CE"] as const;
+
+/**
+ * Interpreta la búsqueda de la bandeja. Un número con "+" o que empieza por
+ * "0" es un teléfono; uno de menos de 10 dígitos, una cédula. Con 10 dígitos
+ * o más puede ser las dos cosas (un celular de Venezuela o de Colombia sin el
+ * 0, o una cédula colombiana), así que se buscan todas.
+ */
+export function messageSearchFromQuery(query: string): MessageSearch | null {
+  const upper = query.trim().toUpperCase();
+  if (upper.startsWith("TR-")) {
+    const code = upper.replace(/\s+/g, "");
+    return /^TR(?:-[0-9A-Z]+)+$/.test(code) ? { code, phones: [], idNumbers: [] } : null;
+  }
+  const compact = upper.replace(/[\s.\-_()]/g, "");
+  if (/^\+\d+$/.test(compact) || /^0\d+$/.test(compact)) {
+    const phone = normalizePhone(compact);
+    return isValidPhone(phone) ? { phones: [phone], idNumbers: [] } : null;
+  }
+  if (/^\d+$/.test(compact)) {
+    const idNumbers = isValidIdNumber(compact)
+      ? [compact, ...ID_PREFIXES.map((prefix) => `${prefix}${compact}`)]
+      : [];
+    const phones =
+      compact.length >= 10 ? [normalizePhone(compact, "VE"), normalizePhone(compact, "CO")].filter(isValidPhone) : [];
+    return idNumbers.length > 0 || phones.length > 0 ? { phones, idNumbers } : null;
+  }
+  return isValidIdNumber(compact) ? { phones: [], idNumbers: [compact] } : null;
 }

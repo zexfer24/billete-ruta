@@ -6,6 +6,7 @@ import {
   dayGroupLabel,
   dayTimePhrase,
   detailLabel,
+  homeNotices,
   isCopyableDetail,
   isInactiveReservation,
   noticeActionLabel,
@@ -138,5 +139,29 @@ describe("datos de cobro", () => {
   it("nombra las monedas en palabras", () => {
     expect(currencyName("VES")).toBe("bolívares");
     expect(currencyName("USD")).toBe("dólares");
+  });
+});
+
+describe("homeNotices", () => {
+  const avisos = [
+    { kind: "SALDO_PENDIENTE" as const, reservationCode: "TR-1" },
+    { kind: "RESERVA_POR_LIBERAR" as const, reservationCode: "TR-2" },
+    { kind: "COMPROBANTE_RECHAZADO" as const, reservationCode: "TR-1" },
+    { kind: "DOCUMENTO_FALTANTE" as const },
+  ];
+
+  it("una reserva pagada en parte que va en grande no repite su saldo en «Avisos»", () => {
+    const restantes = homeNotices(avisos, { codesOnScreen: new Set(["TR-1"]), heroIsDocument: false });
+    expect(restantes.map((aviso) => aviso.kind)).toEqual([
+      "RESERVA_POR_LIBERAR",
+      "COMPROBANTE_RECHAZADO",
+      "DOCUMENTO_FALTANTE",
+    ]);
+  });
+
+  it("calla la cédula solo si la acción principal ya es subirla", () => {
+    const restantes = homeNotices(avisos, { codesOnScreen: new Set(), heroIsDocument: true });
+    expect(restantes.map((aviso) => aviso.kind)).not.toContain("DOCUMENTO_FALTANTE");
+    expect(restantes).toHaveLength(3);
   });
 });

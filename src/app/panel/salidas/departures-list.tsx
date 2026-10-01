@@ -22,7 +22,7 @@ import { DepartureForm } from "../_forms/departure-form";
 import { groupByCaracasDay, plural } from "../_shared/day-label";
 import { departureNotice, noticeTextNoBreak, type DepartureNotice } from "../_shared/departure-notice";
 import { DepartureNoticeText } from "../_shared/departure-notice-text";
-import { routeSubtitle } from "../_shared/route-text";
+import { arrowRouteName, routeSubtitle } from "../_shared/route-text";
 import { inTodayOrTomorrow, proximasHref } from "./links";
 
 const HORA_MS = 3_600_000;
@@ -49,12 +49,13 @@ function ocupacion(s: AgencyDepartureRow): { label: string; detail: string; tone
 }
 
 /**
- * Nombre de la ruta sin cortes feos: cada ciudad queda entera en su renglón
- * y el guion va pegado a la ciudad anterior, así nunca queda "–" solo en una
- * línea ni "San / Cristóbal".
+ * Nombre de la ruta con flecha, como en el tablero ("Caracas → Mérida"), y
+ * sin cortes feos: cada ciudad queda entera en su renglón y la flecha va
+ * pegada a la ciudad anterior, así nunca queda "→" solo en una línea ni
+ * "San / Cristóbal".
  */
 function RouteName({ name }: { name: string }) {
-  const partes = name.split(/ ([–-]) /);
+  const partes = arrowRouteName(name).split(/ ([–\-→]) /);
   const ciudades = partes.filter((_, i) => i % 2 === 0);
   const guiones = partes.filter((_, i) => i % 2 === 1);
   return (
@@ -328,7 +329,7 @@ export async function DeparturesList({
                             Ver detalle
                             <span className="sr-only">
                               {" "}
-                              de {s.routeName}, {grupo.heading.toLowerCase()} a las {hora}
+                              de {arrowRouteName(s.routeName)}, {grupo.heading.toLowerCase()} a las {hora}
                             </span>
                           </Link>
                         </td>

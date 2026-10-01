@@ -19,8 +19,8 @@ export function ReportDataSkeleton({ vista }: { vista: ReportView }) {
         stats={
           vista === "recaudacion"
             ? [
-                { label: "Total cobrado", icon: <IconCash /> },
-                { label: "Pagos registrados", icon: <IconChart /> },
+                { label: "Recaudado", icon: <IconCash /> },
+                { label: "Pagos recibidos", icon: <IconChart /> },
               ]
             : [
                 { label: "Viajes", icon: <IconBus /> },
@@ -32,7 +32,7 @@ export function ReportDataSkeleton({ vista }: { vista: ReportView }) {
       <SkeletonTable
         columns={
           vista === "recaudacion"
-            ? ["Ruta", "Total cobrado", "Pagos", "Parte del total"]
+            ? ["Ruta", "Recaudado", "Pagos", "Parte del total"]
             : ["Fecha", "Chofer y vehículo", "Ruta", "Salió", "Llegó", "Duración", "Pasajeros"]
         }
         rows={5}

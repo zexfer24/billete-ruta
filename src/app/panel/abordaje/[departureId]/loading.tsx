@@ -4,14 +4,14 @@ import { Skeleton, SkeletonScreen } from "@/components/skeleton";
 /** Silueta del escáner de abordaje: volver, título, avance y la tarjeta de búsqueda. */
 export default function AbordajeLoading() {
   return (
-    <SkeletonScreen label="Cargando el abordaje…" className="flex w-full max-w-xl flex-col gap-6">
+    <SkeletonScreen label="Cargando el escáner…" className="flex w-full max-w-xl flex-col gap-6">
       <div aria-hidden="true" className="flex flex-col gap-3">
         <span className="-ml-2 inline-flex min-h-11 w-fit items-center gap-1.5 px-2 text-[15px] font-semibold text-marca-700">
           <IconArrowLeft className="size-5 shrink-0" />
           Volver a la salida
         </span>
         <div>
-          <p className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">Abordaje</p>
+          <p className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">Escanear tickets</p>
           <Skeleton className="mt-2.5 h-5 w-4/5 rounded-pastilla" />
         </div>
       </div>

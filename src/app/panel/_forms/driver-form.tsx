@@ -35,7 +35,7 @@ export function DriverForm(props: DriverFormProps) {
   const campoConError = errorFieldFor(props.error, props.errorField, CAMPOS);
   const errorDe = (campo: (typeof CAMPOS)[number]) => (campoConError === campo ? props.error : undefined);
 
-  const ayudaCedula = "Con la letra delante (V, E o P) y sin puntos. Por ejemplo, V12345678.";
+  const ayudaCedula = "La letra y el número, por ejemplo V12345678. Con o sin puntos.";
   const ayudaTelefono = "Con el código de área. Por ejemplo, 0414 1234567.";
 
   return (

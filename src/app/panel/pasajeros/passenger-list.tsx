@@ -602,7 +602,7 @@ export async function ReservationList({
                   key={row.reservationId}
                   href={href}
                   title={row.holderName}
-                  srPrefix="Ver el detalle de la reserva de "
+                  srPrefix="Ver detalle de la reserva de "
                   badges={<StatusBadge label={situacion.label} tone={situacion.tone} />}
                   idNumber={maskIdNumber(row.holderIdNumber)}
                   code={row.code}

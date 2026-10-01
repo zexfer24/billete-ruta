@@ -19,6 +19,7 @@ import {
   cashCounterDeadline,
   currencyName,
   dayTimePhrase,
+  deadlineBeforePhrase,
   deadlinePhrase,
   isInactiveReservation,
   PASSENGER_PROOF_STATUS_LABELS,
@@ -466,9 +467,9 @@ function AccionDePago({
               </span>
             </li>
           </ul>
-          {plazoEnTicket ? (
+          {plazoEnTicket && plazo ? (
             <Alert tone="alerta" role="none">
-              Si no pagas antes de la hora que dice tu ticket, el puesto se libera para otra persona.
+              Si no pagas {deadlineBeforePhrase(plazo, now)}, el puesto se libera para otra persona.
             </Alert>
           ) : (
             <Alert tone="alerta" role="none" title={`Tienes hasta ${whenPhrase(limiteTaquilla, now)} para pagar`}>
@@ -517,8 +518,8 @@ function AccionDePago({
                 </Alert>
               ) : (
                 <Alert tone="alerta" role="none">
-                  Si no registras ningún pago antes de la hora que dice tu ticket, el puesto se libera
-                  para otra persona.
+                  Si no registras ningún pago {deadlineBeforePhrase(plazo, now)}, el puesto se libera para
+                  otra persona.
                 </Alert>
               )
             ) : null}

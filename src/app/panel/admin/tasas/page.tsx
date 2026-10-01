@@ -14,7 +14,7 @@ import {
 import { setDepartureTaxAction, setExchangeRateAction } from "./actions";
 import { RateChangeForm } from "./rate-change-form";
 import { RateHistory, type RateHistoryEntry } from "./rate-history";
-import { PAGE_DESCRIPTION, PAGE_TITLE, amountHint } from "./texts";
+import { PAGE_DESCRIPTION, PAGE_TITLE, RATE_SECTIONS, amountHint } from "./texts";
 
 export const metadata: Metadata = { title: PAGE_TITLE };
 
@@ -61,8 +61,9 @@ function CurrentValue({
 
 /**
  * Tasas del terminal: la tasa de salida por pasajero y las tasas de cambio
- * del bolívar y del peso colombiano. Cada cambio pide confirmación y solo
- * aplica a las reservas nuevas.
+ * del bolívar y del peso colombiano, cada una en su tarjeta con la misma
+ * disposición. Cada cambio pide confirmación y solo aplica a las reservas
+ * nuevas.
  */
 export default async function TasasAdminPage({
   searchParams,
@@ -93,18 +94,14 @@ export default async function TasasAdminPage({
 
   const exchangeBlocks: Array<{
     currency: "VES" | "COP";
-    title: string;
     prefix: string;
     current: Prisma.Decimal | null;
     history: RateHistoryEntry[];
-    /** Nombre de la moneda en plural, para la etiqueta del campo. */
-    plural: string;
-    /** Ejemplo de monto para la ayuda del campo. */
-    example: string;
+    /** Qué se cambia, para el diálogo de confirmación. */
+    subject: string;
   }> = [
     {
       currency: "VES",
-      title: "Bolívar",
       prefix: "Bs.",
       current: vesRate,
       history: vesHistory.map((h) => ({
@@ -112,12 +109,10 @@ export default async function TasasAdminPage({
         amount: formatMoney(h.rateFromUsd, "VES"),
         effectiveFrom: h.effectiveFrom,
       })),
-      plural: "bolívares",
-      example: "36,74",
+      subject: "la tasa del bolívar",
     },
     {
       currency: "COP",
-      title: "Peso colombiano",
       prefix: "COP",
       current: copRate,
       history: copHistory.map((h) => ({
@@ -125,8 +120,7 @@ export default async function TasasAdminPage({
         amount: formatMoney(h.rateFromUsd, "COP"),
         effectiveFrom: h.effectiveFrom,
       })),
-      plural: "pesos",
-      example: "4012,50",
+      subject: "la tasa del peso colombiano",
     },
   ];
 
@@ -138,13 +132,10 @@ export default async function TasasAdminPage({
 
       <PanelFeedback error={error} ok={ok} />
 
-      <SectionCard
-        title="Tasa de salida"
-        description="La cobra el terminal a cada pasajero, aparte de la tarifa de la agencia."
-      >
+      <SectionCard title={RATE_SECTIONS.tax.title} description={RATE_SECTIONS.tax.description}>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <CurrentValue
-            label="Vigente, por pasajero"
+            label={RATE_SECTIONS.tax.currentLabel}
             value={currentTaxLabel}
             since={departureTaxHistory[0]?.effectiveFrom}
           />
@@ -152,8 +143,8 @@ export default async function TasasAdminPage({
             key={departureTaxHistory[0]?.id ?? "sin-tasa"}
             action={setDepartureTaxAction}
             fieldName="amountUsd"
-            label="Nueva tasa de salida, en dólares por pasajero"
-            hint={amountHint("2,50")}
+            label={RATE_SECTIONS.tax.fieldLabel}
+            hint={amountHint(RATE_SECTIONS.tax.example)}
             prefix="$"
             subject="la tasa de salida"
             unit=" por pasajero"
@@ -166,47 +157,34 @@ export default async function TasasAdminPage({
         </div>
       </SectionCard>
 
-      <SectionCard
-        title="Tasas de cambio"
-        description="Cuántos bolívares o pesos equivalen a un dólar. Se usan para convertir los pagos en esas monedas."
-      >
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-6">
-          {exchangeBlocks.map((block) => {
-            const currentLabel = block.current ? formatMoney(block.current, block.currency) : null;
-            return (
-              <section
-                key={block.currency}
-                aria-labelledby={`tasa-${block.currency}`}
-                className="flex flex-col gap-5 rounded-control border border-borde p-4"
-              >
-                <h3 id={`tasa-${block.currency}`} className="text-base font-semibold text-tinta">
-                  {block.title}
-                </h3>
-                <CurrentValue
-                  label="Vigente, por cada dólar"
-                  value={currentLabel}
-                  since={block.history[0]?.effectiveFrom}
-                />
-                <RateChangeForm
-                  key={block.history[0]?.id ?? `sin-tasa-${block.currency}`}
-                  action={setExchangeRateAction}
-                  fieldName="rateFromUsd"
-                  hiddenFields={{ currency: block.currency }}
-                  label={`Nueva tasa, en ${block.plural} por cada dólar`}
-                  hint={amountHint(block.example)}
-                  prefix={block.prefix}
-                  subject={`la tasa del ${block.title.toLowerCase()}`}
-                  unit=" por cada dólar"
-                  current={currentLabel}
-                />
-                <div className="border-t border-borde pt-4">
-                  <RateHistory title="Historial" entries={block.history} />
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      </SectionCard>
+      {/* Cada moneda en su tarjeta hermana, con la misma disposición que la
+          tasa de salida: antes iban como tarjetas dentro de otra tarjeta. */}
+      {exchangeBlocks.map((block) => {
+        const texts = RATE_SECTIONS[block.currency];
+        const currentLabel = block.current ? formatMoney(block.current, block.currency) : null;
+        return (
+          <SectionCard key={block.currency} title={texts.title} description={texts.description}>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <CurrentValue label={texts.currentLabel} value={currentLabel} since={block.history[0]?.effectiveFrom} />
+              <RateChangeForm
+                key={block.history[0]?.id ?? `sin-tasa-${block.currency}`}
+                action={setExchangeRateAction}
+                fieldName="rateFromUsd"
+                hiddenFields={{ currency: block.currency }}
+                label={texts.fieldLabel}
+                hint={amountHint(texts.example)}
+                prefix={block.prefix}
+                subject={block.subject}
+                unit=" por cada dólar"
+                current={currentLabel}
+              />
+            </div>
+            <div className="mt-6 border-t border-borde pt-4">
+              <RateHistory title="Historial" entries={block.history} />
+            </div>
+          </SectionCard>
+        );
+      })}
     </div>
   );
 }

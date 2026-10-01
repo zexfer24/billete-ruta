@@ -128,14 +128,72 @@ describe("recordatorio de 24 horas", () => {
       currency: "USD",
     });
 
-    await runSweeps(new Date());
-    await runSweeps(new Date());
+    const primera = await runSweeps(new Date());
+    const segunda = await runSweeps(new Date());
 
     expect(
       await prisma.outboundMessage.count({
         where: { reservationId: reserva.reservationId, templateKey: "recordatorio_24h" },
       }),
     ).toBe(1);
+    // El log del worker cuenta solo los mensajes nuevos, no los ya encolados.
+    expect(primera.reminders24h).toBe(1);
+    expect(segunda.reminders24h).toBe(0);
+  });
+
+  it("a la reserva pagada en parte le dice cuánto le falta; a la pagada, no", async () => {
+    const { salida, agencia } = await createDepartureFixture({ hoursFromNow: 24 });
+    const operador = await createPanelUserFixture({ agencyId: agencia.id });
+    const fisico = await createPaymentMethodFixture({ kind: "FISICO" });
+    // Con método físico la reserva nace en PAGO_EN_SITIO y un abono parcial no
+    // la mueve de ahí; con método digital, el cobro parcial la deja ABONADA.
+    const digital = await createPaymentMethodFixture({ kind: "DIGITAL" });
+    const abonada = await createReservation({
+      accountId: (await createAccountFixture()).id,
+      departureId: salida.id,
+      paymentMethodId: digital.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+    await registerCashPayment({
+      reservationId: abonada.reservationId,
+      panelUserId: operador.id,
+      agencyId: agencia.id,
+      amount: "20.00",
+      currency: "USD",
+    });
+    const pagada = await createReservation({
+      accountId: (await createAccountFixture()).id,
+      departureId: salida.id,
+      paymentMethodId: fisico.id,
+      companions: [],
+      policiesAccepted: true,
+    });
+    await registerCashPayment({
+      reservationId: pagada.reservationId,
+      panelUserId: operador.id,
+      agencyId: agencia.id,
+      amount: "47.50",
+      currency: "USD",
+    });
+
+    await runSweeps(new Date());
+
+    const fila = await prisma.reservation.findUniqueOrThrow({ where: { id: abonada.reservationId } });
+    expect(fila.status).toBe("ABONADA");
+    const saldo = fila.totalUsd.sub(fila.paidUsd).toFixed(2).replace(".", ",");
+    const recordatorioAbonada = await prisma.outboundMessage.findFirstOrThrow({
+      where: { reservationId: abonada.reservationId, templateKey: "recordatorio_24h" },
+    });
+    const recordatorioPagada = await prisma.outboundMessage.findFirstOrThrow({
+      where: { reservationId: pagada.reservationId, templateKey: "recordatorio_24h" },
+    });
+    const textoAbonada = String((recordatorioAbonada.payload as Record<string, unknown>)._texto);
+    const textoPagada = String((recordatorioPagada.payload as Record<string, unknown>)._texto);
+    expect(textoAbonada).toContain("Todavía te falta pagar");
+    expect(textoAbonada).toContain(saldo);
+    expect(textoAbonada).toContain("no recibes tu ticket");
+    expect(textoPagada).not.toContain("te falta pagar");
   });
 });
 

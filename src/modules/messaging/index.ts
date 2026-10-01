@@ -1,6 +1,8 @@
 export {
+  DEFAULT_TRAVEL_TIPS,
   ONCE_PER_RESERVATION_TEMPLATES,
   TEMPLATE_KEYS,
+  reminderRecommendations,
   STORED_TEXT_KEY,
   isTemplateKey,
   messageRoute,

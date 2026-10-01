@@ -37,7 +37,7 @@ import { changeFromReceived } from "./change";
 import { countLabel, joinPhrases } from "../_dashboard/text";
 import { dayChipLabel } from "./departure-days";
 import type { PerPassengerPrice } from "./price";
-import { COUNTER_STEP_HINTS, COUNTER_STEP_LABELS, COUNTER_STEP_TITLES, type CounterStep } from "./texts";
+import { COUNTER_STEP_HINTS, COUNTER_STEP_LABELS, COUNTER_STEP_TITLES, counterStepLine, type CounterStep } from "./texts";
 
 export interface DepartureOption {
   id: string;
@@ -400,8 +400,11 @@ function Wizard({
       <input type="hidden" name="companions" value={companionsPayload} />
       <input type="hidden" name="policiesAccepted" value={policiesAccepted ? "on" : ""} />
 
-      <div className="flex flex-col gap-5 rounded-tarjeta border border-borde bg-superficie p-5 shadow-1">
-        <Stepper steps={COUNTER_STEP_LABELS} current={step} label="Pasos de la venta" />
+      <div className="flex flex-col gap-2 rounded-tarjeta border border-borde bg-superficie p-5 shadow-1 sm:gap-5">
+        {/* En el teléfono, una sola línea en vez de los cuatro círculos: el
+            asistente libera unos 60 px y las salidas suben a la primera pantalla. */}
+        <p className="text-sm font-semibold text-marca-700 sm:hidden">{counterStepLine(step)}</p>
+        <Stepper steps={COUNTER_STEP_LABELS} current={step} label="Pasos de la venta" className="max-sm:hidden" />
         <div>
           <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold tracking-tight text-tinta outline-none">
             {COUNTER_STEP_TITLES[step]}
@@ -412,6 +415,8 @@ function Wizard({
             {COUNTER_STEP_HINTS[step]}
           </p>
         </div>
+        {/* En el paso 2, «Atrás» ya vuelve a la salida: el resumen solo lleva
+            «Cambiar salida» desde el paso 3, donde «Atrás» va a otro paso. */}
         {step > 1 && salidaElegida ? (
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-control border border-marca-200 bg-marca-50 px-4 py-2.5">
             <div className="min-w-0 text-[15px] leading-snug">
@@ -430,17 +435,19 @@ function Wizard({
                 </p>
               ) : null}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setConfirmOpen(false);
-                setStep(1);
-              }}
-              disabled={pending}
-              className={panelButtonClass("fantasma", "md", "-mr-2")}
-            >
-              Cambiar salida
-            </button>
+            {step > 2 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  setStep(1);
+                }}
+                disabled={pending}
+                className={panelButtonClass("fantasma", "md", "-mr-2")}
+              >
+                Cambiar salida
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>

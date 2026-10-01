@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { IconChevronDown, IconDownload } from "@/components/icons";
-import { PANEL_LABEL_CLASS, PanelPageHeader, panelButtonClass, panelInputClass } from "@/components/panel-ui";
+import { IconDownload } from "@/components/icons";
+import { PanelPageHeader, panelButtonClass } from "@/components/panel-ui";
 import { listAgencies } from "@/modules/agencies";
 import { requirePanelUser } from "@/modules/auth";
 import { PeriodFilter } from "../_shared/period-filter";
 import { rangeKey, resolveAdminRange } from "../_shared/period";
+import { AgencySelect } from "./agency-select";
 import { movementsCsvHref, movementsHref, parseMovementsParams } from "./movements";
 import { MovementsList, MovementsListSkeleton } from "./movements-list";
 import { TripDetailPanel, TripDetailPanelSkeleton } from "./trip-detail";
@@ -49,26 +50,11 @@ export default async function MovimientosAdminPage({
         path="/panel/admin/movimientos"
         range={range}
         keep={{ agency: agencyId }}
+        autoSubmit
         extraFields={
-          <label className={`${PANEL_LABEL_CLASS} min-w-0 flex-1 basis-40 sm:flex-none`}>
-            Agencia
-            <span className="relative block">
-              <select
-                name="agency"
-                defaultValue={agencyId ?? ""}
-                className={panelInputClass("cursor-pointer appearance-none pr-10 sm:w-64")}
-              >
-                <option value="">Todas las agencias</option>
-                {agencies.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                    {a.active ? "" : " (inactiva)"}
-                  </option>
-                ))}
-              </select>
-              <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-5 -translate-y-1/2 text-tinta-suave" />
-            </span>
-          </label>
+          // `key`: la lista no es controlada; si la URL cambia de agencia
+          // (atrás del navegador), se vuelve a montar con la aplicada.
+          <AgencySelect key={agencyId ?? ""} agencies={agencies} value={agencyId} />
         }
       />
 

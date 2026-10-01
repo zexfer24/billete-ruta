@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { cache } from "react";
 import Link from "next/link";
 import { listDrivers } from "@/modules/agencies";
 import { agencyFleetStatus } from "@/modules/reports";
@@ -8,7 +8,7 @@ import { Alert } from "@/components/alert";
 import { ClickableRow } from "@/components/clickable-row";
 import { PanelFeedback } from "@/components/panel-feedback";
 import { SidePanel } from "@/components/side-panel";
-import { IconBus, IconUser, IconWarning } from "@/components/icons";
+import { IconBus, IconChevronRight, IconUser, IconWarning } from "@/components/icons";
 import {
   EmptyState,
   MobileCard,
@@ -36,8 +36,26 @@ const OK_LABELS: Readonly<Record<string, string>> = {
   "chofer-actualizado": "Cambios del chofer guardados.",
 };
 
-/** Orden fijo del resumen de estados. */
-const ORDEN_RESUMEN: readonly UnitState[] = ["EN_RUTA", "EMBARCANDO", "ASIGNADO", "DISPONIBLE", "FUERA_DE_SERVICIO"];
+/** Orden fijo del resumen de estados, el mismo que el del tablero. */
+const ORDEN_RESUMEN: readonly UnitState[] = [
+  "EN_RUTA",
+  "ATRASADO",
+  "EMBARCANDO",
+  "ASIGNADO",
+  "DISPONIBLE",
+  "FUERA_DE_SERVICIO",
+];
+
+/**
+ * Estado de la flota de la agencia, una sola consulta por petición: la lista
+ * (en su `<Suspense key={vista}>`) y el panel de edición (en el suyo) la
+ * comparten con `cache` en vez de pedirla dos veces. Trae su propio `now`
+ * para que las dos zonas describan los viajes con la misma hora.
+ */
+const fleetStatusFor = cache(async (agencyId: string) => {
+  const now = new Date();
+  return { fleet: await agencyFleetStatus(agencyId, now), now };
+});
 
 /**
  * Viaje en curso o próxima salida de una unidad, compartido por las tablas y
@@ -60,9 +78,11 @@ function TripSummary({
   return (
     <span className="flex flex-col">
       {salidaId ? (
+        // 44 px de área táctil (spec 1.10) sin agrandar el renglón: el
+        // margen negativo devuelve el alto que agrega `min-h-11`.
         <Link
           href={`/panel/salidas/${salidaId}`}
-          className="foco w-fit rounded-control font-semibold text-marca-700 underline underline-offset-2 hover:text-marca-800"
+          className="foco -my-2.5 inline-flex min-h-11 w-fit items-center rounded-control font-semibold text-marca-700 underline underline-offset-2 hover:text-marca-800"
         >
           {viaje.title}
           <span className="sr-only"> (abrir la salida)</span>
@@ -84,28 +104,39 @@ function TripSummary({
 }
 
 /**
- * Viaje de una unidad en la tarjeta del teléfono: a todo el ancho, debajo de
- * las cifras, porque en media columna la ruta y el aviso se partían en cuatro
- * renglones. Va junto al botón de editar, en el pie de la tarjeta.
+ * Viaje de una unidad en la tarjeta del teléfono: a todo el ancho, porque en
+ * media columna la ruta y el aviso se partían en cuatro renglones. Debajo va
+ * el enlace de texto "Editar ›", igual que "Ver detalle ›" en las tarjetas de
+ * Salidas: siete botones de contorno a todo el ancho pesaban más que los datos.
+ * La tarjeta no es un enlace entero porque la ruta de un viaje activo ya
+ * enlaza a su hoja.
  */
 function MobileTripAndAction({
   unit,
   now,
-  action,
+  editHref,
+  editLabel,
 }: {
   unit: { current: UnitDeparture | null; upcoming: UnitDeparture[]; upcomingCount: number };
   now: Date;
-  action: ReactNode;
+  editHref: string;
+  /** Texto para el lector de pantalla: a quién edita el enlace. */
+  editLabel: string;
 }) {
   return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex flex-col gap-0.5">
-        <p className="text-sm text-tinta-suave">Viaje</p>
-        <div className="tabular text-[15px] font-medium text-tinta">
-          <TripSummary unit={unit} now={now} />
-        </div>
+    <div className="flex w-full flex-col gap-2">
+      <div className="tabular text-[15px] text-tinta">
+        <TripSummary unit={unit} now={now} />
       </div>
-      {action}
+      <Link
+        href={editHref}
+        scroll={false}
+        className="foco -mx-1 inline-flex min-h-11 w-fit items-center gap-1 rounded-control px-1 text-[15px] font-semibold text-marca-700 hover:text-marca-800"
+      >
+        Editar
+        <span className="sr-only"> {editLabel}</span>
+        <IconChevronRight className="size-4 shrink-0" />
+      </Link>
     </div>
   );
 }
@@ -133,7 +164,14 @@ function StateSummary({ counts, label }: { counts: Record<UnitState, number>; la
 }
 
 function countStates(rows: ReadonlyArray<{ state: UnitState }>): Record<UnitState, number> {
-  const counts: Record<UnitState, number> = { EN_RUTA: 0, EMBARCANDO: 0, ASIGNADO: 0, DISPONIBLE: 0, FUERA_DE_SERVICIO: 0 };
+  const counts: Record<UnitState, number> = {
+    EN_RUTA: 0,
+    ATRASADO: 0,
+    EMBARCANDO: 0,
+    ASIGNADO: 0,
+    DISPONIBLE: 0,
+    FUERA_DE_SERVICIO: 0,
+  };
   for (const row of rows) counts[row.state] += 1;
   return counts;
 }
@@ -162,22 +200,18 @@ function VehiclesList({ vehicles, selectedId, now }: { vehicles: VehicleStatusRo
             <MobileCard
               key={v.id}
               title={<span className="tabular">{v.plate}</span>}
-              subtitle={`${v.brand} ${v.model}`}
+              subtitle={
+                <>
+                  {v.brand} {v.model} · <span className="tabular whitespace-nowrap">{v.seatCount} puestos</span>
+                </>
+              }
               status={<StatusBadge label={UNIT_STATE_LABELS[v.state]} tone={unitStateTone(v.state)} />}
-              details={[{ label: "Puestos", value: v.seatCount }]}
               action={
                 <MobileTripAndAction
                   unit={v}
                   now={now}
-                  action={
-                    <Link
-                      href={`/panel/flota?vista=vehiculos&editar=${v.id}`}
-                      scroll={false}
-                      className={panelButtonClass("secundario", "md", "w-full")}
-                    >
-                      Editar vehículo
-                    </Link>
-                  }
+                  editHref={`/panel/flota?vista=vehiculos&editar=${v.id}`}
+                  editLabel={`el vehículo ${v.plate}`}
                 />
               }
             />
@@ -259,22 +293,21 @@ function DriversList({ drivers, selectedId, now }: { drivers: DriverStatusRow[];
             <MobileCard
               key={c.id}
               title={c.fullName}
-              subtitle={<span className="tabular">Cédula {c.idNumber}</span>}
+              subtitle={
+                <>
+                  <span className="tabular whitespace-nowrap">Cédula {c.idNumber}</span> ·{" "}
+                  <span className="tabular whitespace-nowrap">
+                    {c.arrivalCount === 1 ? "1 viaje completado" : `${c.arrivalCount} viajes completados`}
+                  </span>
+                </>
+              }
               status={<StatusBadge label={UNIT_STATE_LABELS[c.state]} tone={unitStateTone(c.state)} />}
-              details={[{ label: "Viajes completados", value: c.arrivalCount }]}
               action={
                 <MobileTripAndAction
                   unit={c}
                   now={now}
-                  action={
-                    <Link
-                      href={`/panel/flota?vista=choferes&editar=${c.id}`}
-                      scroll={false}
-                      className={panelButtonClass("secundario", "md", "w-full")}
-                    >
-                      Editar chofer
-                    </Link>
-                  }
+                  editHref={`/panel/flota?vista=choferes&editar=${c.id}`}
+                  editLabel={`a ${c.fullName}`}
                 />
               }
             />
@@ -305,7 +338,8 @@ function DriversList({ drivers, selectedId, now }: { drivers: DriverStatusRow[];
                 className="border-b border-borde last:border-0"
               >
                 <td className={PANEL_TD_CLASS}>
-                  <p className="font-semibold">{c.fullName}</p>
+                  {/* En un renglón: a 820 px "María Gabriela / Colmenares" se partía. */}
+                  <p className="whitespace-nowrap font-semibold">{c.fullName}</p>
                   {/* La cédula va completa: el chofer es personal de la propia agencia. */}
                   <p className="tabular whitespace-nowrap text-sm text-tinta-suave">Cédula {c.idNumber}</p>
                 </td>
@@ -331,54 +365,36 @@ function DriversList({ drivers, selectedId, now }: { drivers: DriverStatusRow[];
 }
 
 /**
- * Cuerpo de la pantalla de flota: pestañas con contador, resumen por estado,
- * la lista de la pestaña activa y el panel lateral de registro o edición.
- * Se consulta dentro de un `<Suspense>` para que la cabecera salga al instante.
+ * Cuerpo de la pantalla de flota: aviso de resultado, pestañas con contador,
+ * resumen por estado y la lista de la pestaña activa. Se consulta dentro de un
+ * `<Suspense key={vista}>` para que la cabecera salga al instante. Los paneles
+ * laterales van aparte (`FleetRegisterPanel` y `FleetEditPanel`), fuera de
+ * este `<Suspense>`: abrir uno no cambia la `vista`, y si vivieran aquí la
+ * pantalla quedaría quieta, sin panel ni silueta, hasta que volviera toda la
+ * flota (spec 6.5).
  */
 export async function FleetBody({
   agencyId,
   vista,
-  registrar,
-  editar,
+  selectedId,
+  panelAbierto,
   error,
-  errorField,
   ok,
 }: {
   agencyId: string;
   vista: FleetView;
-  registrar?: "vehiculo" | "chofer";
-  /** Valor crudo de `?editar=`; si no corresponde a nadie se explica en pantalla. */
-  editar?: string;
+  /** Unidad en edición, para marcar su fila. */
+  selectedId?: string;
+  /** Con un panel abierto, el error de `?error=` se muestra dentro del formulario. */
+  panelAbierto: boolean;
   error?: string;
-  errorField?: string;
   ok?: string;
 }) {
-  const now = new Date();
-  const editarChofer = !registrar && editar !== undefined && vista === "choferes";
-  const [fleet, choferesEditables] = await Promise.all([
-    agencyFleetStatus(agencyId, now),
-    // El teléfono del chofer solo lo trae el listado de choferes, y solo hace falta al editar.
-    editarChofer ? listDrivers(agencyId) : Promise.resolve(null),
-  ]);
-
-  const vehiculoEnEdicion =
-    !registrar && editar !== undefined && vista === "vehiculos" ? fleet.vehicles.find((v) => v.id === editar) : undefined;
-  const choferEstado = editarChofer ? fleet.drivers.find((c) => c.id === editar) : undefined;
-  const choferEnEdicion = editarChofer ? choferesEditables?.find((c) => c.id === editar) : undefined;
-  const edicionPerdida = !registrar && editar !== undefined && !vehiculoEnEdicion && !choferEnEdicion;
-
-  const panelAbierto = Boolean(registrar) || Boolean(vehiculoEnEdicion) || Boolean(choferEnEdicion);
-  const closeHref = `/panel/flota?vista=${vista}`;
+  const { fleet, now } = await fleetStatusFor(agencyId);
 
   return (
     <div className="flex flex-col gap-6">
       <PanelFeedback error={panelAbierto ? undefined : error} ok={okMessage(OK_LABELS, ok)} />
-
-      {edicionPerdida ? (
-        <Alert tone="alerta" title={vista === "choferes" ? "No encontramos ese chofer" : "No encontramos ese vehículo"}>
-          Puede que el enlace esté incompleto. Elígelo de la lista para editarlo.
-        </Alert>
-      ) : null}
 
       <PanelTabs
         label="Secciones de flota"
@@ -401,62 +417,114 @@ export async function FleetBody({
       {vista === "vehiculos" ? (
         <div className="flex flex-col gap-4">
           <StateSummary counts={fleet.vehicleSummary} label="Vehículos por estado:" />
-          <VehiclesList vehicles={fleet.vehicles} selectedId={vehiculoEnEdicion?.id} now={now} />
+          <VehiclesList vehicles={fleet.vehicles} selectedId={selectedId} now={now} />
         </div>
       ) : (
         <div className="flex flex-col gap-4">
           <StateSummary counts={countStates(fleet.drivers)} label="Choferes por estado:" />
-          <DriversList drivers={fleet.drivers} selectedId={choferEnEdicion?.id} now={now} />
+          <DriversList drivers={fleet.drivers} selectedId={selectedId} now={now} />
         </div>
       )}
+    </div>
+  );
+}
 
-      {registrar === "vehiculo" ? (
-        <SidePanel
-          title="Registrar vehículo"
-          subtitle="Los datos del bus que vas a asignar a las salidas."
-          closeHref={closeHref}
-        >
-          <VehicleForm mode="create" error={error} errorField={errorField} />
-        </SidePanel>
-      ) : null}
+/**
+ * Panel lateral de registro de un vehículo o un chofer. No consulta nada: se
+ * pinta en la misma respuesta que la página, sin esperar a la flota.
+ */
+export function FleetRegisterPanel({
+  registrar,
+  closeHref,
+  error,
+  errorField,
+}: {
+  registrar: "vehiculo" | "chofer";
+  closeHref: string;
+  error?: string;
+  errorField?: string;
+}) {
+  return registrar === "vehiculo" ? (
+    <SidePanel title="Registrar vehículo" subtitle="Los datos del bus que vas a asignar a las salidas." closeHref={closeHref}>
+      <VehicleForm mode="create" error={error} errorField={errorField} />
+    </SidePanel>
+  ) : (
+    <SidePanel title="Registrar chofer" subtitle="Los datos de la persona que maneja el bus." closeHref={closeHref}>
+      <DriverForm mode="create" error={error} errorField={errorField} />
+    </SidePanel>
+  );
+}
 
-      {registrar === "chofer" ? (
-        <SidePanel
-          title="Registrar chofer"
-          subtitle="Los datos de la persona que maneja el bus."
-          closeHref={closeHref}
-        >
-          <DriverForm mode="create" error={error} errorField={errorField} />
-        </SidePanel>
-      ) : null}
+/**
+ * Panel lateral de edición de la unidad de `?editar=`, en su propio
+ * `<Suspense key>`: al pulsar "Editar" o una fila aparece al instante la
+ * silueta del panel y luego el formulario. Usa la misma consulta de flota que
+ * la lista (`fleetStatusFor`) y, para un chofer, su teléfono de `listDrivers`.
+ * Si el id no es de nadie de la agencia, lo explica en vez del panel.
+ */
+export async function FleetEditPanel({
+  agencyId,
+  vista,
+  editar,
+  closeHref,
+  error,
+  errorField,
+}: {
+  agencyId: string;
+  vista: FleetView;
+  /** Valor crudo de `?editar=`; si no corresponde a nadie se explica en pantalla. */
+  editar: string;
+  closeHref: string;
+  error?: string;
+  errorField?: string;
+}) {
+  const esChofer = vista === "choferes";
+  const [{ fleet }, choferes] = await Promise.all([
+    fleetStatusFor(agencyId),
+    // El teléfono del chofer solo lo trae el listado de choferes, y solo hace falta al editar.
+    esChofer ? listDrivers(agencyId) : Promise.resolve(null),
+  ]);
 
-      {vehiculoEnEdicion ? (
+  if (!esChofer) {
+    const vehiculo = fleet.vehicles.find((v) => v.id === editar);
+    if (vehiculo) {
+      return (
         <SidePanel
           title="Editar vehículo"
-          subtitle={`${vehiculoEnEdicion.plate} · ${vehiculoEnEdicion.brand} ${vehiculoEnEdicion.model}`}
+          subtitle={`${vehiculo.plate} · ${vehiculo.brand} ${vehiculo.model}`}
           closeHref={closeHref}
         >
           <VehicleForm
             mode="edit"
-            vehicle={vehiculoEnEdicion}
-            upcomingCount={vehiculoEnEdicion.upcomingCount}
+            vehicle={vehiculo}
+            upcomingCount={vehiculo.upcomingCount}
             error={error}
             errorField={errorField}
           />
         </SidePanel>
-      ) : null}
-
-      {choferEnEdicion ? (
-        <SidePanel title="Editar chofer" subtitle={choferEnEdicion.fullName} closeHref={closeHref}>
+      );
+    }
+  } else {
+    const chofer = choferes?.find((c) => c.id === editar);
+    if (chofer) {
+      const estado = fleet.drivers.find((c) => c.id === editar);
+      return (
+        <SidePanel title="Editar chofer" subtitle={chofer.fullName} closeHref={closeHref}>
           <DriverForm
             mode="edit"
-            driver={choferEnEdicion}
-            upcomingCount={choferEstado?.upcomingCount ?? 0}
+            driver={chofer}
+            upcomingCount={estado?.upcomingCount ?? 0}
             error={error}
             errorField={errorField}
           />
         </SidePanel>
-      ) : null}
-    </div>
+      );
+    }
+  }
+
+  return (
+    <Alert tone="alerta" title={esChofer ? "No encontramos ese chofer" : "No encontramos ese vehículo"}>
+      Puede que el enlace esté incompleto. Elígelo de la lista para editarlo.
+    </Alert>
   );
 }

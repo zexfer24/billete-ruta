@@ -5,13 +5,15 @@ import { Alert } from "@/components/alert";
 import { PanelPageHeader, ProgressBar, panelButtonClass } from "@/components/panel-ui";
 import { departureWhenText } from "../../_shared/day-label";
 import { loadManifestOrNotFound } from "../../_shared/load-manifest";
+import { arrowRouteName } from "../../_shared/route-text";
 import { manifestSummary } from "../../_shared/manifest-summary";
 import { AbordajeScanner } from "./scanner";
 
-export const metadata: Metadata = { title: "Abordaje" };
+export const metadata: Metadata = { title: "Escanear tickets" };
 
 /**
- * Pantalla de abordaje de una salida: dice qué bus se está embarcando, cuántos
+ * Escáner de tickets de una salida ("Escanear tickets": el embarque es el paso
+ * de la hoja y el escáner es la herramienta): dice qué bus se está embarcando, cuántos
  * pasajeros ya subieron y deja buscar cada ticket. Solo se abre mientras la
  * salida está embarcando o en ruta; en cualquier otro estado explica por qué
  * y qué hacer. El enlace de volver a la hoja va siempre arriba, como en toda
@@ -38,10 +40,10 @@ export default async function AbordajePage({
     <div className="flex w-full max-w-xl flex-col gap-6">
       <PanelPageHeader
         back={{ href: hojaHref, label: "Volver a la salida" }}
-        title="Abordaje"
+        title="Escanear tickets"
         description={
           <>
-            <span className="font-semibold text-tinta">{salida.route.name}</span>, {verbo}{" "}
+            <span className="font-semibold text-tinta">{arrowRouteName(salida.route.name)}</span>, {verbo}{" "}
             <span className="tabular">{departureWhenText(salida.departsAt, ahora)}</span>. Vehículo{" "}
             <span className="tabular">{salida.vehicle.plate}</span>.
           </>
@@ -73,7 +75,7 @@ export default async function AbordajePage({
           role="none"
           title={
             salida.status === "PROGRAMADA"
-              ? "El abordaje todavía no está abierto"
+              ? "El escáner todavía no está abierto"
               : salida.status === "CANCELADA"
                 ? "Esta salida fue cancelada"
                 : "Este viaje ya terminó"

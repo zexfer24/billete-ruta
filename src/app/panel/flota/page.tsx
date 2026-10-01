@@ -7,7 +7,8 @@ import { SkeletonScreen } from "@/components/skeleton";
 import { IconPlus } from "@/components/icons";
 import { PanelPageHeader, panelButtonClass } from "@/components/panel-ui";
 import { errorMessage } from "../_dashboard/search-params";
-import { FleetBody, type FleetView } from "./fleet-body";
+import { SkeletonSidePanel } from "../_shared/skeletons";
+import { FleetBody, FleetEditPanel, FleetRegisterPanel, type FleetView } from "./fleet-body";
 import { FleetBodySkeleton } from "./fleet-skeleton";
 
 export const metadata: Metadata = { title: "Vehículos y choferes" };
@@ -30,7 +31,11 @@ export default async function FlotaPage({
 
   const vista: FleetView = VISTA.parse(texto(params.vista));
   const registrar = REGISTRAR.parse(texto(params.registrar));
-  const editar = texto(params.editar);
+  // Registrar gana sobre editar: nunca se abren dos paneles.
+  const editar = registrar ? undefined : texto(params.editar);
+  const error = errorMessage(params.error);
+  const errorField = texto(params.campo);
+  const closeHref = `/panel/flota?vista=${vista}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -60,6 +65,30 @@ export default async function FlotaPage({
         }
       />
 
+      {/* Panel de edición en su propio <Suspense key>: al abrirlo aparece al
+          instante su silueta, sin esperar a la lista (spec 6.5). Va antes de
+          la lista porque, si el id no es de nadie, deja ahí su aviso. */}
+      {editar !== undefined ? (
+        <Suspense
+          key={`${vista}:${editar}`}
+          fallback={
+            <SkeletonSidePanel
+              title={vista === "choferes" ? "Editar chofer" : "Editar vehículo"}
+              fields={vista === "choferes" ? 3 : 4}
+            />
+          }
+        >
+          <FleetEditPanel
+            agencyId={agencyId}
+            vista={vista}
+            editar={editar}
+            closeHref={closeHref}
+            error={error}
+            errorField={errorField}
+          />
+        </Suspense>
+      ) : null}
+
       <Suspense
         key={vista}
         fallback={
@@ -71,13 +100,17 @@ export default async function FlotaPage({
         <FleetBody
           agencyId={agencyId}
           vista={vista}
-          registrar={registrar}
-          editar={editar}
-          error={errorMessage(params.error)}
-          errorField={texto(params.campo)}
+          selectedId={editar}
+          panelAbierto={registrar !== undefined || editar !== undefined}
+          error={error}
           ok={texto(params.ok)}
         />
       </Suspense>
+
+      {/* El registro no consulta nada: sale en la misma respuesta que la página. */}
+      {registrar ? (
+        <FleetRegisterPanel registrar={registrar} closeHref={closeHref} error={error} errorField={errorField} />
+      ) : null}
     </div>
   );
 }

@@ -30,3 +30,12 @@ export const COUNTER_STEP_HINTS: Record<CounterStep, string> = {
   3: "Agrega a los acompañantes, si los hay, y confirma que el pasajero aceptó las políticas.",
   4: "Cobra el total en efectivo y entrega el vuelto.",
 };
+
+/**
+ * Línea de paso del teléfono, en lugar del `Stepper`: "Paso 1 de 4 · Salida".
+ * Es texto visible y legible por el lector de pantalla (el `Stepper` queda
+ * oculto por debajo de `sm`).
+ */
+export function counterStepLine(step: CounterStep): string {
+  return `Paso ${step} de ${COUNTER_STEP_LABELS.length} · ${COUNTER_STEP_LABELS[step - 1]}`;
+}

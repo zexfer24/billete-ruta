@@ -1,6 +1,6 @@
-import type { MessageStatus } from "@prisma/client";
+import type { MessageStatus, Prisma } from "@prisma/client";
 import Link from "next/link";
-import { IconMessage } from "@/components/icons";
+import { IconMessage, IconSearch } from "@/components/icons";
 import { EmptyState, StatusBadge, TableShell, panelButtonClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { MESSAGE_STATUS_LABELS, messageStatusTone } from "@/lib/labels";
@@ -36,6 +36,8 @@ interface MessageRow {
   id: string;
   phone: string;
   name: string;
+  /** Código de la reserva del mensaje; nulo en los de lista de espera. */
+  code: string | null;
   text: string;
   status: MessageStatus;
   attempts: number;
@@ -45,16 +47,14 @@ interface MessageRow {
 }
 
 /**
- * Texto que recibe el pasajero, siempre entero. Las plantillas no pasan de
- * unos 260 caracteres (tres líneas en la tabla, unas seis en la tarjeta):
- * recortarlo a dos líneas y sumar un "Ver mensaje completo" de 44 px casi
- * nunca ahorraba altura y parecía un enlace roto cuando el texto ya cabía.
- * Los códigos de reserva van en una sola pieza para leerlos de un vistazo.
+ * Texto que recibe el pasajero. Los códigos de reserva van en una sola pieza
+ * para leerlos de un vistazo. En la tabla va siempre entero (unas tres
+ * líneas); en la tarjeta del teléfono, `MobileMessageText` lo recorta.
  */
-function MessageText({ text }: { text: string }) {
+function MessageText({ text, className }: { text: string; className?: string }) {
   const parts = text.split(RESERVATION_CODE);
   return (
-    <p className="text-sm leading-relaxed text-tinta-suave">
+    <p className={cx("text-sm leading-relaxed text-tinta-suave", className)}>
       {parts.map((part, index) =>
         index % 2 === 1 ? (
           <span key={index} className="tabular whitespace-nowrap">
@@ -65,6 +65,30 @@ function MessageText({ text }: { text: string }) {
         ),
       )}
     </p>
+  );
+}
+
+/**
+ * Texto del mensaje en la tarjeta del teléfono: entero ocupaba de seis a ocho
+ * líneas por tarjeta y una página de 25 medía unas diez pantallas. Se ven las
+ * tres primeras líneas y "Ver el mensaje completo" lo abre; al abrirlo, el
+ * recorte se esconde (`:has(details[open])`) para no repetir el texto.
+ */
+function MobileMessageText({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col gap-1 [&:has(details[open])_[data-recorte]]:hidden">
+      <div data-recorte aria-hidden="true">
+        <MessageText text={text} className="line-clamp-3" />
+      </div>
+      <details className="group">
+        <summary className={DISCLOSURE_SUMMARY_CLASS}>
+          <span className="group-open:hidden">Ver el mensaje completo</span>
+          <span className="hidden group-open:inline">Ocultar el mensaje</span>
+          <DisclosureChevron />
+        </summary>
+        <MessageText text={text} />
+      </details>
+    </div>
   );
 }
 
@@ -146,17 +170,46 @@ function sendLine(message: MessageRow): string {
  * y el estado con las etiquetas y tonos de `labels.ts`.
  */
 export async function MessagesList({
+  query,
+  where,
   status,
   page,
   total,
 }: {
+  /** Búsqueda tal como la escribió el administrador, para los textos y los enlaces. */
+  query?: string;
+  /** Filtro de esa búsqueda (`messageWhere`); sin búsqueda, ninguno. */
+  where?: Prisma.OutboundMessageWhereInput;
   status?: MessageStatus;
   page: number;
   /** Total de mensajes con ese estado, ya contado para las pestañas. */
   total: number;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / MESSAGES_PAGE_SIZE));
-  const hrefFor = (p: number) => withQuery(MESSAGES_PATH, { status, page: p > 1 ? String(p) : undefined });
+  const hrefFor = (p: number) =>
+    withQuery(MESSAGES_PATH, { q: query, status, page: p > 1 ? String(p) : undefined });
+
+  if (total === 0 && query) {
+    return (
+      <EmptyState
+        icon={<IconSearch />}
+        title={
+          status
+            ? `No hay mensajes en “${MESSAGE_STATUS_LABELS[status] ?? status}” para “${query}”`
+            : `No encontramos mensajes para “${query}”`
+        }
+        description="Revisa el número o el código. Un teléfono va con su 0 inicial y una cédula, con o sin letra."
+        action={
+          <Link
+            href={status ? withQuery(MESSAGES_PATH, { q: query }) : MESSAGES_PATH}
+            className={panelButtonClass("secundario")}
+          >
+            {status ? "Ver todos sus mensajes" : "Ver todos los mensajes"}
+          </Link>
+        }
+      />
+    );
+  }
 
   if (total === 0) {
     return (
@@ -184,10 +237,11 @@ export async function MessagesList({
   }
 
   const messages = await prisma.outboundMessage.findMany({
-    where: status ? { status } : undefined,
+    where: { ...where, ...(status ? { status } : {}) },
     orderBy: { createdAt: "desc" },
     skip: (page - 1) * MESSAGES_PAGE_SIZE,
     take: MESSAGES_PAGE_SIZE,
+    include: { reservation: { select: { code: true } } },
   });
 
   if (messages.length === 0) {
@@ -209,6 +263,7 @@ export async function MessagesList({
     id: m.id,
     phone: formatPhone(m.phone),
     name: templateName(m.templateKey),
+    code: m.reservation?.code ?? null,
     text: isTemplateKey(m.templateKey)
       ? renderStoredPreview(m.templateKey, payloadToParams(m.payload))
       : "No hay vista previa para este tipo de mensaje.",
@@ -225,7 +280,8 @@ export async function MessagesList({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm font-semibold text-tinta-suave">
-        {countLabel(total, "mensaje", "mensajes")}, del más reciente al más antiguo
+        {countLabel(total, "mensaje", "mensajes")}
+        {query ? ` para “${query}”` : ""}, del más reciente al más antiguo
         {totalPages > 1
           ? `. Estás viendo del ${formatCount(firstShown)} al ${formatCount(lastShown)}.`
           : "."}
@@ -247,14 +303,22 @@ export async function MessagesList({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="break-words text-base font-semibold text-tinta">{m.name}</p>
-                    <p className="tabular text-sm text-tinta-suave">Para {m.phone}</p>
+                    <p className="tabular text-sm text-tinta-suave">
+                      <span className="whitespace-nowrap">Para {m.phone}</span>
+                      {m.code ? (
+                        <>
+                          {" "}
+                          · <span className="whitespace-nowrap">Reserva {m.code}</span>
+                        </>
+                      ) : null}
+                    </p>
                     <p className="tabular text-sm text-tinta-suave">{sendLine(m)}</p>
                   </div>
                   <div className="max-w-[55%] shrink-0">
                     <MessageStatusBlock message={m} />
                   </div>
                 </div>
-                <MessageText text={m.text} />
+                <MobileMessageText text={m.text} />
               </li>
             ))}
           </ul>

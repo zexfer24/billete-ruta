@@ -4,6 +4,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { IconBus, IconRoute, IconUser } from "@/components/icons";
 import { EmptyState, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { caracasDayInputValue } from "@/lib/time";
+import { arrowRouteName } from "../_shared/route-text";
 import { createDepartureAction } from "@/app/panel/salidas/actions";
 import { PanelField, errorFieldFor, panelFieldAria } from "./panel-field";
 
@@ -103,7 +104,7 @@ export function DepartureForm({ routes, vehicles, drivers, returnTo, error, erro
   const campoConError = errorFieldFor(error, errorField, CAMPOS);
   const errorDe = (campo: (typeof CAMPOS)[number]) => (campoConError === campo ? error : undefined);
   const hoy = caracasDayInputValue(new Date());
-  const ayudaHora = "Formato de 24 horas, hora de Caracas. Por ejemplo, 14:30 son las 2:30 de la tarde.";
+  const ayudaHora = "En formato de 24 horas: 14:30 son las 2:30 de la tarde.";
 
   return (
     <form action={createDepartureAction} className="flex flex-col gap-5">
@@ -123,7 +124,7 @@ export function DepartureForm({ routes, vehicles, drivers, returnTo, error, erro
           </option>
           {rutasActivas.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.name}
+              {arrowRouteName(r.name)}
             </option>
           ))}
         </select>

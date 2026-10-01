@@ -47,10 +47,26 @@ function StatusOf({ salida, now }: { salida: AgencyDepartureRow; now: Date }) {
   return <StatusBadge label={departureStatusLabel(salida.status)} tone={departureStatusTone(salida.status)} />;
 }
 
-/** Movimientos de la salida; si está atrasada, a qué hora debía salir. */
-function movementOf(salida: AgencyDepartureRow, now: Date): string {
+/**
+ * Movimientos de la salida; si está atrasada, a qué hora debía salir. `null`
+ * si todavía no pasó nada: el estado ya lo dice.
+ */
+function movementOf(salida: AgencyDepartureRow, now: Date): string | null {
   if (isOverdue(salida, now)) return `Debía salir a las ${formatCaracasTime24(salida.departsAt)}`;
   return tripMovementText(salida);
+}
+
+/** Celda de movimientos: sin hitos, un guion y, para lectores de pantalla, la frase. */
+function MovementCell({ text }: { text: string | null }) {
+  if (text) return <>{text}</>;
+  return (
+    <>
+      <span aria-hidden="true" className="text-tinta-tenue">
+        —
+      </span>
+      <span className="sr-only">Sin movimientos todavía</span>
+    </>
+  );
 }
 
 /**
@@ -111,28 +127,33 @@ export async function TripsTodayBlock({
           <ResponsiveTable
             cards={
               <>
-                {tarjetas.map((salida) => (
-                  <li key={salida.id}>
-                    <Link
-                      href={`/panel/salidas/${salida.id}`}
-                      className="foco flex h-full items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-colors duration-150 ease-out hover:bg-marca-50/60 motion-reduce:transition-none"
-                    >
-                      <span className="flex min-w-0 flex-1 flex-col gap-1">
-                        <span className="flex flex-wrap items-start justify-between gap-2">
-                          <span className="tabular min-w-0 text-base font-semibold text-tinta">
-                            {formatCaracasTime24(salida.departsAt)} · {routeLabel(salida)}
+                {tarjetas.map((salida) => {
+                  const movimiento = movementOf(salida, now);
+                  return (
+                    <li key={salida.id}>
+                      <Link
+                        href={`/panel/salidas/${salida.id}`}
+                        className="foco flex h-full items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-colors duration-150 ease-out hover:bg-marca-50/60 motion-reduce:transition-none"
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col gap-1">
+                          <span className="flex flex-wrap items-start justify-between gap-2">
+                            <span className="tabular min-w-0 text-base font-semibold text-tinta">
+                              {formatCaracasTime24(salida.departsAt)} · {routeLabel(salida)}
+                            </span>
+                            <StatusOf salida={salida} now={now} />
                           </span>
-                          <StatusOf salida={salida} now={now} />
+                          <span className="text-sm text-tinta-suave">
+                            {salida.vehiclePlate} · {salida.driverName}
+                          </span>
+                          {movimiento ? (
+                            <span className="tabular text-[15px] font-medium text-tinta">{movimiento}</span>
+                          ) : null}
                         </span>
-                        <span className="text-sm text-tinta-suave">
-                          {salida.vehiclePlate} · {salida.driverName}
-                        </span>
-                        <span className="tabular text-[15px] font-medium text-tinta">{movementOf(salida, now)}</span>
-                      </span>
-                      <IconChevronRight className="size-5 shrink-0 text-marca-700" />
-                    </Link>
-                  </li>
-                ))}
+                        <IconChevronRight className="size-5 shrink-0 text-marca-700" />
+                      </Link>
+                    </li>
+                  );
+                })}
               </>
             }
             table={
@@ -174,7 +195,9 @@ export async function TripsTodayBlock({
                       <td className={PANEL_TD_CLASS}>
                         <StatusOf salida={salida} now={now} />
                       </td>
-                      <td className={`${PANEL_TD_CLASS} tabular`}>{movementOf(salida, now)}</td>
+                      <td className={`${PANEL_TD_CLASS} tabular`}>
+                        <MovementCell text={movementOf(salida, now)} />
+                      </td>
                     </ClickableRow>
                   ))}
                 </tbody>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayChipLabel, dayLabel, groupByDay, routeNameAddsInfo } from "@/app/panel/taquilla/departure-days";
+import { dayChipLabel, dayChipShortLabel, dayLabel, groupByDay, routeNameAddsInfo } from "@/app/panel/taquilla/departure-days";
 
 // 2026-09-30 es miércoles. 16:00 UTC = 12:00 en Caracas (UTC−4).
 const now = new Date("2026-09-30T16:00:00Z");
@@ -17,6 +17,12 @@ describe("dayLabel y dayChipLabel", () => {
     expect(dayLabel(new Date("2026-10-02T15:00:00Z"), now)).toBe("Viernes 2 de octubre");
     expect(dayChipLabel(new Date("2026-10-02T15:00:00Z"), now)).toBe("Vie 2 oct");
     expect(dayChipLabel(new Date("2026-10-04T15:00:00Z"), now)).toBe("Dom 4 oct");
+  });
+
+  it("la ficha corta del teléfono deja Hoy y Mañana y quita el mes a los demás días", () => {
+    expect(dayChipShortLabel(new Date("2026-10-01T01:30:00Z"), now)).toBe("Hoy");
+    expect(dayChipShortLabel(new Date("2026-10-01T15:00:00Z"), now)).toBe("Mañana");
+    expect(dayChipShortLabel(new Date("2026-10-03T15:00:00Z"), now)).toBe("Sáb 3");
   });
 });
 

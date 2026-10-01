@@ -18,14 +18,6 @@ import { formatCount } from "./format";
 export const ADMIN_TH_CLASS = "px-3 py-3 text-left text-sm font-semibold text-tinta-suave";
 export const ADMIN_TD_CLASS = "px-3 py-3 align-middle text-sm text-tinta";
 
-/**
- * Enlace de texto de 44 px con flecha, para "Ver todos…" junto a un título de
- * sección. No lleva relleno lateral: cuando baja a su propia línea en el
- * teléfono queda alineado con el título.
- */
-export const SECTION_LINK_CLASS =
-  "foco inline-flex min-h-11 items-center gap-1 rounded-control text-[15px] font-semibold text-marca-700 underline-offset-4 transition-colors duration-150 ease-out hover:text-marca-800 hover:underline motion-reduce:transition-none";
-
 /** Clases del `summary` de un `<details>`: un enlace de 44 px con flecha que gira al abrir. */
 export const DISCLOSURE_SUMMARY_CLASS =
   "foco -ml-2 inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-control px-2 text-[15px] font-semibold text-marca-700 transition-colors duration-150 ease-out hover:bg-marca-50 motion-reduce:transition-none [&::-webkit-details-marker]:hidden";

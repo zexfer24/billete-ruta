@@ -45,66 +45,54 @@ const ALERT_TITLE_LINE = "h-[22px]";
 const ALERT_BODY_LINE = "h-[26px]";
 
 /**
- * Los dos avisos de la silueta con el contenido de siempre: primero el de
- * comprobantes (alerta), cuyo título se parte en dos renglones en el teléfono
- * y su texto en tres (dos desde `sm`); luego el de una salida (información),
- * con el título en un renglón y el texto en dos (uno desde `sm`). Cada
- * renglón lleva su ancho de barra y, si solo existe en el teléfono, `sm:hidden`.
+ * Renglones del único aviso de la silueta, el caso más común: el de
+ * comprobantes, cuyo título se parte en dos renglones en el teléfono y su
+ * texto en tres (dos desde `sm`). Cada renglón lleva su ancho de barra y, si
+ * solo existe en el teléfono, `sm:hidden`.
  */
-const ATTENTION_CARDS: ReadonlyArray<{
-  tone: string;
-  title: ReadonlyArray<{ width: string; className?: string }>;
-  body: ReadonlyArray<{ width: string; className?: string }>;
-}> = [
-  {
-    tone: "border-alerta/30 bg-alerta-suave",
-    title: [{ width: "w-full sm:w-1/2" }, { width: "w-1/3", className: "sm:hidden" }],
-    body: [{ width: "w-full" }, { width: "w-full sm:w-2/3" }, { width: "w-1/2", className: "sm:hidden" }],
-  },
-  {
-    tone: "border-info/30 bg-info-suave",
-    title: [{ width: "w-4/5 sm:w-1/3" }],
-    body: [{ width: "w-full sm:w-3/5" }, { width: "w-2/3", className: "sm:hidden" }],
-  },
+const ATTENTION_TITLE_LINES: ReadonlyArray<{ width: string; className?: string }> = [
+  { width: "w-full sm:w-1/2" },
+  { width: "w-1/3", className: "sm:hidden" },
+];
+const ATTENTION_BODY_LINES: ReadonlyArray<{ width: string; className?: string }> = [
+  { width: "w-full" },
+  { width: "w-full sm:w-2/3" },
+  { width: "w-1/2", className: "sm:hidden" },
 ];
 
 /**
- * Silueta de "Lo que necesita tu atención" con la geometría de `Alert`: el
- * icono de 24 px, el título y el texto con el alto de sus renglones reales y
- * el botón de 44 px (debajo, con la sangría del icono, en el teléfono; a la
- * derecha desde `sm`). Así el bloque mide lo mismo que el real y lo que está
- * debajo no baja de golpe al llegar los datos.
+ * Silueta de "Lo que necesita tu atención": una sola tarjeta con la caja y la
+ * geometría de `Alert` (el icono de 24 px, el título y el texto con el alto de
+ * sus renglones reales y el botón de 44 px, debajo con la sangría del icono
+ * en el teléfono y a la derecha desde `sm`), pero en tono neutro: sin datos
+ * no se adelanta una alerta ámbar que luego puede ser el verde de "Todo al
+ * día" (spec 6.5: la silueta no inventa bloques ni estados).
  */
 export function AttentionSkeleton() {
   return (
     <div aria-hidden="true" className="flex flex-col gap-3">
-      {ATTENTION_CARDS.map((card) => (
-        <div
-          key={card.tone}
-          className={`flex flex-col gap-3 rounded-control border px-4 py-3.5 sm:flex-row sm:items-start ${card.tone}`}
-        >
-          <div className="flex min-w-0 flex-1 items-start gap-3">
-            <span className="shrink-0 pt-px">
-              <SkeletonCircle className="size-6" />
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <div className="flex flex-col">
-                {card.title.map((line, i) => (
-                  <LineBar key={i} lineClass={ALERT_TITLE_LINE} width={line.width} className={line.className} />
-                ))}
-              </div>
-              <div className="flex flex-col">
-                {card.body.map((line, i) => (
-                  <LineBar key={i} lineClass={ALERT_BODY_LINE} width={line.width} className={line.className} />
-                ))}
-              </div>
+      <div className="flex flex-col gap-3 rounded-control border border-borde bg-superficie px-4 py-3.5 sm:flex-row sm:items-start">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span className="shrink-0 pt-px">
+            <SkeletonCircle className="size-6" />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex flex-col">
+              {ATTENTION_TITLE_LINES.map((line, i) => (
+                <LineBar key={i} lineClass={ALERT_TITLE_LINE} width={line.width} className={line.className} />
+              ))}
+            </div>
+            <div className="flex flex-col">
+              {ATTENTION_BODY_LINES.map((line, i) => (
+                <LineBar key={i} lineClass={ALERT_BODY_LINE} width={line.width} className={line.className} />
+              ))}
             </div>
           </div>
-          <div className="flex shrink-0 pl-9 sm:pl-0">
-            <Skeleton className="h-11 w-44" />
-          </div>
         </div>
-      ))}
+        <div className="flex shrink-0 pl-9 sm:pl-0">
+          <Skeleton className="h-11 w-44" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -283,7 +271,8 @@ export function TicketsSkeleton({ periodPhrase }: { periodPhrase?: string }) {
 /**
  * Silueta de "Choferes y buses" (`FleetBlock`): los subtítulos reales «Buses»
  * y «Choferes», las pastillas del resumen de buses y tres filas de chofer con
- * el nombre y su pastilla en la primera línea y el detalle del viaje en dos.
+ * el nombre y, debajo, la línea del viaje. Sin pastilla de chofer: la real
+ * solo aparece cuando el estado aporta algo (en ruta, embarcando, atrasado).
  */
 export function FleetSkeleton() {
   return (
@@ -307,10 +296,8 @@ export function FleetSkeleton() {
                     <span className="flex h-6 items-center">
                       <Skeleton className="h-5 w-44 rounded-pastilla" />
                     </span>
-                    <Skeleton className="h-7 w-24 rounded-pastilla" />
                   </div>
-                  <TextLineBar className="w-full" />
-                  <TextLineBar className="w-1/2" />
+                  <TextLineBar className="w-4/5" />
                 </div>
               ))}
             </div>
@@ -326,14 +313,15 @@ const TRIPS_COLUMNS = [
   { label: "Hora", width: "w-12" },
   { label: "Ruta, bus y chofer", width: "w-48" },
   { label: "Estado", width: "w-24" },
-  { label: "Movimientos", width: "w-40" },
+  { label: "Movimientos", width: "w-16" },
 ] as const;
 
 /**
  * Silueta de "Salidas de hoy" con la misma forma que el bloque real: por
  * debajo de `xl`, cuatro tarjetas (dos columnas desde `md`) con hora y ruta,
- * pastilla (bajo la ruta en el teléfono), bus y chofer, la frase de
- * movimientos y la flecha; desde `xl`, la
+ * pastilla (bajo la ruta en el teléfono), bus y chofer y la flecha (la frase
+ * de movimientos solo aparece cuando ya embarcó, y antes es lo común); desde
+ * `xl`, la
  * tabla con sus cabeceras reales y cuatro filas de 88 px (el enlace de la
  * ruta de 44 px y la línea del bus), como las reales.
  */
@@ -385,7 +373,7 @@ export function TripsTodaySkeleton() {
               className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
             >
               {/* Como la tarjeta real: en el teléfono la pastilla baja bajo la
-                  ruta; luego el bus y el chofer, y la frase de movimientos. */}
+                  ruta; luego el bus y el chofer. */}
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-col items-start gap-1 sm:flex-row sm:justify-between sm:gap-2">
                   <span className="flex h-6 w-2/3 items-center">
@@ -394,9 +382,6 @@ export function TripsTodaySkeleton() {
                   <Skeleton className="h-7 w-24 rounded-pastilla" />
                 </div>
                 <TextLineBar className="w-1/2" />
-                <span className="flex h-6 items-center">
-                  <Skeleton className="h-4 w-4/5 rounded-pastilla" />
-                </span>
               </div>
               <IconChevronRight className="size-5 shrink-0 text-marca-700" />
             </div>

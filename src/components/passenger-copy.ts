@@ -179,10 +179,22 @@ export function ticketDeadline(reserva: DeadlineInput, now: Date): PaymentDeadli
   return plazo;
 }
 
-/** Línea del plazo en el ticket: "Paga antes de hoy a las 21:02". */
+/**
+ * El plazo con el día separado de la hora, para ir detrás de un verbo: "hoy
+ * antes de las 21:02", "mañana antes de las 08:00" o "el lun 12 oct antes de
+ * las 08:00"; si lo pone la salida, "hoy antes de las 20:58, cuando sale el
+ * bus". Nunca "antes de hoy a las…", que se lee como "antes de que empiece hoy".
+ */
+export function deadlineBeforePhrase(deadline: PaymentDeadline, now: Date = new Date()): string {
+  const day = dayWord(deadline.at, now);
+  const phrase = `${RELATIVE_DAYS.has(day) ? day : `el ${day}`} antes de las ${formatCaracasTime24(deadline.at)}`;
+  return deadline.boundByDeparture ? `${phrase}, cuando sale el bus` : phrase;
+}
+
+/** Línea del plazo en el ticket: "Paga hoy antes de las 21:02". */
 export function ticketDeadlineLabel(status: string, deadline: PaymentDeadline, now: Date = new Date()): string {
-  const cuando = deadlinePhrase(deadline, now);
-  return status === "PAGO_EN_SITIO" ? `Paga en la taquilla antes de ${cuando}` : `Paga antes de ${cuando}`;
+  const cuando = deadlineBeforePhrase(deadline, now);
+  return status === "PAGO_EN_SITIO" ? `Paga en la taquilla ${cuando}` : `Paga ${cuando}`;
 }
 
 /** Lo mínimo de una reserva próxima para elegir cuál va en grande en el inicio. */
@@ -226,12 +238,16 @@ export function heroDepartureTitle(departsAt: Date, now: Date): string {
  *    a igual urgencia, la de código menor.
  * 2. Si esa salida es dentro de 3 horas, se queda en grande sea cual sea su
  *    estado: es el viaje que hay que tomar.
- * 3. Si sale más tarde y no le pide nada al pasajero (pago en revisión o
- *    pagada), sube otra reserva próxima que sí pida algo pronto: primero la
- *    del plazo visible más cercano (`ticketDeadline`, el mismo que dice el
- *    ticket: sin pago, o taquilla que vence dentro de 24 horas) y, si no hay,
- *    la primera pagada en parte que sale dentro de 24 horas.
- * 4. Si nada apura, el héroe sigue siendo el viaje más cercano.
+ * 3. Si sale más tarde, manda el plazo: sube la otra reserva cuyo plazo
+ *    visible (`ticketDeadline`, el mismo que dice el ticket: sin pago, o
+ *    taquilla que vence dentro de 24 horas) vence primero, siempre que el
+ *    viaje más cercano no tenga un plazo propio que venza antes. Así una
+ *    pagada en parte (que nunca se libera sola) cede ante un puesto que se
+ *    pierde en 1 hora.
+ * 4. Si no hay plazos que apuren y el viaje más cercano no le pide nada al
+ *    pasajero (pago en revisión o pagada), sube la primera pagada en parte
+ *    que sale dentro de 24 horas.
+ * 5. Si nada apura, el héroe sigue siendo el viaje más cercano.
  *
  * `soonest` es la de la salida más cercana; `promoted` dice si el héroe es
  * otra. `null` si no hay reservas.
@@ -251,8 +267,6 @@ export function pickHeroReservation<T extends HeroCandidate>(
   const quedarse = { hero: soonest, soonest, promoted: false };
 
   if (heroDepartsSoon(soonest.departsAt, now)) return quedarse;
-  const noPideNada = soonest.status === "EN_VALIDACION" || soonest.status === "PAGADA";
-  if (!noPideNada) return quedarse;
 
   let conPlazo: { reserva: T; at: number } | null = null;
   for (const reserva of ordenadas) {
@@ -262,7 +276,13 @@ export function pickHeroReservation<T extends HeroCandidate>(
       conPlazo = { reserva, at: plazo.at.getTime() };
     }
   }
-  if (conPlazo) return { hero: conPlazo.reserva, soonest, promoted: true };
+  const plazoPropio = ticketDeadline(soonest, now);
+  if (conPlazo && (!plazoPropio || conPlazo.at < plazoPropio.at.getTime())) {
+    return { hero: conPlazo.reserva, soonest, promoted: true };
+  }
+
+  const noPideNada = soonest.status === "EN_VALIDACION" || soonest.status === "PAGADA";
+  if (!noPideNada) return quedarse;
 
   // Pagada en parte: no se libera nunca, pero sin ticket no se aborda.
   const abonada = ordenadas.find(
@@ -288,12 +308,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * "jueves 1 de octubre".
  */
 export function dayTimePhrase(date: Date, now: Date = new Date()): string {
+  return `${dayWord(date, now)} a las ${formatCaracasTime24(date)}`;
+}
+
+/** Días que se dicen sin artículo: "hoy a las…", no "el hoy a las…". */
+const RELATIVE_DAYS = new Set(["hoy", "mañana", "ayer"]);
+
+/** El día de `dayTimePhrase`, sin la hora: "hoy", "mañana", "ayer" o "lun 12 oct". */
+function dayWord(date: Date, now: Date): string {
   const day = formatCaracasDate(date);
-  const time = formatCaracasTime24(date);
-  if (day === formatCaracasDate(now)) return `hoy a las ${time}`;
-  if (day === formatCaracasDate(new Date(now.getTime() + DAY_MS))) return `mañana a las ${time}`;
-  if (day === formatCaracasDate(new Date(now.getTime() - DAY_MS))) return `ayer a las ${time}`;
-  return `${formatInTimeZone(date, BUSINESS_TZ, "EEE d MMM", { locale: es })} a las ${time}`;
+  if (day === formatCaracasDate(now)) return "hoy";
+  if (day === formatCaracasDate(new Date(now.getTime() + DAY_MS))) return "mañana";
+  if (day === formatCaracasDate(new Date(now.getTime() - DAY_MS))) return "ayer";
+  return formatInTimeZone(date, BUSINESS_TZ, "EEE d MMM", { locale: es });
 }
 
 /**
@@ -346,6 +373,39 @@ export function noticeTimeLabel(notice: { kind: NoticeKind; at: Date }, now: Dat
     default:
       return null;
   }
+}
+
+/**
+ * Avisos que el inicio ya dice con la reserva en grande o con el enlace al
+ * viaje más cercano: el plazo de pago (va en el ticket), el saldo pendiente
+ * (la barra y el botón del ticket), el pago en revisión (la pastilla) y el
+ * ticket listo (el botón). Un comprobante rechazado sí se muestra: dice algo
+ * que el ticket no dice.
+ */
+const NOTICES_SAID_BY_HERO = new Set<NoticeKind>([
+  "RESERVA_POR_LIBERAR",
+  "RECONFIRMAR_PAGO_EN_SITIO",
+  "COMPROBANTE_EN_VALIDACION",
+  "SALDO_PENDIENTE",
+  "TICKET_LISTO",
+]);
+
+/**
+ * Los avisos que el inicio muestra debajo de la acción principal: quita los
+ * que ya dicen las reservas en pantalla (`codesOnScreen`) y, si la acción
+ * principal es subir la cédula (`heroIsDocument`), el aviso de la cédula.
+ */
+export function homeNotices<T extends { kind: NoticeKind; reservationCode?: string }>(
+  notices: readonly T[],
+  { codesOnScreen, heroIsDocument }: { codesOnScreen: ReadonlySet<string>; heroIsDocument: boolean },
+): T[] {
+  return notices.filter((notice) => {
+    if (heroIsDocument && notice.kind === "DOCUMENTO_FALTANTE") return false;
+    if (notice.reservationCode && codesOnScreen.has(notice.reservationCode) && NOTICES_SAID_BY_HERO.has(notice.kind)) {
+      return false;
+    }
+    return true;
+  });
 }
 
 const NOTICE_ACTIONS: Record<NoticeKind, string> = {

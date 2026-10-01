@@ -1,15 +1,30 @@
 import type { DepartureStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { UnitState } from "@/lib/labels";
+import { caracasDayRange } from "@/lib/time";
 
 const SIETE_DIAS_MS = 7 * 24 * 3_600_000;
+
+/**
+ * Hasta cuándo una próxima salida deja a la unidad ASIGNADO: lo que queda del
+ * día en Caracas o las próximas 12 horas, lo que llegue más lejos (a las 23:00
+ * cubre la mañana siguiente). Una unidad activa cuya próxima salida es
+ * posterior está libre por ahora (DISPONIBLE), aunque tenga salidas en los
+ * próximos 7 días: si no, en una agencia con salidas diarias todas las
+ * unidades saldrían siempre "Asignado" y la columna no diría quién está libre.
+ */
+const VENTANA_ASIGNADO_MS = 12 * 3_600_000;
+
+function finVentanaAsignado(now: Date): number {
+  return Math.max(caracasDayRange(now).to.getTime(), now.getTime() + VENTANA_ASIGNADO_MS);
+}
 
 /**
  * Cuánto tiempo hacia atrás una salida PROGRAMADA vencida o con el manifiesto
  * cerrado sigue decidiendo el estado de la unidad. Doce horas cubren un atraso
  * real y el cruce de medianoche; una salida más vieja que nadie cerró (por
  * ejemplo, porque el worker no corrió) ya no compromete al bus ni al chofer y
- * no debe dejarlos "Embarcando" para siempre. EN_RUTA no tiene este límite: es
+ * no debe dejarlos "Atrasado" para siempre. EN_RUTA no tiene este límite: es
  * un viaje que salió de verdad y lo cierra `registerArrival`.
  */
 const VIGENCIA_EN_CURSO_MS = 12 * 3_600_000;
@@ -90,15 +105,21 @@ export function unitStateOf(
   if (current?.status === "EN_RUTA") {
     // Regla 2: un viaje en curso gana aunque la unidad esté inactiva.
     state = "EN_RUTA";
-  } else if (current?.status === "MANIFIESTO_CERRADO" || current?.overdue) {
-    // Una salida atrasada tiene al bus y al chofer comprometidos igual que un
-    // manifiesto cerrado, que es el estado al que la lleva el worker.
+  } else if (current?.status === "MANIFIESTO_CERRADO") {
+    // Con el embarque abierto la unidad está embarcando, aunque vaya tarde.
     state = "EMBARCANDO";
+  } else if (current?.overdue) {
+    // Una PROGRAMADA cuya hora ya pasó: nadie abrió el embarque, así que no
+    // está "Embarcando" (Salidas la muestra "Programada", con "Iniciar el
+    // embarque" pendiente). Está atrasada, y compromete al bus y al chofer
+    // aunque la unidad esté inactiva, igual que un manifiesto cerrado.
+    state = "ATRASADO";
   } else if (!input.active) {
     // Regla 3: sin viaje en curso, la unidad inactiva está fuera de servicio.
     state = "FUERA_DE_SERVICIO";
-  } else if (upcomingCount > 0) {
-    // Regla 5.
+  } else if (upcoming[0] && upcoming[0].departsAt.getTime() <= finVentanaAsignado(now)) {
+    // Regla 5: asignado solo si la próxima salida es hoy o en las próximas
+    // 12 horas (ver `VENTANA_ASIGNADO_MS`).
     state = "ASIGNADO";
   } else {
     state = "DISPONIBLE";
@@ -143,14 +164,15 @@ export interface AgencyFleetStatus {
 
 const ORDEN_ESTADO: Record<UnitState, number> = {
   EN_RUTA: 0,
-  EMBARCANDO: 1,
-  ASIGNADO: 2,
-  DISPONIBLE: 3,
-  FUERA_DE_SERVICIO: 4,
+  ATRASADO: 1,
+  EMBARCANDO: 2,
+  ASIGNADO: 3,
+  DISPONIBLE: 4,
+  FUERA_DE_SERVICIO: 5,
 };
 
 function resumenVacio(): Record<UnitState, number> {
-  return { EN_RUTA: 0, EMBARCANDO: 0, ASIGNADO: 0, DISPONIBLE: 0, FUERA_DE_SERVICIO: 0 };
+  return { EN_RUTA: 0, ATRASADO: 0, EMBARCANDO: 0, ASIGNADO: 0, DISPONIBLE: 0, FUERA_DE_SERVICIO: 0 };
 }
 
 /** Estado operativo de choferes y vehículos de una agencia, para el tablero de flota. */

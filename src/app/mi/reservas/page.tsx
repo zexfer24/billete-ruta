@@ -5,11 +5,12 @@ import { requirePassenger } from "@/modules/auth";
 import { balanceUsd } from "@/modules/catalog";
 import { prisma } from "@/lib/prisma";
 import { splitByDeparture } from "@/lib/reservations";
+import { Alert } from "@/components/alert";
 import { buttonClass, EmptyState } from "@/components/ui";
 import { cx } from "@/components/ui-classes";
 import { TicketCard, type TicketCardData } from "@/components/ticket-card";
 import { Isotipo } from "@/components/logo";
-import { reservationUrgency, ticketDeadline } from "@/components/passenger-copy";
+import { deadlineBeforePhrase, reservationUrgency, ticketDeadline } from "@/components/passenger-copy";
 import { SkeletonScreen } from "@/components/skeleton";
 import { SkeletonTicketCompact } from "../_components/skeletons";
 
@@ -165,8 +166,35 @@ async function ListaViajes({ vista }: { vista: Vista }) {
     );
   }
 
+  // La lista sigue por fecha; si alguna reserva está por perder el puesto, un
+  // solo aviso arriba dice cuál vence primero, con la misma hora de su tarjeta.
+  const masUrgente = datos.reduce<TicketCardData | null>(
+    (elegida, data) =>
+      data.deadline && (!elegida?.deadline || data.deadline.at < elegida.deadline.at) ? data : elegida,
+    null,
+  );
+
   return (
     <div className="flex flex-col gap-3">
+      {masUrgente?.deadline ? (
+        <Alert
+          tone="alerta"
+          role="none"
+          className="mb-1"
+          title={`${
+            masUrgente.status === "PAGO_EN_SITIO" ? "Paga en la taquilla tu viaje" : "Paga tu viaje"
+          } a ${masUrgente.destination} ${deadlineBeforePhrase(masUrgente.deadline, now)}`}
+          action={
+            <Link href={`/mi/reservas/${masUrgente.code}`} className={buttonClass("primario", undefined, "sm")}>
+              {masUrgente.status === "PAGO_EN_SITIO" ? "Ver cómo pagar" : "Pagar ahora"}
+            </Link>
+          }
+        >
+          {masUrgente.deadline.boundByDeparture
+            ? "Si no, pierdes el viaje."
+            : "Si no, el puesto se libera para otra persona."}
+        </Alert>
+      ) : null}
       <ul className="flex flex-col gap-4">
         {datos.map((data) => (
           <li key={data.code}>

@@ -5,16 +5,37 @@ import { formatCount } from "../_shared/format";
 import { toggleAgencyAction } from "./actions";
 
 /**
+ * Qué pasa con la gente que ya compró: la cifra de reservas de viajes
+ * próximos y que el personal sigue entrando al panel (desactivar la agencia
+ * no corta su acceso), para que quien decide sepa que no deja a nadie sin
+ * atender.
+ */
+function upcomingReservationsText(count: number): string {
+  if (count === 0) return "No tiene reservas de viajes próximos.";
+  if (count === 1) {
+    return "Su única reserva de un viaje próximo se mantiene y su personal puede seguir entrando al panel para cobrarla y embarcarla.";
+  }
+  return `Sus ${formatCount(count)} reservas de viajes próximos se mantienen y su personal puede seguir entrando al panel para cobrarlas y embarcarlas.`;
+}
+
+/**
  * Botón para activar o desactivar una agencia. Desactivar pide confirmación
- * con sus consecuencias, porque sus salidas dejan de venderse; activar la
- * devuelve a la venta sin más pasos.
+ * con sus consecuencias en números, porque sus salidas dejan de venderse;
+ * activar la devuelve a la venta sin más pasos.
  */
 export function AgencyStatusAction({
   agency,
   size = "sm",
   fullWidth = false,
 }: {
-  agency: { id: string; name: string; active: boolean; routes: number };
+  agency: {
+    id: string;
+    name: string;
+    active: boolean;
+    routes: number;
+    /** Reservas que ocupan puesto en salidas futuras de la agencia. */
+    upcomingReservations: number;
+  };
   size?: PanelButtonSize;
   fullWidth?: boolean;
 }) {
@@ -47,7 +68,8 @@ export function AgencyStatusAction({
                 ? `Las salidas de sus ${formatCount(agency.routes)} rutas dejarán de venderse en la app y en la taquilla.`
                 : "Sus salidas dejarán de venderse en la app y en la taquilla."}
           </p>
-          <p>Las reservas que ya existen se mantienen. Puedes volver a activarla cuando quieras.</p>
+          <p>{upcomingReservationsText(agency.upcomingReservations)}</p>
+          <p>Puedes volver a activarla cuando quieras.</p>
         </div>
       }
       confirmLabel="Sí, desactivar"

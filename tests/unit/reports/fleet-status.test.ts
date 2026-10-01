@@ -104,6 +104,35 @@ describe("unitStateOf", () => {
     expect(resultado.upcomingCount).toBe(0);
   });
 
+  describe("asignado solo con una salida hoy o en las próximas 12 horas", () => {
+    // `now` es 2026-09-13 08:00 en Caracas: el día termina a las 00:00 del 14
+    // (04:00 UTC), y las 12 horas llegan a las 20:00, así que manda el fin del día.
+    it("una salida esta noche deja la unidad asignada", () => {
+      const noche = salida({ id: "noche", status: "PROGRAMADA", departsAt: new Date("2026-09-14T03:30:00Z") });
+
+      expect(unitStateOf({ active: true, departures: [noche] }, now).state).toBe("ASIGNADO");
+    });
+
+    it("con la próxima salida mañana a media mañana la unidad está disponible, y la salida sigue en upcoming", () => {
+      const manana = salida({ id: "manana", status: "PROGRAMADA", departsAt: new Date(now.getTime() + DIA) });
+
+      const resultado = unitStateOf({ active: true, departures: [manana] }, now);
+
+      expect(resultado.state).toBe("DISPONIBLE");
+      expect(resultado.upcoming.map((u) => u.id)).toEqual(["manana"]);
+      expect(resultado.upcomingCount).toBe(1);
+    });
+
+    it("a las 23:00 cubre las 12 horas siguientes, aunque sean de mañana", () => {
+      const tarde = new Date("2026-09-14T03:00:00Z"); // 23:00 del 13 en Caracas
+      const temprano = salida({ id: "temprano", status: "PROGRAMADA", departsAt: new Date("2026-09-14T14:00:00Z") });
+      const mediodia = salida({ id: "mediodia", status: "PROGRAMADA", departsAt: new Date("2026-09-14T16:00:00Z") });
+
+      expect(unitStateOf({ active: true, departures: [temprano] }, tarde).state).toBe("ASIGNADO");
+      expect(unitStateOf({ active: true, departures: [mediodia] }, tarde).state).toBe("DISPONIBLE");
+    });
+  });
+
   it("fuera de servicio: inactiva y sin viaje en curso, aunque tenga próximas salidas", () => {
     const proxima = salida({ id: "p1", status: "PROGRAMADA", departsAt: new Date(now.getTime() + DIA) });
 
@@ -123,7 +152,7 @@ describe("unitStateOf", () => {
     expect(resultado.upcoming.map((u) => u.id)).toEqual(["p1"]);
   });
 
-  it("una PROGRAMADA vencida es el viaje en curso, marcada como atrasada, y no cuenta como próxima", () => {
+  it("una PROGRAMADA vencida es el viaje en curso: la unidad queda atrasada, no embarcando, y no cuenta como próxima", () => {
     const atrasada = salida({
       id: "atrasada",
       status: "PROGRAMADA",
@@ -133,7 +162,7 @@ describe("unitStateOf", () => {
 
     const resultado = unitStateOf({ active: true, departures: [noche, atrasada] }, now);
 
-    expect(resultado.state).toBe("EMBARCANDO");
+    expect(resultado.state).toBe("ATRASADO");
     expect(resultado.current?.id).toBe("atrasada");
     expect(resultado.current?.overdue).toBe(true);
     expect(resultado.upcoming.map((u) => u.id)).toEqual(["noche"]);
@@ -151,7 +180,7 @@ describe("unitStateOf", () => {
     expect(resultado.current?.id).toBe("hace3");
   });
 
-  it("EN_RUTA y MANIFIESTO_CERRADO ganan a una PROGRAMADA atrasada, que queda sin marca", () => {
+  it("EN_RUTA y MANIFIESTO_CERRADO ganan a una PROGRAMADA atrasada, que queda sin marca: con el embarque abierto sigue embarcando", () => {
     const atrasada = salida({ id: "atrasada", status: "PROGRAMADA", departsAt: new Date(now.getTime() - HORA) });
     const cerrada = salida({
       id: "cerrada",
@@ -166,12 +195,12 @@ describe("unitStateOf", () => {
     expect(resultado.current?.overdue).toBeUndefined();
   });
 
-  it("una salida atrasada gana a la unidad inactiva, igual que un manifiesto cerrado", () => {
+  it("una salida atrasada gana a la unidad inactiva, que queda atrasada", () => {
     const atrasada = salida({ id: "atrasada", status: "PROGRAMADA", departsAt: new Date(now.getTime() - HORA) });
 
     const resultado = unitStateOf({ active: false, departures: [atrasada] }, now);
 
-    expect(resultado.state).toBe("EMBARCANDO");
+    expect(resultado.state).toBe("ATRASADO");
     expect(resultado.current?.overdue).toBe(true);
   });
 
@@ -187,9 +216,9 @@ describe("unitStateOf", () => {
       expect(resultado.current).toBeNull();
     });
 
-    it("PROGRAMADA de hace 3 días: la unidad activa con próximas queda asignada", () => {
+    it("PROGRAMADA de hace 3 días: la unidad activa con una salida en unas horas queda asignada", () => {
       const vieja = salida({ id: "vieja", status: "PROGRAMADA", departsAt: hace3Dias });
-      const proxima = salida({ id: "p1", status: "PROGRAMADA", departsAt: new Date(now.getTime() + DIA) });
+      const proxima = salida({ id: "p1", status: "PROGRAMADA", departsAt: new Date(now.getTime() + 3 * HORA) });
 
       const resultado = unitStateOf({ active: true, departures: [vieja, proxima] }, now);
 
@@ -224,7 +253,7 @@ describe("unitStateOf", () => {
 
       const resultado = unitStateOf({ active: true, departures: [vieja, reciente] }, now);
 
-      expect(resultado.state).toBe("EMBARCANDO");
+      expect(resultado.state).toBe("ATRASADO");
       expect(resultado.current?.id).toBe("reciente");
       expect(resultado.current?.overdue).toBe(true);
     });

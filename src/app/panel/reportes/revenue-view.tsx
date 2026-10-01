@@ -16,7 +16,7 @@ import {
 } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { CompactFigures } from "../_shared/compact-figures";
-import { routeSubtitle } from "../_shared/route-text";
+import { arrowRouteName, routeSubtitle } from "../_shared/route-text";
 import { ReportRangeLine } from "./report-range-line";
 import type { ReportRange } from "./range";
 
@@ -90,19 +90,19 @@ export function RevenueView({
       {/* En el teléfono, las dos cifras en una sola tarjeta; desde `sm`, dos tarjetas. */}
       <CompactFigures
         figures={[
-          { label: "Total cobrado", value: formatMoney(total, "USD") },
-          { label: "Pagos registrados", value: totalPagos },
+          { label: "Recaudado", value: formatMoney(total, "USD") },
+          { label: "Pagos recibidos", value: totalPagos },
         ]}
       />
       <div className="hidden grid-cols-1 gap-4 sm:grid sm:grid-cols-2">
         <StatCard
-          label="Total cobrado"
+          label="Recaudado"
           value={formatMoney(total, "USD")}
           detail="Comprobantes aprobados y cobros en efectivo"
           tone="marca"
           icon={<IconCash />}
         />
-        <StatCard label="Pagos registrados" value={totalPagos} detail="Cada abono cuenta por separado" icon={<IconChart />} />
+        <StatCard label="Pagos recibidos" value={totalPagos} detail="Cada abono cuenta por separado" icon={<IconChart />} />
       </div>
 
       <TableShell
@@ -111,11 +111,11 @@ export function RevenueView({
             {filas.map((f) => (
               <MobileCard
                 key={f.routeId}
-                title={f.routeName}
+                title={arrowRouteName(f.routeName)}
                 subtitle={routeSubtitle(f.routeName, f.origin, f.destination) ?? undefined}
                 status={f.routeId === mejorId ? <StatusBadge label={MEJOR_RUTA} tone="marca" /> : undefined}
                 details={[
-                  { label: "Total cobrado", value: formatMoney(f.totalUsd, "USD") },
+                  { label: "Recaudado", value: formatMoney(f.totalUsd, "USD") },
                   { label: "Pagos", value: f.payments },
                 ]}
                 action={
@@ -132,7 +132,7 @@ export function RevenueView({
           <thead className="border-b border-borde bg-lienzo">
             <tr>
               <th scope="col" className={PANEL_TH_CLASS}>Ruta</th>
-              <th scope="col" className={cx(PANEL_TH_CLASS, "text-right")}>Total cobrado</th>
+              <th scope="col" className={cx(PANEL_TH_CLASS, "text-right")}>Recaudado</th>
               <th scope="col" className={cx(PANEL_TH_CLASS, "text-right")}>Pagos</th>
               <th scope="col" className={cx(PANEL_TH_CLASS, "w-64")}>Parte del total</th>
             </tr>
@@ -141,7 +141,7 @@ export function RevenueView({
             {filas.map((f) => (
               <tr key={f.routeId} className="border-b border-borde last:border-0">
                 <td className={PANEL_TD_CLASS}>
-                  <p className="font-semibold">{f.routeName}</p>
+                  <p className="font-semibold">{arrowRouteName(f.routeName)}</p>
                   <RouteSubtitle row={f} />
                   {f.routeId === mejorId ? (
                     <span className="mt-1.5 inline-flex">

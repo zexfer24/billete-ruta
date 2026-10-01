@@ -1,15 +1,16 @@
 import { Alert } from "@/components/alert";
 import { IconSearch } from "@/components/icons";
-import { PANEL_LABEL_CLASS, panelButtonClass } from "@/components/panel-ui";
+import { PANEL_LABEL_CLASS } from "@/components/panel-ui";
 import { SkeletonScreen } from "@/components/skeleton";
-import { InputSkeleton, PageHeaderSkeleton } from "../_shared/skeletons";
+import { ButtonSkeleton, InputSkeleton, PageHeaderSkeleton } from "../_shared/skeletons";
 import { SearchExamples } from "./search-examples";
 import { UsersResultsSkeleton } from "./users-results";
 
 /**
  * Silueta de la base de datos de usuarios: el aviso, el buscador y la tabla.
- * El aviso, la etiqueta, el botón y los ejemplos son textos fijos y se pintan
- * reales; el campo va vacío con su borde y solo los resultados van en barras.
+ * El aviso, la etiqueta, el texto del botón y los ejemplos son fijos y se
+ * pintan reales; el campo y el botón llevan el brillo de carga (sin su borde
+ * ni su relleno) y los resultados van en barras.
  */
 export default function UsuariosAdminLoading() {
   return (
@@ -30,10 +31,10 @@ export default function UsuariosAdminLoading() {
         <p className={PANEL_LABEL_CLASS}>Buscar por cédula, nombre o teléfono</p>
         <div className="flex flex-wrap gap-2">
           <InputSkeleton className="min-w-0 flex-1 basis-60" />
-          <span className={panelButtonClass("primario", "md", "flex-1 sm:flex-none")}>
+          <ButtonSkeleton className="flex-1 sm:flex-none">
             <IconSearch className="size-5 shrink-0" />
             Buscar
-          </span>
+          </ButtonSkeleton>
         </div>
         <SearchExamples />
       </div>

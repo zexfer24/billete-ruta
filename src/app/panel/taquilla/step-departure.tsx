@@ -10,7 +10,14 @@ import { IconCheckCircle, IconSearch } from "@/components/icons";
 import { countLabel } from "../_dashboard/text";
 import type { DepartureOption } from "./counter-sale-form";
 import { CounterField } from "./counter-field";
-import { DAY_CHIP_BASE_CLASS, DAY_CHIP_IDLE_CLASS, DEPARTURE_SEARCH_INPUT_CLASS } from "./classes";
+import {
+  DAY_CHIP_BASE_CLASS,
+  DAY_CHIP_IDLE_CLASS,
+  DAY_CHIP_SELECTED_CLASS,
+  DAY_CHIPS_CONTAINER_CLASS,
+  DEPARTURE_CARD_SCROLL_CLASS,
+  DEPARTURE_SEARCH_INPUT_CLASS,
+} from "./classes";
 import { dayKey, groupByDay, normalizeSearch, routeNameAddsInfo } from "./departure-days";
 
 /** Con más salidas que estas, aparecen las fichas de día y el buscador por origen o destino. */
@@ -38,7 +45,7 @@ function DepartureCard({
   const pocos = d.available < FEW_SEATS;
   return (
     <label
-      className={`flex cursor-pointer items-center gap-3 rounded-tarjeta border-2 bg-superficie px-4 py-4 transition-colors duration-150 ease-out motion-reduce:transition-none sm:gap-4 ${
+      className={`flex cursor-pointer items-center gap-3 rounded-tarjeta border-2 bg-superficie px-4 py-4 transition-colors duration-150 ease-out motion-reduce:transition-none sm:gap-4 ${DEPARTURE_CARD_SCROLL_CLASS} ${
         selected ? "border-marca-600 bg-marca-50" : "border-borde hover:border-marca-600/60"
       }`}
     >
@@ -48,7 +55,7 @@ function DepartureCard({
         value={d.id}
         checked={selected}
         onChange={() => onSelect(d.id)}
-        className="foco size-5 shrink-0 accent-marca-600"
+        className={cx("foco size-5 shrink-0 accent-marca-600", DEPARTURE_CARD_SCROLL_CLASS)}
       />
       <span className="tabular w-14 shrink-0 text-xl font-bold text-tinta sm:w-16 sm:text-2xl">
         {formatCaracas(new Date(d.departsAtIso), "HH:mm")}
@@ -151,14 +158,17 @@ export function StepDeparture({
 
       {conFichas && !termino ? (
         // Las fichas bajan de fila en vez de desplazarse de lado: así se ven
-        // todos los días sin adivinar que la tira se desliza. Llevan solo el
+        // todos los días sin adivinar que la tira se desliza. En el teléfono
+        // van en una rejilla de cuatro con el texto corto ("Vie 2"): siete
+        // días ocupan dos filas en vez de tres y las salidas suben a la
+        // primera pantalla. Llevan solo el
         // día: cuántas salidas tiene lo dice el título de la lista, en
         // palabras, en vez de un número suelto en cada ficha. `relative` en el
         // grupo y en cada ficha contiene el texto `sr-only` (posición
         // absoluta), que de otro modo ensanchaba la página en el teléfono y
         // dejaba la barra de «Continuar» fuera de la pantalla.
         <div role="group" aria-label="Día de la salida" className="relative">
-          <div className="flex flex-wrap gap-2">
+          <div className={DAY_CHIPS_CONTAINER_CLASS}>
             {todos.map((grupo) => {
               const elegido = grupo.key === dia;
               return (
@@ -170,10 +180,11 @@ export function StepDeparture({
                   className={cx(
                     "foco transition-colors duration-150 ease-out motion-reduce:transition-none",
                     DAY_CHIP_BASE_CLASS,
-                    elegido ? "border-marca-600 bg-marca-600 text-white" : `${DAY_CHIP_IDLE_CLASS} hover:bg-marca-50`,
+                    elegido ? DAY_CHIP_SELECTED_CLASS : `${DAY_CHIP_IDLE_CLASS} hover:bg-marca-50`,
                   )}
                 >
-                  {grupo.chipLabel}
+                  <span className="sm:hidden">{grupo.chipShortLabel}</span>
+                  <span className="hidden sm:inline">{grupo.chipLabel}</span>
                 </button>
               );
             })}

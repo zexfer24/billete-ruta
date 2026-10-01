@@ -9,6 +9,8 @@ import {
   panelInputClass,
   PANEL_BUTTON_SIZE_CLASSES,
   PANEL_BUTTON_VARIANT_CLASSES,
+  PANEL_TAB_ACTIVE_CLASS,
+  PANEL_TAB_INACTIVE_CLASS,
   PILL_TONE_CLASSES,
   pillClass,
   progressPercent,
@@ -120,6 +122,24 @@ describe("panelInputClass", () => {
 
   it("agrega las clases extra al final", () => {
     expect(panelInputClass("max-w-xs").endsWith("max-w-xs")).toBe(true);
+  });
+
+  it("lleva la marca campo-panel, que da a los selectores el chevron de la marca", () => {
+    expect(tokens(panelInputClass())).toContain("campo-panel");
+  });
+});
+
+describe("pestañas del panel", () => {
+  it("la activa tiene una barra inferior marca-600 además del tono, sin cambiar el peso de la letra", () => {
+    const active = tokens(PANEL_TAB_ACTIVE_CLASS);
+    expect(active).toEqual(expect.arrayContaining(["bg-marca-50", "text-marca-800", "after:bg-marca-600", "after:absolute"]));
+    expect(active.some((c) => /^font-/.test(c))).toBe(false);
+    expect(tokens(PANEL_TAB_INACTIVE_CLASS)).toContain("text-tinta-suave");
+  });
+
+  it("no usa colores fijos ni valores arbitrarios con var()", () => {
+    expect(PANEL_TAB_ACTIVE_CLASS).not.toMatch(FORBIDDEN_COLOR);
+    expect(PANEL_TAB_INACTIVE_CLASS).not.toMatch(FORBIDDEN_COLOR);
   });
 });
 

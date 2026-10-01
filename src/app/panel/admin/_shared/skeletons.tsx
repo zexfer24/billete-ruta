@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { IconChevronDown, IconChevronRight } from "@/components/icons";
+import { IconChevronRight } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
-import { cx, panelButtonClass, panelInputClass } from "@/components/ui-classes";
+import { PANEL_BUTTON_SIZE_CLASSES, cx, type PanelButtonSize } from "@/components/ui-classes";
 import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TABS_GRID_CLASS, ADMIN_TABS_ROW_CLASS } from "./tab-classes";
 
 /**
@@ -11,6 +11,12 @@ import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TABS_GRID_CLASS, ADMIN_T
  * de agencia (`src/app/panel/_shared/skeletons.tsx`), los textos fijos
  * (pestañas, cabeceras de tabla, títulos de sección y etiquetas de cifra) se
  * pintan reales y solo los datos van en barras.
+ *
+ * Los controles (campos, listas desplegables y botones) llevan el brillo de
+ * `.esqueleto`, nunca su borde ni su relleno real, como en los formularios
+ * de ingresar (`src/app/_publico/form-skeleton.tsx`): así nadie escribe en un
+ * campo que todavía no recibe el texto ni pulsa un botón que todavía no
+ * responde. El texto de un botón sí puede ir real, para leer qué hará.
  *
  * Todas las piezas van con `aria-hidden`: dentro de `SkeletonScreen` (región
  * viva) el lector de pantalla solo debe oír la etiqueta de carga.
@@ -49,16 +55,36 @@ export function PageHeaderSkeleton({
 }
 
 /**
- * Campo vacío y quieto, con el borde y el fondo del campo real: un campo
- * nunca es un bloque lila, así que no cambia de aspecto al llegar la página.
- * `select` le agrega la flecha de la lista desplegable.
+ * Campo o lista desplegable del panel mientras carga: un bloque con brillo de
+ * su misma altura (44 px) y radio, sin el borde de control.
  */
-export function InputSkeleton({ className, select = false }: { className?: string; select?: boolean }) {
+export function InputSkeleton({ className }: { className?: string }) {
+  return <span className={cx("esqueleto block min-h-11 w-full rounded-control", className)} />;
+}
+
+/**
+ * Botón del panel mientras carga: su texto (y su icono) reales en marca-700
+ * sobre el brillo, con las medidas de `panelButtonClass` del mismo `size`,
+ * sin el relleno morado ni el borde: se lee qué hará, pero no parece listo.
+ */
+export function ButtonSkeleton({
+  children,
+  size = "md",
+  className,
+}: {
+  children: ReactNode;
+  size?: PanelButtonSize;
+  className?: string;
+}) {
   return (
-    <span className={panelInputClass(cx("relative block", className))}>
-      {select ? (
-        <IconChevronDown className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-tinta-suave" />
-      ) : null}
+    <span
+      className={cx(
+        "esqueleto inline-flex items-center justify-center gap-2 rounded-control text-center font-semibold leading-tight text-marca-700",
+        PANEL_BUTTON_SIZE_CLASSES[size],
+        className,
+      )}
+    >
+      {children}
     </span>
   );
 }
@@ -100,17 +126,14 @@ export function LineSkeleton({ className = "w-72" }: { className?: string }) {
 }
 
 /**
- * Paginación de arriba de una lista paginada (`Pagination`): la posición en
- * barra y el botón "Siguiente" real, quieto, como en la primera página.
+ * Paginación de arriba de una lista paginada (`Pagination`): solo la posición
+ * en barra, en una fila de 44 px como la real. Sin botones: mientras carga no
+ * se sabe si hay una página siguiente (ni si hay una anterior).
  */
 export function PaginationSkeleton() {
   return (
-    <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-3">
+    <div aria-hidden="true" className="flex min-h-11 items-center">
       <LineSkeleton className="w-28" />
-      <span className={panelButtonClass("secundario")}>
-        Siguiente
-        <IconChevronRight className="size-5 shrink-0" />
-      </span>
     </div>
   );
 }
@@ -154,20 +177,20 @@ export function StatCardSkeleton({
 }
 
 /**
- * Formulario de filtros en una tarjeta: listas desplegables vacías de 44 px
- * con su etiqueta real, y el botón corto en la misma fila, como el filtro
- * de agencia de `PeriodFilter`.
+ * Formulario de filtros en una tarjeta: listas desplegables de 44 px con su
+ * etiqueta real y, si la real lo lleva, el botón corto en la misma fila. El
+ * filtro de agencia de movimientos se aplica al elegir y no lleva botón.
  */
-export function FilterCardSkeleton({ labels, button }: { labels: readonly string[]; button: string }) {
+export function FilterCardSkeleton({ labels, button }: { labels: readonly string[]; button?: string }) {
   return (
     <div aria-hidden="true" className={`${CARD} flex flex-wrap items-end gap-3 p-4`}>
       {labels.map((label) => (
         <div key={label} className="flex min-w-0 flex-1 basis-40 flex-col gap-1.5 sm:flex-none">
           <p className="text-sm font-semibold text-tinta">{label}</p>
-          <InputSkeleton select className="sm:w-64" />
+          <InputSkeleton className="sm:w-64" />
         </div>
       ))}
-      <span className={panelButtonClass("secundario", "md")}>{button}</span>
+      {button ? <ButtonSkeleton>{button}</ButtonSkeleton> : null}
     </div>
   );
 }
@@ -183,6 +206,7 @@ export function TableSkeleton({
   rows = 6,
   mobileCards = 3,
   mobileDetails = 4,
+  mobileDetailLabels,
   mobileStatus = false,
   mobileAction = false,
   mobileSubtitleLines = 1,
@@ -193,6 +217,8 @@ export function TableSkeleton({
   rows?: number;
   mobileCards?: number;
   mobileDetails?: number;
+  /** Etiquetas fijas de los datos de la tarjeta ("Registro"): se pintan reales en vez de en barra. */
+  mobileDetailLabels?: readonly string[];
   mobileStatus?: boolean;
   mobileAction?: boolean;
   /** Líneas secundarias bajo el título de la tarjeta (destinatario y hora, por ejemplo). */
@@ -250,7 +276,11 @@ export function TableSkeleton({
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                   {Array.from({ length: mobileDetails }, (_, detail) => (
                     <div key={detail} className="flex flex-col gap-1">
-                      <Skeleton className="h-3.5 w-16 rounded-pastilla" />
+                      {mobileDetailLabels?.[detail] ? (
+                        <p className="text-sm text-tinta-suave">{mobileDetailLabels[detail]}</p>
+                      ) : (
+                        <Skeleton className="h-3.5 w-16 rounded-pastilla" />
+                      )}
                       <Skeleton className="h-4 w-24 rounded-pastilla" />
                     </div>
                   ))}
@@ -272,38 +302,5 @@ export function TableSkeleton({
         })}
       </div>
     </>
-  );
-}
-
-/**
- * Título de sección (`h2` de 18 px) con su texto real. La frase de ayuda se
- * pinta real si es fija (`description`) y como barra si depende del periodo.
- */
-export function SectionHeadingSkeleton({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description?: ReactNode;
-  /** Enlace fijo a la derecha del título, como "Ver todos los movimientos". */
-  action?: ReactNode;
-}) {
-  const heading = (
-    <div className="flex min-w-0 flex-col gap-1">
-      <p className="text-lg font-semibold text-tinta">{title}</p>
-      {description ? (
-        <p className="text-sm leading-snug text-tinta-suave">{description}</p>
-      ) : (
-        <Skeleton className="mt-1 h-4 w-2/3 max-w-sm rounded-pastilla" />
-      )}
-    </div>
-  );
-  if (!action) return <div aria-hidden="true">{heading}</div>;
-  return (
-    <div aria-hidden="true" className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
-      {heading}
-      {action}
-    </div>
   );
 }

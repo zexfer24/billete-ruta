@@ -28,7 +28,7 @@ describe("describeUnitTrip", () => {
       estimatedArrivalAt: new Date("2026-09-13T17:00:00Z"),
     });
     expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Salió 09:00 · llegada estimada 13:00",
     });
   });
@@ -40,7 +40,7 @@ describe("describeUnitTrip", () => {
       estimatedArrivalAt: null,
     });
     expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Salió 09:00",
     });
   });
@@ -51,7 +51,7 @@ describe("describeUnitTrip", () => {
       departsAt: new Date("2026-09-13T15:00:00Z"),
     });
     expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Embarcando · sale 11:00",
     });
   });
@@ -63,7 +63,7 @@ describe("describeUnitTrip", () => {
       estimatedArrivalAt: new Date("2026-09-12T17:00:00Z"),
     });
     expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Salió 12/09 09:00 · llegada estimada 12/09 13:00",
     });
   });
@@ -74,7 +74,7 @@ describe("describeUnitTrip", () => {
       departsAt: new Date("2026-09-14T15:00:00Z"),
     });
     expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Embarcando · sale 14/09 11:00",
     });
   });
@@ -82,16 +82,16 @@ describe("describeUnitTrip", () => {
   it("sin viaje en curso, con una sola próxima salida", () => {
     const proxima = unidad({ status: "PROGRAMADA", departsAt: new Date("2026-09-14T12:00:00Z") });
     expect(describeUnitTrip({ current: null, upcoming: [proxima] }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Mañana 08:00",
     });
   });
 
-  it("una próxima salida de hoy dice «Hoy» y una lejana lleva la fecha", () => {
+  it("una próxima salida de hoy dice «Hoy» y una lejana lleva el día de la semana y la fecha", () => {
     const hoy = unidad({ status: "PROGRAMADA", departsAt: new Date("2026-09-13T15:00:00Z") });
     expect(describeUnitTrip({ current: null, upcoming: [hoy] }, NOW)?.detail).toBe("Hoy 11:00");
     const lejana = unidad({ status: "PROGRAMADA", departsAt: new Date("2026-09-16T12:00:00Z") });
-    expect(describeUnitTrip({ current: null, upcoming: [lejana] }, NOW)?.detail).toBe("16/09 08:00");
+    expect(describeUnitTrip({ current: null, upcoming: [lejana] }, NOW)?.detail).toBe("Miércoles 16/09 08:00");
   });
 
   it("sin viaje en curso, con varias próximas salidas", () => {
@@ -102,7 +102,7 @@ describe("describeUnitTrip", () => {
     ];
     // La lista llega recortada a 3: sin el total aparte no se inventa una cifra.
     expect(describeUnitTrip({ current: null, upcoming }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Mañana 08:00 · y otras salidas en 7 días",
     });
   });
@@ -124,7 +124,7 @@ describe("describeUnitTrip", () => {
   it("atrasada de hoy: dice a qué hora debía salir, con las palabras del tablero", () => {
     const current = unidad({ departsAt: new Date("2026-09-13T13:00:00Z"), overdue: true });
     expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Debía salir a las 09:00",
       late: true,
     });
@@ -142,7 +142,7 @@ describe("describeUnitTrip", () => {
       unidad({ routeName: "Caracas - Mérida", departsAt: new Date("2026-09-14T22:00:00Z") }),
     ];
     expect(describeUnitTrip({ current, upcoming, upcomingCount: 2 }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Debía salir a las 09:00",
       late: true,
     });
@@ -151,7 +151,7 @@ describe("describeUnitTrip", () => {
   it("embarque abierto cuya hora ya pasó: no dice «sale» con una hora vencida", () => {
     const current = unidad({ status: "MANIFIESTO_CERRADO", departsAt: new Date("2026-09-13T13:00:00Z") });
     expect(describeUnitTrip({ current, upcoming: [] }, NOW)).toEqual({
-      title: "Caracas - Maracaibo",
+      title: "Caracas → Maracaibo",
       detail: "Embarque abierto · debía salir a las 09:00",
       late: true,
     });

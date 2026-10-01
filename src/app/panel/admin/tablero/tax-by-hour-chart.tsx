@@ -84,20 +84,24 @@ export function TaxByHourChart({
 
         <figure className="flex flex-col gap-2">
           <div className="flex gap-2 sm:gap-3">
-            {/* Eje de montos: el máximo arriba y cero abajo. */}
+            {/* Eje de montos: el máximo arriba y cero abajo, cada rótulo centrado
+                en su valor (el tope de la barra más alta y la línea base), no
+                media línea hacia adentro. */}
             <div
               aria-hidden="true"
               className="tabular flex h-44 shrink-0 flex-col justify-between text-right text-sm text-tinta-tenue"
             >
-              <span>{peakLabel}</span>
-              <span>{formatMoney(ZERO, "USD")}</span>
+              <span className="-translate-y-1/2">{peakLabel}</span>
+              <span className="translate-y-1/2">{formatMoney(ZERO, "USD")}</span>
             </div>
             <div className="min-w-0 flex-1">
               <div
                 role="img"
                 aria-label={summary}
-                className="flex h-44 items-end gap-px border-b border-borde-control sm:gap-1"
+                className="relative flex h-44 items-end gap-px border-b border-borde-control sm:gap-1"
               >
+                {/* Línea guía tenue a la altura del máximo, la del rótulo de arriba. */}
+                <span className="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-borde" />
                 {hours.map((h) => {
                   const value = Number(h.totalUsd);
                   const percent = value > 0 ? Math.max(3, Math.round((value / peakValue) * 100)) : 0;

@@ -32,7 +32,7 @@ export function VehicleForm(props: VehicleFormProps) {
   const campoConError = errorFieldFor(props.error, props.errorField, CAMPOS);
   const errorDe = (campo: (typeof CAMPOS)[number]) => (campoConError === campo ? props.error : undefined);
 
-  const ayudaPlaca = "Entre 5 y 10 letras y números, con o sin guiones. Por ejemplo, AA000AA.";
+  const ayudaPlaca = "Entre 5 y 10 letras y números, con o sin guiones. Por ejemplo, AB123CD.";
   const ayudaPuestos = "Solo los puestos para pasajeros, sin contar al chofer. Entre 4 y 80.";
 
   return (

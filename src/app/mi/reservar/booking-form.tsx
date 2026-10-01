@@ -335,7 +335,7 @@ export default function BookingForm({
         tabIndex={step === 1 ? -1 : undefined}
         role={step === 1 ? "group" : undefined}
         aria-labelledby={step === 1 ? "paso-titulo" : undefined}
-        className="foco rounded-control outline-none"
+        className="foco rounded-control"
       >
         <Stepper steps={STEP_LABELS} current={step} label="Pasos para reservar" />
       </div>
@@ -379,7 +379,7 @@ export default function BookingForm({
         id="paso-titulo"
         ref={headingRef}
         tabIndex={-1}
-        className={step === 1 ? "sr-only" : "text-lg font-semibold text-tinta outline-none"}
+        className={step === 1 ? "sr-only" : "foco rounded-control text-lg font-semibold text-tinta"}
       >
         <span className="sr-only">
           Paso {step} de {STEP_LABELS.length}:{" "}

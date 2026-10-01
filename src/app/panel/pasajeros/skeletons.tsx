@@ -173,7 +173,11 @@ export function ListSkeleton({
                     {linkLabel ? (
                       <span className={panelButtonClass("secundario")}>{linkLabel}</span>
                     ) : (
-                      <Skeleton className="ml-auto h-11 w-28" />
+                      // Sin saber si es "Revisar" o "Ver detalle": la caja con
+                      // contorno del botón real, de un ancho entre los dos, sin relleno.
+                      <span className="ml-auto flex h-11 w-24 items-center justify-center rounded-control border border-borde">
+                        <Skeleton className="h-4 w-14 rounded-pastilla" />
+                      </span>
                     )}
                   </td>
                 </tr>

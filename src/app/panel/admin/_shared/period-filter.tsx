@@ -3,7 +3,7 @@ import { IconCalendar } from "@/components/icons";
 import { PANEL_LABEL_CLASS, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { AdminTabs } from "./admin-tabs";
 import { ADMIN_TABS_BESIDE_TITLE_CLASS, ADMIN_TITLE_ROW_CLASS } from "./tab-classes";
-import { GetForm, GetSubmitButton } from "./get-form";
+import { GetForm, GetSubmitButton } from "@/app/panel/_shared/get-form";
 import { describeAdminRange, periodQuery, periodTabs, type AdminRange } from "./period";
 
 /** Botón del formulario cuando solo trae otros filtros (la agencia), en singular. */
@@ -19,7 +19,10 @@ export const FILTER_BUTTON_LABEL = "Filtrar";
  *
  * `extraFields` agrega otros filtros al mismo formulario (por ejemplo la
  * agencia); con ellos el formulario se muestra siempre. `keep` son esos mismos
- * filtros ya aplicados, para conservarlos al cambiar de pestaña.
+ * filtros ya aplicados, para conservarlos al cambiar de pestaña. Con
+ * `autoSubmit`, esos campos se aplican solos al cambiar (como las pestañas) y
+ * el botón "Filtrar" queda solo para quien navega sin JavaScript; en "Otras
+ * fechas" el botón sigue visible, porque las fechas se aplican con él.
  *
  * Con `title`, las pestañas van a la derecha de un título de sección (`h2`),
  * como "Resumen de hoy" en el tablero de la agencia, y el rango queda debajo
@@ -32,11 +35,14 @@ export function PeriodFilter({
   extraFields,
   caption,
   title,
+  autoSubmit = false,
 }: {
   path: string;
   range: AdminRange;
   keep?: Record<string, string | undefined>;
   extraFields?: ReactNode;
+  /** Los `extraFields` envían el formulario al cambiar (ver arriba). */
+  autoSubmit?: boolean;
   /** Qué abarca el periodo, por ejemplo "Recorridos, usuarios nuevos y gráfico". */
   caption?: string;
   /** Título de sección con las pestañas a su derecha; `id` para `aria-labelledby`. */
@@ -99,18 +105,27 @@ export function PeriodFilter({
             </>
           ) : null}
           {extraFields}
-          {/* Con un solo filtro y sin fechas, el botón corto queda en la misma
-              fila que la lista en el teléfono, para no empujar la lista de viajes. */}
-          <GetSubmitButton
-            pendingLabel="Buscando…"
-            className={panelButtonClass(
-              extraFields ? "secundario" : "primario",
-              "md",
-              extraFields && !isCustom ? undefined : "w-full sm:w-auto",
-            )}
-          >
-            {extraFields ? FILTER_BUTTON_LABEL : "Ver estas fechas"}
-          </GetSubmitButton>
+          {autoSubmit && extraFields && !isCustom ? (
+            // Respaldo sin JavaScript: con él, la lista ya se aplica al elegir.
+            <noscript>
+              <button type="submit" className={panelButtonClass("secundario", "md")}>
+                {FILTER_BUTTON_LABEL}
+              </button>
+            </noscript>
+          ) : (
+            // Con un solo filtro y sin fechas, el botón corto queda en la misma
+            // fila que la lista en el teléfono, para no empujar la lista de viajes.
+            <GetSubmitButton
+              pendingLabel="Buscando…"
+              className={panelButtonClass(
+                extraFields ? "secundario" : "primario",
+                "md",
+                extraFields && !isCustom ? undefined : "w-full sm:w-auto",
+              )}
+            >
+              {extraFields ? FILTER_BUTTON_LABEL : "Ver estas fechas"}
+            </GetSubmitButton>
+          )}
         </GetForm>
       ) : null}
 

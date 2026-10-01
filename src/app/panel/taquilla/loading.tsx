@@ -1,19 +1,37 @@
 import { Stepper } from "@/components/stepper";
 import { Skeleton, SkeletonCircle, SkeletonScreen } from "@/components/skeleton";
-import { panelInputClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
-import { COUNTER_STEP_HINTS, COUNTER_STEP_LABELS, COUNTER_STEP_TITLES, TAQUILLA_DESCRIPTION } from "./texts";
-import { DAY_CHIP_BASE_CLASS, DAY_CHIP_IDLE_CLASS, DEPARTURE_SEARCH_INPUT_CLASS } from "./classes";
+import {
+  COUNTER_STEP_HINTS,
+  COUNTER_STEP_LABELS,
+  COUNTER_STEP_TITLES,
+  TAQUILLA_DESCRIPTION,
+  counterStepLine,
+} from "./texts";
+import { DAY_CHIP_BASE_CLASS, DAY_CHIP_IDLE_CLASS, DAY_CHIPS_CONTAINER_CLASS, DEPARTURE_SEARCH_INPUT_CLASS } from "./classes";
 
-/** Anchos de las fichas de día de la silueta ("Hoy", "Mañana", "Vie 2 oct"…). */
-const CHIP_WIDTHS = ["w-8", "w-14", "w-16", "w-16", "w-16"] as const;
+/**
+ * Anchos de las siete fichas de día de la silueta: "Hoy", "Mañana" y los
+ * demás días, cortos en el teléfono ("Vie 2") y con el mes desde `sm`
+ * ("Vie 2 oct"). Siete, como la semana habitual: dos filas en el teléfono.
+ */
+const CHIP_WIDTHS = [
+  "w-8",
+  "w-14",
+  "w-10 sm:w-16",
+  "w-10 sm:w-16",
+  "w-10 sm:w-16",
+  "w-10 sm:w-16",
+  "w-10 sm:w-16",
+] as const;
 
 /**
  * Silueta de la taquilla mientras llegan las salidas (spec 6.5). El título,
  * los pasos y la pregunta del paso 1 se pintan con su texto real, pero como
  * decoración (`aria-hidden`, el título en un `p` y no en un `h1`): el lector
  * de pantalla solo oye «Cargando la taquilla…» y la página no tiene dos `h1`
- * al llegar. Debajo, el buscador por origen o destino con su ayuda y las
+ * al llegar. En el teléfono, la línea «Paso 1 de 4 · Salida» en vez de los
+ * círculos, como la página. Debajo, el buscador por origen o destino con su ayuda y las
  * fichas de día (el caso habitual, con más de seis salidas en la semana), la
  * etiqueta del día, las tarjetas de salida y la barra de botones. En el
  * teléfono, la frase de la cabecera y la pista del paso se ocultan igual que
@@ -32,9 +50,10 @@ export default function TaquillaLoading() {
       <div className="flex max-w-3xl flex-col gap-6">
         <div
           aria-hidden="true"
-          className="flex flex-col gap-5 rounded-tarjeta border border-borde bg-superficie p-5 shadow-1"
+          className="flex flex-col gap-2 rounded-tarjeta border border-borde bg-superficie p-5 shadow-1 sm:gap-5"
         >
-          <Stepper steps={COUNTER_STEP_LABELS} current={1} label="Pasos de la venta" />
+          <p className="text-sm font-semibold text-marca-700 sm:hidden">{counterStepLine(1)}</p>
+          <Stepper steps={COUNTER_STEP_LABELS} current={1} label="Pasos de la venta" className="max-sm:hidden" />
           <div>
             <p className="text-xl font-bold tracking-tight text-tinta">{COUNTER_STEP_TITLES[1]}</p>
             <p className="mt-1 hidden text-[15px] text-tinta-suave sm:block">{COUNTER_STEP_HINTS[1]}</p>
@@ -46,13 +65,14 @@ export default function TaquillaLoading() {
               salidas, así que va en barra. */}
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-semibold text-tinta">Buscar por origen o destino</p>
-            <div className={panelInputClass(cx("min-h-12", DEPARTURE_SEARCH_INPUT_CLASS))} />
+            {/* El campo en brillo de carga, sin el borde de control: no parece listo para escribir. */}
+            <Skeleton className={cx("min-h-12 rounded-control", DEPARTURE_SEARCH_INPUT_CLASS)} />
             <span className="flex h-5 items-center">
               <Skeleton className="h-4 w-72 max-w-full rounded-pastilla" />
             </span>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className={DAY_CHIPS_CONTAINER_CLASS}>
             {CHIP_WIDTHS.map((width, i) => (
               <span key={i} className={cx(DAY_CHIP_BASE_CLASS, DAY_CHIP_IDLE_CLASS)}>
                 <Skeleton className={cx("h-4 rounded-pastilla", width)} />

@@ -43,10 +43,9 @@ function TabCount({ count, active }: { count?: number; active: boolean }) {
 
 /**
  * Pestañas de "Pasajeros y pagos": el mismo aspecto que `PanelTabs` (bajan
- * de fila en vez de desplazarse de lado), con el reparto de dos filas parejas
- * en el teléfono de `tab-layout.ts`, y la pestaña pulsada responde en el
- * mismo instante. Como
- * solo cambian los `searchParams`, el `loading.tsx` no vuelve a mostrarse y,
+ * de fila en vez de desplazarse de lado), con la rejilla de dos columnas del
+ * teléfono de `tab-layout.ts`, y la pestaña pulsada responde en el mismo
+ * instante. Como solo cambian los `searchParams`, el `loading.tsx` no vuelve a mostrarse y,
  * sin esto, la pantalla quedaba quieta hasta que llegaban los datos: ahora la
  * pestaña cambia el contador por un indicador de espera mientras se abre.
  */

@@ -23,9 +23,9 @@ import { ReservationDetailPanel, ReservationNotFound } from "./reservation-detai
 import { ProofQueueList, ReservationList } from "./passenger-list";
 import { ListSkeleton, PanelBodySkeleton } from "./skeletons";
 import { arrowRouteName } from "./trip-text";
-// Formulario GET con espera (`next/form`): vive en la carpeta del admin, como
-// en el filtro de Reportes (period-bar.tsx).
-import { GetForm, GetSubmitButton } from "../admin/_shared/get-form";
+// Formulario GET con espera (`next/form`), el mismo que el filtro de Reportes
+// (period-bar.tsx).
+import { GetForm, GetSubmitButton } from "../_shared/get-form";
 import { parsePasajerosFilters, uuidParam } from "./filters";
 import { pasajerosUrl } from "./urls";
 import { ViewTabs } from "./view-tabs";
@@ -82,55 +82,58 @@ async function ReservationFilters({
   const salidaFueraDeLista = salida !== undefined && !salidas.some((d) => d.id === salida);
   const hayFiltros = Boolean(salida || buscar);
 
+  // El landmark de búsqueda lleva nombre ("Filtrar reservas"): `GetForm` no
+  // reenvía `aria-label`, así que el rol va en el contenedor.
   return (
-    <GetForm
-      action="/panel/pasajeros"
-      role="search"
-      className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 md:flex-row md:flex-wrap md:items-end"
-    >
-      <input type="hidden" name="vista" value={vista} />
-      <label className={`${PANEL_LABEL_CLASS} md:w-80`}>
-        Salida
-        <span className="relative">
-          <select
-            name="salida"
-            defaultValue={salida ?? ""}
-            className={panelInputClass("cursor-pointer appearance-none pr-10")}
-          >
-            <option value="">Cualquier salida</option>
-            {salidaFueraDeLista ? <option value={salida}>La salida elegida en el enlace</option> : null}
-            {salidas.map((d) => (
-              <option key={d.id} value={d.id}>
-                {arrowRouteName(d.routeName)} · {formatCaracasDateTime24(d.departsAt)}
-              </option>
-            ))}
-          </select>
-          <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-5 -translate-y-1/2 text-tinta-suave" />
-        </span>
-      </label>
-      <label className={`${PANEL_LABEL_CLASS} md:min-w-64 md:flex-1`}>
-        Buscar
-        <input
-          type="search"
-          name="buscar"
-          defaultValue={buscar ?? ""}
-          maxLength={80}
-          placeholder="Nombre, cédula o código"
-          className={panelInputClass()}
-        />
-      </label>
-      <div className="flex flex-wrap gap-2">
-        <GetSubmitButton pendingLabel="Buscando…" className={panelButtonClass("secundario")}>
-          <IconSearch className="size-5" />
+    <div role="search" aria-label="Filtrar reservas">
+      <GetForm
+        action="/panel/pasajeros"
+        className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 md:flex-row md:flex-wrap md:items-end"
+      >
+        <input type="hidden" name="vista" value={vista} />
+        <label className={`${PANEL_LABEL_CLASS} md:w-80`}>
+          Salida
+          <span className="relative">
+            <select
+              name="salida"
+              defaultValue={salida ?? ""}
+              className={panelInputClass("cursor-pointer appearance-none pr-10")}
+            >
+              <option value="">Cualquier salida</option>
+              {salidaFueraDeLista ? <option value={salida}>La salida elegida en el enlace</option> : null}
+              {salidas.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {arrowRouteName(d.routeName)} · {formatCaracasDateTime24(d.departsAt)}
+                </option>
+              ))}
+            </select>
+            <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-5 -translate-y-1/2 text-tinta-suave" />
+          </span>
+        </label>
+        <label className={`${PANEL_LABEL_CLASS} md:min-w-64 md:flex-1`}>
           Buscar
-        </GetSubmitButton>
-        {hayFiltros ? (
-          <Link href={pasajerosUrl({ vista })} className={panelButtonClass("fantasma")}>
-            Quitar los filtros
-          </Link>
-        ) : null}
-      </div>
-    </GetForm>
+          <input
+            type="search"
+            name="buscar"
+            defaultValue={buscar ?? ""}
+            maxLength={80}
+            placeholder="Nombre, cédula o código"
+            className={panelInputClass()}
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <GetSubmitButton pendingLabel="Buscando…" className={panelButtonClass("secundario")}>
+            <IconSearch className="size-5" />
+            Buscar
+          </GetSubmitButton>
+          {hayFiltros ? (
+            <Link href={pasajerosUrl({ vista })} className={panelButtonClass("fantasma")}>
+              Quitar los filtros
+            </Link>
+          ) : null}
+        </div>
+      </GetForm>
+    </div>
   );
 }
 

@@ -13,6 +13,7 @@ import {
 } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { CompactFigures } from "../_shared/compact-figures";
+import { arrowRouteName } from "../_shared/route-text";
 import { ReportRangeLine } from "./report-range-line";
 import type { ReportRange } from "./range";
 
@@ -115,7 +116,7 @@ export function MovementsView({
                 <MobileCard
                   key={m.tripLogId}
                   title={m.driverName}
-                  subtitle={`${referencia ? fechaCorta(referencia, ahora) : "Sin fecha"} · ${m.routeName} · ${m.vehiclePlate}`}
+                  subtitle={`${referencia ? fechaCorta(referencia, ahora) : "Sin fecha"} · ${arrowRouteName(m.routeName)} · ${m.vehiclePlate}`}
                   details={[
                     { label: "Salió", value: horaRelativa(m.departedAt, referencia) },
                     { label: "Llegó", value: horaRelativa(m.arrivedAt, referencia) },
@@ -150,7 +151,7 @@ export function MovementsView({
                     <p className="font-semibold">{m.driverName}</p>
                     <p className="tabular text-sm text-tinta-suave">{m.vehiclePlate}</p>
                   </td>
-                  <td className={PANEL_TD_CLASS}>{m.routeName}</td>
+                  <td className={PANEL_TD_CLASS}>{arrowRouteName(m.routeName)}</td>
                   {/* Fechas, horas y duraciones no se parten: el ajuste lo absorben chofer y ruta. */}
                   <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>
                     <p>{horaRelativa(m.departedAt, referencia)}</p>

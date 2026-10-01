@@ -90,7 +90,7 @@ export function StepHolder({
       <CounterField
         id="taquilla-cedula"
         label="Cédula del titular"
-        hint="Con su letra y sin puntos, por ejemplo V12345678. Pulsa Enter o «Buscar titular»."
+        hint="Con su letra y sin puntos, por ejemplo V12345678."
         error={searchError ?? undefined}
         errorAfterSubmit
         autoComplete="off"

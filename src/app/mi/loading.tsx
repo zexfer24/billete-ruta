@@ -4,7 +4,7 @@ import { SkeletonNotice, SkeletonSectionTitle, SkeletonTicketCompact } from "./_
 /**
  * Silueta del inicio del pasajero en su caso más común: título, próximo viaje
  * con su botón y la línea "Tienes N viajes próximos", y un aviso con el
- * enlace "Ver los N avisos". Con un viaje próximo la página no muestra
+ * enlace "Ver todos los avisos". Con un viaje próximo la página no muestra
  * "Salen pronto", así que la silueta tampoco.
  */
 export default function MiInicioLoading() {

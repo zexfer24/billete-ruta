@@ -62,28 +62,41 @@ function withArrowRoute(departure: UnitDeparture): UnitDeparture {
 }
 
 /**
- * Línea del viaje de un chofer: placa, ruta y hora, y si tiene más salidas
- * programadas en los próximos 7 días, cuántas («· 2 salidas más en 7 días»)
- * con el total real (`upcomingCount`), igual que la pantalla de flota. Con una
- * salida atrasada, `describeUnitTrip` ya muestra esa salida ("Debía salir a
- * las 21:00") sin sumar otras, y `late` pide pintarla en tono de alerta, como
- * en la pantalla de flota.
+ * Línea del viaje de un chofer en el tablero: placa, ruta y hora de lo que
+ * toca ahora ("AC456EF · Caracas → Mérida · Hoy 10:00"). Sin el conteo de
+ * salidas de la semana ("· 4 salidas más en 7 días"): no ayuda a decidir nada
+ * aquí, alargaba cada fila y vive en la pantalla de flota. Por eso se pasa
+ * solo la próxima salida. Con una salida atrasada, `describeUnitTrip` ya
+ * muestra esa salida ("Debía salir a las 21:00") y `late` pide pintarla en
+ * tono de alerta, como en la pantalla de flota.
  */
 function driverTripLine(
   chofer: AgencyFleetStatus["drivers"][number],
   now: Date,
 ): { text: string; late: boolean } {
+  const proxima = chofer.upcoming.slice(0, 1).map(withArrowRoute);
   const viaje = describeUnitTrip(
     {
       current: chofer.current ? withArrowRoute(chofer.current) : null,
-      upcoming: chofer.upcoming.map(withArrowRoute),
-      upcomingCount: chofer.upcomingCount,
+      upcoming: proxima,
+      upcomingCount: proxima.length,
     },
     now,
   );
   if (!viaje) return { text: "Sin viajes en los próximos 7 días", late: false };
   const placa = chofer.current?.vehiclePlate ?? chofer.upcoming[0]?.vehiclePlate;
   return { text: [placa, viaje.title, viaje.detail].filter(Boolean).join(" · "), late: viaje.late === true };
+}
+
+/**
+ * Estados de chofer que llevan pastilla en el tablero: los que piden mirar o
+ * cambian lo que se hace (en ruta, embarcando, atrasado, fuera de servicio).
+ * "Asignado" y "Disponible" no la llevan: la línea del viaje ya lo dice
+ * ("Hoy 10:00" o "Sin viajes"), y cinco pastillas iguales no distinguían a
+ * nadie.
+ */
+function showsDriverBadge(estado: DashboardUnitState): boolean {
+  return estado !== "ASIGNADO" && estado !== "DISPONIBLE";
 }
 
 /** Máximo de choferes que muestra la lista antes de remitir a la flota completa. */
@@ -167,7 +180,9 @@ export async function FleetBlock({
                   <li key={chofer.id} className={`${FLEET_DRIVER_ROW_CLASS} ${mobileRowClass(index)}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-semibold text-tinta">{chofer.fullName}</p>
-                      <StatusBadge label={stateLabel(estado)} tone={stateTone(estado)} />
+                      {showsDriverBadge(estado) ? (
+                        <StatusBadge label={stateLabel(estado)} tone={stateTone(estado)} />
+                      ) : null}
                     </div>
                     {linea.late ? (
                       <p className="tabular flex items-start gap-1.5 text-sm font-semibold text-alerta">

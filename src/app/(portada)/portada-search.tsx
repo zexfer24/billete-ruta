@@ -50,7 +50,7 @@ export function PortadaSearch({ origins, destinations, loggedIn, title }: Portad
       {loggedIn ? null : (
         <p className="flex w-full items-start gap-2 text-sm leading-snug text-white/85">
           <IconInfo aria-hidden="true" className="size-5 shrink-0" />
-          Para ver los horarios y reservar te pediremos que ingreses con tu cédula.
+          Al buscar o reservar te pediremos que ingreses con tu cédula.
         </p>
       )}
     </SearchCard>

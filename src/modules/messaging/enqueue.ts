@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import type { TemplateKey } from "./templates";
-import { STORED_TEXT_KEY, renderPreview, templateParams } from "./templates";
+import {
+  ONCE_PER_RESERVATION_TEMPLATES,
+  STORED_TEXT_KEY,
+  renderPreview,
+  templateParams,
+} from "./templates";
 
 export interface EnqueueInput {
   reservationId?: string | null;
@@ -12,14 +17,17 @@ export interface EnqueueInput {
 }
 
 /**
- * Encola un mensaje. Si la plantilla es de las que se envían una sola vez por
- * reserva, el índice único parcial rechaza el duplicado y aquí se ignora en
- * silencio: que un barrido corra dos veces no debe molestar al pasajero.
+ * Encola un mensaje y devuelve si lo creó. Si la plantilla es de las que se
+ * envían una sola vez por reserva y ese mensaje ya existe, no hace nada y
+ * devuelve `false`: que un barrido corra cada 5 minutos no debe molestar al
+ * pasajero ni contarse como un envío nuevo. La consulta previa evita que Prisma
+ * registre como error un duplicado esperado; el índice único parcial y la
+ * captura de P2002 siguen como garantía ante dos escrituras simultáneas.
  */
 export async function enqueueMessage(
   tx: Prisma.TransactionClient,
   input: EnqueueInput,
-): Promise<void> {
+): Promise<boolean> {
   const faltantes = templateParams(input.templateKey).filter(
     (p) => input.payload[p] === undefined,
   );
@@ -28,10 +36,18 @@ export async function enqueueMessage(
       `Faltan parámetros para ${input.templateKey}: ${faltantes.join(", ")}`,
     );
   }
+  const reservationId = input.reservationId ?? null;
+  if (reservationId !== null && ONCE_PER_RESERVATION_TEMPLATES.includes(input.templateKey)) {
+    const existente = await tx.outboundMessage.findFirst({
+      where: { reservationId, templateKey: input.templateKey },
+      select: { id: true },
+    });
+    if (existente) return false;
+  }
   try {
     await tx.outboundMessage.create({
       data: {
-        reservationId: input.reservationId ?? null,
+        reservationId,
         waitlistEntryId: input.waitlistEntryId ?? null,
         phone: input.phone,
         templateKey: input.templateKey,
@@ -45,8 +61,9 @@ export async function enqueueMessage(
         scheduledFor: input.scheduledFor ?? new Date(),
       },
     });
+    return true;
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return false;
     throw error;
   }
 }

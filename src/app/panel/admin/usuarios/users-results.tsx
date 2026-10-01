@@ -26,6 +26,21 @@ const USER_COLUMNS = [
 ] as const;
 const USERS_PATH = "/panel/admin/usuarios";
 
+/**
+ * Enlace a la bandeja con los mensajes que recibió esa persona, buscada por
+ * su teléfono: responde "¿qué le llegó?" sin tener que copiar el número.
+ */
+function MessagesLink({ phone }: { phone: string }) {
+  return (
+    <Link
+      href={withQuery("/panel/admin/mensajes", { q: phone })}
+      className="foco -ml-2 inline-flex min-h-11 items-center rounded-control px-2 text-sm font-semibold text-marca-700 transition-colors duration-150 ease-out hover:bg-marca-50 motion-reduce:transition-none"
+    >
+      Ver sus mensajes
+    </Link>
+  );
+}
+
 function pageHref(query: string | undefined, page: number): string {
   return withQuery(USERS_PATH, { q: query, page: page > 1 ? String(page) : undefined });
 }
@@ -137,6 +152,7 @@ export async function UsersResults({
                     </span>
                   </>
                 }
+                action={<MessagesLink phone={r.phone} />}
               />
             ))}
           </ul>
@@ -164,7 +180,10 @@ export async function UsersResults({
                   <span className="block font-semibold">{r.fullName}</span>
                   <span className="tabular block text-sm text-tinta-suave">{r.idNumber}</span>
                 </td>
-                <td className={cx(ADMIN_TD_CLASS, "tabular whitespace-nowrap")}>{formatPhone(r.phone)}</td>
+                <td className={cx(ADMIN_TD_CLASS, "whitespace-nowrap")}>
+                  <span className="tabular block">{formatPhone(r.phone)}</span>
+                  <MessagesLink phone={r.phone} />
+                </td>
                 <td className={cx(ADMIN_TD_CLASS, "tabular")}>{r.birthYear}</td>
                 <td className={cx(ADMIN_TD_CLASS, "tabular text-right")}>{formatCount(r.paidTrips)}</td>
                 <td className={ADMIN_TD_CLASS}>
@@ -194,7 +213,7 @@ export function UsersResultsSkeleton() {
     <div className="flex flex-col gap-3">
       <LineSkeleton className="w-80" />
       <PaginationSkeleton />
-      <TableSkeleton columns={USER_COLUMNS} rows={10} mobileDetails={0} mobileSubtitleLines={2} />
+      <TableSkeleton columns={USER_COLUMNS} rows={10} mobileDetails={0} mobileSubtitleLines={2} mobileAction />
     </div>
   );
 }

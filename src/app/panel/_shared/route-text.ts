@@ -23,3 +23,16 @@ export function routeSubtitle(name: string, origin: string, destination: string)
   if (normalizar(name) === normalizar(`${origin} ${destination}`)) return null;
   return `${origin} → ${destination}`;
 }
+
+/**
+ * Nombre de la ruta con flecha, como en el resto del panel ("Caracas → San
+ * Cristóbal"), a partir del nombre libre de la ruta ("Caracas – San
+ * Cristóbal"): se cambia el primer guion o raya rodeado de espacios por la
+ * flecha y el resto del nombre queda igual. Un nombre sin ese separador
+ * ("Expreso Los Llanos") no cambia. Es la misma regla que `arrowRouteName`
+ * de Pasajeros, para que salidas, flota, abordaje y reportes escriban la ruta
+ * igual que el tablero. El CSV conserva el nombre original.
+ */
+export function arrowRouteName(name: string): string {
+  return name.replace(/\s+[-‐‑‒–—―]\s+/, " → ");
+}

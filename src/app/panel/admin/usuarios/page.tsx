@@ -7,7 +7,7 @@ import { IconSearch } from "@/components/icons";
 import { PANEL_LABEL_CLASS, PanelPageHeader, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { requirePanelUser } from "@/modules/auth";
 import { cleanSearch, pageFromParam } from "../_shared/format";
-import { GetForm, GetSubmitButton } from "../_shared/get-form";
+import { GetForm, GetSubmitButton } from "@/app/panel/_shared/get-form";
 import { SearchExamples } from "./search-examples";
 import { UsersResults, UsersResultsSkeleton } from "./users-results";
 

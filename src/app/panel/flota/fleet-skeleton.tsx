@@ -7,8 +7,8 @@ import type { FleetView } from "./fleet-body";
  * más de un estado. Sin `vista` (el `loading.tsx`, que no sabe si se entró
  * con `?vista=choferes`) ninguna pestaña va marcada y las cabeceras de la
  * tabla van como barras, para no mostrar las de vehículos y cambiarlas luego
- * por las de choferes. En el teléfono, cada tarjeta lleva una cifra, el viaje
- * a todo el ancho y el botón de editar.
+ * por las de choferes. En el teléfono, cada tarjeta lleva el título con su
+ * línea de datos, el viaje a todo el ancho y el enlace "Editar".
  */
 export function FleetBodySkeleton({ vista }: { vista?: FleetView }) {
   return (
@@ -27,8 +27,9 @@ export function FleetBodySkeleton({ vista }: { vista?: FleetView }) {
           }
           rows={6}
           headerBars={vista === undefined}
-          cardDetails={1}
+          cardDetails={0}
           cardWideDetail
+          cardAction="enlace"
         />
       </div>
     </div>

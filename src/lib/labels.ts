@@ -111,10 +111,15 @@ export function departureStatusTone(status: string): StatusTone {
  * Estado operativo de una unidad (chofer o vehículo), derivado de sus salidas
  * en `agencyFleetStatus`. No es un campo de la base de datos.
  */
-export type UnitState = "EN_RUTA" | "EMBARCANDO" | "ASIGNADO" | "DISPONIBLE" | "FUERA_DE_SERVICIO";
+export type UnitState = "EN_RUTA" | "ATRASADO" | "EMBARCANDO" | "ASIGNADO" | "DISPONIBLE" | "FUERA_DE_SERVICIO";
 
+/**
+ * En masculino porque describen al bus o al chofer: "Atrasado" es la unidad
+ * cuya salida pasó la hora sin que nadie abriera el embarque.
+ */
 export const UNIT_STATE_LABELS: Record<UnitState, string> = {
   EN_RUTA: "En ruta",
+  ATRASADO: "Atrasado",
   EMBARCANDO: "Embarcando",
   ASIGNADO: "Asignado",
   DISPONIBLE: "Disponible",
@@ -123,6 +128,7 @@ export const UNIT_STATE_LABELS: Record<UnitState, string> = {
 
 const UNIT_STATE_TONES: Record<UnitState, StatusTone> = {
   EN_RUTA: "exito",
+  ATRASADO: "alerta",
   EMBARCANDO: "alerta",
   ASIGNADO: "marca",
   DISPONIBLE: "neutro",

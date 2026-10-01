@@ -183,6 +183,7 @@ describe("departureStatusTone", () => {
 describe("UNIT_STATE_LABELS y unitStateTone", () => {
   it("traduce los cinco estados de unidad", () => {
     expect(UNIT_STATE_LABELS.EN_RUTA).toBe("En ruta");
+    expect(UNIT_STATE_LABELS.ATRASADO).toBe("Atrasado");
     expect(UNIT_STATE_LABELS.EMBARCANDO).toBe("Embarcando");
     expect(UNIT_STATE_LABELS.ASIGNADO).toBe("Asignado");
     expect(UNIT_STATE_LABELS.DISPONIBLE).toBe("Disponible");
@@ -191,6 +192,7 @@ describe("UNIT_STATE_LABELS y unitStateTone", () => {
 
   it("EN_RUTA es éxito, EMBARCANDO alerta, ASIGNADO marca, DISPONIBLE neutro y FUERA_DE_SERVICIO peligro", () => {
     expect(unitStateTone("EN_RUTA")).toBe("exito");
+    expect(unitStateTone("ATRASADO")).toBe("alerta");
     expect(unitStateTone("EMBARCANDO")).toBe("alerta");
     expect(unitStateTone("ASIGNADO")).toBe("marca");
     expect(unitStateTone("DISPONIBLE")).toBe("neutro");

@@ -17,7 +17,7 @@ describe("CSV de reportes", () => {
     ]);
     expect(csv.startsWith(CSV_BOM)).toBe(true);
     const [cabecera, fila] = csv.slice(CSV_BOM.length).split("\r\n");
-    expect(cabecera).toBe('"Ruta";"Origen";"Destino";"Total cobrado (USD)";"Pagos"');
+    expect(cabecera).toBe('"Ruta";"Origen";"Destino";"Recaudado (USD)";"Pagos"');
     expect(fila).toBe('"Mérida - Cúcuta";"Mérida";"Cúcuta";"1234,50";"3"');
   });
 
