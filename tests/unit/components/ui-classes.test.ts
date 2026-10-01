@@ -49,10 +49,6 @@ describe("buttonClass (pasajero)", () => {
     expect(classes).toEqual(expect.arrayContaining(["bg-marca-600", "text-white", "hover:bg-marca-700"]));
   });
 
-  it("mantiene ruta como alias del primario", () => {
-    expect(buttonClass("ruta")).toBe(buttonClass("primario"));
-  });
-
   it("usa el foco amarillo solo en las variantes que van sobre morado", () => {
     expect(tokens(buttonClass("acento"))).toContain("foco-sobre-marca");
     expect(tokens(buttonClass("sobre-marca"))).toContain("foco-sobre-marca");

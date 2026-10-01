@@ -50,23 +50,6 @@
   --radio-pastilla: 999px;
   --sombra-1: 0 1px 2px rgb(26 21 48 / 0.06), 0 1px 3px rgb(26 21 48 / 0.04);
   --sombra-2: 0 8px 24px rgb(26 21 48 / 0.1);
-
-  /*
-   * Alias de compatibilidad (spec 3.6). Solo existen para que las pantallas
-   * aún no migradas no se rompan; ningún archivo nuevo o rediseñado los usa.
-   */
-  --marca: var(--marca-600);
-  --marca-oscura: var(--marca-800);
-  --marca-clara: var(--marca-100);
-  --acento: var(--marca-600);
-  --acento-suave: var(--marca-50);
-  --cta: var(--marca-600);
-  --ruta: var(--marca-600);
-  --ruta-oscura: var(--marca-700);
-  --en-vivo: var(--exito);
-  --fondo: var(--lienzo);
-  --texto: var(--tinta);
-  --texto-suave: var(--tinta-suave);
 }
 
 @theme inline {
@@ -102,20 +85,6 @@
   --color-peligro-suave: var(--peligro-suave);
   --color-info: var(--info);
   --color-info-suave: var(--info-suave);
-
-  /* Alias de compatibilidad expuestos como utilidades (spec 3.6). */
-  --color-marca: var(--marca);
-  --color-marca-oscura: var(--marca-oscura);
-  --color-marca-clara: var(--marca-clara);
-  --color-acento: var(--acento);
-  --color-acento-suave: var(--acento-suave);
-  --color-cta: var(--cta);
-  --color-ruta: var(--ruta);
-  --color-ruta-oscura: var(--ruta-oscura);
-  --color-en-vivo: var(--en-vivo);
-  --color-fondo: var(--fondo);
-  --color-texto: var(--texto);
-  --color-texto-suave: var(--texto-suave);
 
   --radius-tarjeta: var(--radio-tarjeta);
   --radius-control: var(--radio-control);

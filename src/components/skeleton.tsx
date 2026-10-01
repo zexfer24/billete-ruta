@@ -119,20 +119,6 @@ export function SkeletonButton({ children, className, ghost = false, onMarca = f
   );
 }
 
-/**
- * Campo o lista desplegable quieto: el brillo de carga con la altura del
- * campo real (44 px en el panel, 48 px en el pasajero) y sin el borde de
- * control, para que nadie empiece a escribir en él.
- */
-export function SkeletonField({ panel = true, className }: { panel?: boolean; className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cx("esqueleto block w-full rounded-control", panel ? "min-h-11" : "min-h-12", className)}
-    />
-  );
-}
-
 interface SkeletonScreenProps {
   /** Texto que oyen los lectores de pantalla mientras carga. */
   label?: string;

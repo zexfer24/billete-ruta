@@ -9,13 +9,6 @@ export interface SearchCardProps {
   origin: string;
   destination: string;
   onChange: (next: { origin: string; destination: string }) => void;
-  /**
-   * `marca` es la única apariencia: tarjeta morada con campos blancos, para
-   * que la acción principal (botón `acento`, amarillo) quede sobre morado.
-   * `verde` se conserva como alias obsoleto de `marca` para quien todavía lo
-   * pase (el asistente de reserva); no lo uses en código nuevo.
-   */
-  variant?: "marca" | "verde";
   /** Título visible de la tarjeta, como `h2` (por ejemplo "¿A dónde viajas?"). */
   title?: ReactNode;
   /** Botones y avisos debajo de los campos. */

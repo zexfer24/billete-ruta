@@ -135,7 +135,6 @@ export function StepDepartures({
   return (
     <section className="flex flex-col gap-4">
       <SearchCard
-        variant="marca"
         origins={origins}
         destinations={destinations}
         origin={origin}

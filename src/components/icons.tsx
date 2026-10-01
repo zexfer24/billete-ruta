@@ -37,24 +37,6 @@ function IconBase({
   );
 }
 
-/** Flecha de ubicación, como el triángulo de navegación de Transit. */
-export function IconNavigation(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M12 2 19 21 12 17 5 21 Z" fill="currentColor" stroke="none" />
-    </IconBase>
-  );
-}
-
-/** Círculo relleno pequeño, usado como marcador de destino. */
-export function IconDot(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <circle cx="12" cy="12" r="5" fill="currentColor" stroke="none" />
-    </IconBase>
-  );
-}
-
 /** Dos flechas verticales opuestas, para intercambiar origen y destino. */
 export function IconSwap(props: IconProps) {
   return (
@@ -63,20 +45,6 @@ export function IconSwap(props: IconProps) {
       <path d="M5 9l3-3 3 3" />
       <path d="M16 4v14" />
       <path d="M13 15l3 3 3-3" />
-    </IconBase>
-  );
-}
-
-/** Deslizadores de ajustes o filtros. */
-export function IconSliders(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <line x1="4" y1="6" x2="20" y2="6" />
-      <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" />
-      <line x1="4" y1="12" x2="20" y2="12" />
-      <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
-      <line x1="4" y1="18" x2="20" y2="18" />
-      <circle cx="7" cy="18" r="2" fill="currentColor" stroke="none" />
     </IconBase>
   );
 }
@@ -239,17 +207,6 @@ export function IconBus(props: IconProps) {
       <line x1="16" y1="5" x2="16" y2="11" />
       <circle cx="8" cy="19" r="1.5" fill="currentColor" stroke="none" />
       <circle cx="16" cy="19" r="1.5" fill="currentColor" stroke="none" />
-    </IconBase>
-  );
-}
-
-/** Salida de sesión. */
-export function IconLogout(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
-      <path d="M15 16l4-4-4-4" />
-      <line x1="19" y1="12" x2="9" y2="12" />
     </IconBase>
   );
 }
@@ -433,16 +390,6 @@ export function IconMenu(props: IconProps) {
   );
 }
 
-/** Teléfono móvil, para el número de contacto. */
-export function IconPhone(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <rect x="6" y="2" width="12" height="20" rx="2.5" />
-      <line x1="11" y1="18" x2="13" y2="18" />
-    </IconBase>
-  );
-}
-
 /** Signo de exclamación dentro de un círculo, para avisos que requieren atención. */
 export function IconAlertCircle(props: IconProps) {
   return (
@@ -517,17 +464,6 @@ export function IconLock(props: IconProps) {
   );
 }
 
-/** Tarjeta con banda, para pagos y métodos de cobro. */
-export function IconCard(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <rect x="2" y="5" width="20" height="14" rx="2" />
-      <line x1="2" y1="10" x2="22" y2="10" />
-      <line x1="6" y1="15" x2="10" y2="15" />
-    </IconBase>
-  );
-}
-
 /** Puerta abierta con flecha de salida, para cerrar la sesión o salir. */
 export function IconExit(props: IconProps) {
   return (
@@ -547,24 +483,6 @@ export function IconSpinner(props: IconProps) {
   return (
     <IconBase {...props}>
       <path d="M21 12a9 9 0 1 1-6.2-8.56" />
-    </IconBase>
-  );
-}
-
-/** Engranaje, para ajustes y configuración. */
-export function IconSettings(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <circle cx="12" cy="12" r="7" />
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3" />
-      <path d="M12 19v3" />
-      <path d="M2 12h3" />
-      <path d="M19 12h3" />
-      <path d="m4.93 4.93 2.12 2.12" />
-      <path d="m16.95 16.95 2.12 2.12" />
-      <path d="m4.93 19.07 2.12-2.12" />
-      <path d="m16.95 7.05 2.12-2.12" />
     </IconBase>
   );
 }
@@ -624,28 +542,6 @@ export function IconSeat(props: IconProps) {
       <path d="M5 14a2 2 0 0 0 2 2h10a2 2 0 0 1 2 2v1H7" />
       <line x1="9" y1="19" x2="9" y2="22" />
       <line x1="17" y1="19" x2="17" y2="22" />
-    </IconBase>
-  );
-}
-
-/** Signo de interrogación dentro de un círculo, para ayuda. */
-export function IconHelp(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M9.5 9.5a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.3-2.4 3.8" />
-      <line x1="12" y1="17" x2="12" y2="17" />
-    </IconBase>
-  );
-}
-
-/** Cuadro con flecha que sale, para enlaces que abren en otra pestaña. */
-export function IconExternal(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
-      <path d="M14 4h6v6" />
-      <line x1="20" y1="4" x2="11" y2="13" />
     </IconBase>
   );
 }

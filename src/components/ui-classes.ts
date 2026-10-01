@@ -22,8 +22,7 @@ export type ButtonVariant =
   | "fantasma"
   | "acento"
   | "sobre-marca"
-  | "peligro"
-  | "ruta";
+  | "peligro";
 
 export type ButtonSize = "sm" | "md" | "lg";
 
@@ -50,8 +49,6 @@ export const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
   acento: "foco-sobre-marca bg-sol text-marca-950 hover:brightness-95 active:brightness-90",
   "sobre-marca": "foco-sobre-marca bg-white text-marca-700 hover:bg-marca-50 active:bg-marca-100",
   peligro: "foco bg-peligro text-white hover:brightness-95 active:brightness-90",
-  // Alias de compatibilidad: el verde de "ruta" pasó a ser el primario morado.
-  ruta: PRIMARY_BUTTON,
 };
 
 /**

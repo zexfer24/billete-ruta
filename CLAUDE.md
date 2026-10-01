@@ -8,10 +8,13 @@ Este proyecto se rige por la metodología Liminal Flows (`/liminalwork`). Todo c
 
 Idioma: comentarios, textos de interfaz y comunicación en español con acentos correctos. Identificadores de código, nombres de archivo y mensajes de commit en inglés.
 
+Este archivo se mantiene cerca de 200 líneas, con una línea por pieza en los glosarios. Lo retirado va a `CLAUDE.archive.md` (fuera del contexto automático; se lee a mano).
+
 ## Documentos rectores
 
-- `docs/superpowers/specs/2026-09-10-ticketruta-design.md` — especificación aprobada, revisión 2. Fuente de verdad para modelo de datos, estados, montos, jobs, reportes y privacidad.
-- `docs/superpowers/plans/2026-09-10-ticketruta-mvp.md` — plan de implementación del MVP en doce tareas delegables.
+- `docs/superpowers/specs/2026-09-10-ticketruta-design.md` — especificación funcional aprobada, revisión 2. Fuente de verdad para modelo de datos, estados, montos, jobs, reportes y privacidad.
+- `docs/superpowers/specs/2026-09-30-brand-design-system.md` — sistema de diseño. Fuente de verdad visual: logo, paleta, tipografía, componentes, skeletons, experiencia por rol y glosario de textos de interfaz.
+- `docs/superpowers/plans/2026-09-10-ticketruta-mvp.md` y `docs/superpowers/plans/2026-09-30-brand-redesign.md` — planes del MVP y del rediseño de marca.
 - `Documentación/*.pdf` — documentos de negocio originales (glosario abajo).
 
 ## Qué es TicketRuta
@@ -31,7 +34,7 @@ Contexto geográfico: Venezuela y corredor hacia Colombia. Monedas: USD, VES, CO
 - **Aislamiento por agencia**: toda consulta o acción de un operador filtra por el `agencyId` de su sesión. Nunca se acepta un `agencyId` que venga de un formulario.
 - **Tasa de salida**: el terminal cobra una tasa por pasajero, separada de la tarifa de la agencia. Se guardan ambos montos por separado porque tienen destinatarios distintos.
 - **Abonos parciales**: una reserva acumula pagos. El ticket se emite solo cuando el saldo llega a cero.
-- **Cupos sin sobreventa**: la creación de reserva bloquea la fila de la salida con `SELECT ... FOR UPDATE` y recalcula el disponible dentro de la transacción.
+- **Cupos sin sobreventa**: la creación de reserva bloquea la fila de la salida con `SELECT ... FOR UPDATE` y recalcula el disponible dentro de la transacción. Los cobros también bloquean la fila de la reserva.
 - **Liberación de cupo**: reserva sin ningún pago a las 2 horas de creada; reserva de pago en sitio no reconfirmada 12 horas antes de la salida. Una reserva pagada nunca se libera automáticamente.
 - **Horas siempre en formato de 24 horas**, en hora de Caracas, con almacenamiento en UTC.
 - **Sin borrado físico** de reservas, pasajeros, comprobantes, mensajes, viajes ni auditoría.
@@ -46,92 +49,129 @@ Contexto geográfico: Venezuela y corredor hacia Colombia. Monedas: USD, VES, CO
 
 ## Stack y decisiones fijas
 
-- Next.js 15 (App Router, TypeScript estricto) como monolito, con proceso `worker` aparte para jobs con pg-boss sobre PostgreSQL 16. Prisma. Tailwind. Vitest y Playwright. pnpm.
-- WhatsApp detrás de la interfaz `WhatsAppProvider`. El MVP usa solo la implementación falsa, con bandeja de mensajes visible en el panel del admin. La Meta Cloud API queda documentada en `docs/whatsapp-templates.md` para después del MVP.
+- Next.js 15 (App Router, TypeScript estricto) como monolito, con proceso `worker` aparte para jobs con pg-boss sobre PostgreSQL 16. Prisma. Tailwind 4. Vitest y Playwright. pnpm.
+- WhatsApp detrás de la interfaz `WhatsAppProvider`. El MVP usa solo la implementación falsa, con bandeja de mensajes visible en el panel del admin. La Meta Cloud API queda para después del MVP; las plantillas viven en `src/modules/messaging/templates.ts` (el `docs/whatsapp-templates.md` que ese archivo cita aún no existe).
 - Entrega inmediata: **MVP en localhost**, no Docker de la aplicación. Solo PostgreSQL en contenedor, puerto 5434 para desarrollo y 5435 para test. Los puertos 5432 y 5433 están ocupados en esta máquina.
 - Módulos en `src/modules/*`, cada uno exporta su API pública desde `index.ts`. Nadie importa internos de otro módulo. Alias `@/` a `src/`.
 - Dinero siempre con `Prisma.Decimal`, nunca `number`.
-- **Interfaz del pasajero**: `/`, `/ingresar`, `/registro`, `/mi/*` y `/lista-espera/*` usan el lenguaje visual de app móvil (tokens `--marca`, `--ruta`, `--cta`, `--tinta`, `--lienzo` en `globals.css`, fuente Rubik, iconos SVG propios sin dependencias, barra inferior de navegación). Los paneles de operador y admin conservan los tokens `--acento` originales. La portada (`/`) muestra las próximas salidas sin necesidad de sesión, por tratarse de datos de catálogo (ruta, hora, precio, cupos), no personales.
-- El panel del operador usa un menú agrupado (Operación, Flota y Reportes) y piezas de `src/components/panel-ui.tsx`. Las rutas viejas `/panel/pagos`, `/panel/vehiculos`, `/panel/choferes`, `/panel/recaudacion` y `/panel/movimientos` redirigen a sus páginas nuevas.
+- `next.config.ts` sube `experimental.serverActions.bodySizeLimit` a `"12mb"` porque la taquilla y los documentos suben imágenes de hasta 5 MB.
+
+## Lenguaje visual
+
+- **Un solo lenguaje para las tres interfaces** (pasajero, agencia y terminal), definido en la spec 2026-09-30. Los tokens viven en `:root` de `src/app/globals.css` y se usan como utilidades de Tailwind (`bg-marca-600`, `text-tinta-suave`, `border-borde`): nunca hex, `bg-[var(--...)]` ni colores fijos de Tailwind.
+- Paleta: escala `marca-50…950` (marca `#601DBF` = `marca-600`), `sol`/`sol-suave`/`sol-oscuro` (amarillo, relleno solo sobre morado), neutros `tinta`/`tinta-suave`/`tinta-tenue`, `borde`/`borde-control`, `lienzo`/`superficie`, y semánticos `exito`/`alerta`/`peligro`/`info` con su variante `-suave`. Radios `rounded-tarjeta`/`rounded-control`/`rounded-pastilla`, sombras `shadow-1`/`shadow-2`, foco `.foco`/`.foco-sobre-marca`, cifras `.tabular`, carga `.esqueleto`.
+- Fuente única **Atkinson Hyperlegible Next** (`next/font/google`, variable `--font-atkinson`, en `src/app/layout.tsx`). Ya no existen Rubik ni los tokens `--acento`, `--cta`, `--ruta` ni los demás alias viejos; la variante de botón `acento` es el relleno `sol`, no un token.
+- Logo en `public/brand/` (`logo-morado.svg`, `logo-blanco.svg`, `isotipo-*.svg`, PNG para el PDF e iconos de la app), servido por `Logo`, `Isotipo` y `LogoLockup` de `src/components/logo.tsx`. Iconos y metadatos: `src/app/icon.svg`, `apple-icon.png`, `opengraph-image.png`, `manifest.ts`.
+- Colores de agencia: seis bloques con texto blanco (spec 3.5), por `agencyColor(agencyId)`. Estados: color + icono + texto, nunca solo color. Textos de interfaz según el glosario de la spec, sección 8.
+- La portada (`/`) muestra las próximas salidas sin sesión, por ser datos de catálogo (ruta, hora, precio, cupos), no personales.
+
+## Estructura de rutas
+
+- `src/app/(portada)/` — la portada `/` en grupo propio, para que su `loading.tsx` no afecte a otras rutas. `src/app/panel/(tablero)/` — el tablero de la agencia en `/panel`, mismo motivo.
+- `src/app/_publico/` — piezas privadas de las pantallas públicas (ingresar, registro, lista de espera): `PublicShell`, enlaces con `safeNext`, campo de contraseña, errores de formulario, foco al primer error y `form-skeleton`.
+- `src/app/mi/*` — app del pasajero (con `_components/`); `src/app/panel/*` — agencia, con `_dashboard/`, `_forms/` y `_shared/`; `src/app/panel/admin/*` — terminal, con `admin/_shared/`.
+- Cada ruta con datos tiene su `loading.tsx` que reproduce la silueta real con las piezas de `skeleton.tsx` y los kits `mi/_components/skeletons.tsx`, `panel/_shared/skeletons.tsx`, `panel/_dashboard/skeletons.tsx` y `panel/admin/_shared/skeletons.tsx`. Los layouts ponen sus consultas lentas en `<Suspense>`.
+- Errores y 404: `src/app/error.tsx`, `global-error.tsx` y `not-found.tsx`, más versiones propias en `mi/error.tsx`, `panel/error.tsx`, `panel/not-found.tsx`, `lista-espera/not-found.tsx` y `mi/reservas/[code]/not-found.tsx`.
+- `src/app/dev/esqueletos/` — galería de skeletons, **solo en desarrollo** (`notFound()` fuera de `NODE_ENV=development`).
+- Descargas CSV: `panel/pasajeros/exportar`, `panel/reportes/descargar` y `panel/admin/movimientos/descargar` (rutas `route.ts`).
+- Las rutas viejas `/panel/pagos`, `/panel/vehiculos`, `/panel/choferes`, `/panel/recaudacion` y `/panel/movimientos` redirigen a sus páginas nuevas con `legacyPanelRedirect`.
 
 ## Comandos
 
 ```
 pnpm db:up / pnpm db:test:up     PostgreSQL en Docker (5434 y 5435)
-pnpm prisma migrate deploy       aplicar migraciones
+pnpm db:deploy                   aplicar migraciones (prisma migrate deploy)
+pnpm db:test:deploy              migraciones en la base de test (tmpfs: rehacer tras reiniciar Docker)
 pnpm seed                        datos de demostración con credenciales impresas
+pnpm mock                        volumen realista sobre la semilla (--reset lo regenera)
 pnpm dev                         http://localhost:3000
 pnpm worker:dev                  jobs programados, en otra terminal
 pnpm typecheck / pnpm lint
 pnpm test                        unitarios
 pnpm test:integration            requiere la base de test levantada
-pnpm test:e2e
+pnpm test:e2e                    script definido, sin playwright.config ni pruebas e2e en el repo
 pnpm test -- tests/unit/booking/state-machine.test.ts    un solo archivo
 ```
 
 ## Glosario de módulos
 
-Cada carpeta de `src/modules/` expone su API pública en `index.ts`. Nadie importa internos de otro módulo.
+Cada carpeta de `src/modules/` expone su API pública en `index.ts`. Nadie importa internos de otro módulo. Detalle completo de `reports`, `notices` y `messaging` en `CLAUDE.archive.md`.
 
 | Módulo | Responsabilidad | API principal |
 |---|---|---|
-| `accounts` | Cuentas de pasajero y sus documentos | `registerAccount` (recibe `givenNames` y `surnames`, no `fullName`; también activa una cuenta creada en taquilla), `loginAccount`, `uploadDocument`, `missingDocuments`, `createCounterAccount` (cuenta de taquilla sin contraseña, actor PANEL), `createDocumentInTx` |
+| `accounts` | Cuentas de pasajero y sus documentos | `registerAccount` (`givenNames` y `surnames`; también activa una cuenta de taquilla), `loginAccount`, `uploadDocument`, `missingDocuments`, `createCounterAccount`, `createDocumentInTx` |
 | `agencies` | Agencias, vehículos y choferes | `createAgencyWithOperator`, `listAgencies`, `createVehicle`, `listDrivers` (trae embarques y desembarques) |
 | `audit` | Bitácora de solo inserción | `writeAudit` |
-| `auth` | Dos ámbitos de sesión y matriz de permisos | `requirePanelUser`, `requirePassenger`, `requireAgencyScope`, `requireAgencyUser` (guarda de páginas de agencia que redirige al inicio del rol), `panelHomeFor`, `can` (incluye el permiso `sales.counter`, solo para OPERADOR), `hashPassword` |
-| `booking` | Reservas, cupos, estados y lista de espera | `createReservation`, `createReservationInTx` (misma lógica dentro de una transacción ya abierta, usada por la venta en taquilla), `transitionReservation`, `getAvailability`, `processWaitlist`, `canTransition` |
-| `catalog` | Rutas, salidas, tasas y precios | `listBookableDepartures`, `createDeparture`, `getManifest`, `computeAmounts`, `getCurrentDepartureTax` |
-| `counter` | Venta de pasajes en la taquilla de la agencia | `lookupCounterHolder` (consulta auditada del titular por cédula), `listCounterOptions`, `quoteCounterSale`, `sellAtCounter` (cuenta, documentos, reserva y cobro en efectivo en una sola transacción; emite el ticket al terminar) |
-| `messaging` | Canal de mensajes con proveedor intercambiable | `enqueueMessage`, `deliverPendingMessages`, `getWhatsAppProvider`, `renderPreview`, `renderStoredPreview` (texto de un mensaje ya guardado, nunca lanza), `listMessagesForPhone` (bandeja de mensajes del pasajero, texto ya renderizado) |
-| `notices` | Avisos derivados del estado del pasajero | `buildNotices` (función pura de reglas: documento faltante, reserva por liberar, comprobante rechazado o en validación, pago en sitio por reconfirmar, ticket listo), `listNoticesForAccount` (avisos vigentes de una cuenta, consulta con Prisma) |
-| `payments` | Abonos, comprobantes y cobros en efectivo | `submitProof`, `approveProof`, `rejectProof`, `registerCashPayment`, `registerCashPaymentInTx` (misma lógica dentro de una transacción ya abierta), `proofCoverage` (abono parcial, pago completo o excedente), `getProofReview` (comprobante, reserva, cobertura e historial, con aislamiento por agencia), `countPendingProofs` (comprobantes pendientes de la agencia, para la insignia del menú) |
-| `reports` | Agregados de agencia y de terminal | `revenueByRoute`, `driverMovements`, `departureTaxRevenue`, `agencyMovements`, `listAccounts`, `listTerminalTrips` (recorridos del tablero), `listNewAccounts` (usuarios nuevos, escribe auditoría), `getTripDetail` (viaje con pasajeros a bordo, escribe auditoría), `listAgencyPassengers` (filtra por `paymentState` o por `view`), `paymentStateOf`, `paymentStateWhere`, `PAYMENT_STATES`, `agencyDashboard(agencyId, range, now)` (tablero del operador), `agencyFleetStatus`, `unitStateOf` (estado operativo de chofer o vehículo, función pura), `listRecentTickets`, `listAgencyActivity`, `describeActivity` (frase legible de una entrada de actividad, función pura), `listPendingProofQueue`, `getAgencyReservationDetail`, `countAgencyReservationViews`, `reservationViewFromSlug` |
-| `scheduler` | Ventanas de tiempo de los barridos | `dueForReminder24h`, `dueForRelease12h`, `nextRetryDelayMinutes` |
-| `tickets` | PDF con QR firmado | `issueTicket`, `signTicketCode`, `verifyTicketQr`, `renderQrDataUrl` (imagen PNG del QR como data URL, para mostrarlo en pantalla sin abrir el PDF) |
-| `trips` | Embarque, desembarque y abordaje | `startBoarding`, `registerDeparture`, `registerArrival`, `findForBoarding`, `confirmBoarding`, `availableTripActions` (qué botones de embarque, salida y llegada aplican según el estado; función pura) |
+| `auth` | Dos ámbitos de sesión y matriz de permisos | `requirePanelUser`, `requirePassenger`, `requireAgencyScope`, `requireAgencyUser`, `panelHomeFor`, `can` (incluye `sales.counter`), `hashPassword`, `createPanelSession`/`createPassengerSession` (cookies `tr_panel`/`tr_pax`); la sesión se resuelve una vez por render con `cache` |
+| `booking` | Reservas, cupos, estados y lista de espera | `createReservation`, `createReservationInTx`, `transitionReservation`, `getAvailability`, `processWaitlist`, `canTransition` |
+| `catalog` | Rutas, salidas, tasas y precios | `listBookableDepartures`, `createDeparture`, `getManifest`, `computeAmounts`, `getCurrentDepartureTax`, `balanceUsd` |
+| `counter` | Venta en la taquilla de la agencia | `lookupCounterHolder` (auditada), `listCounterOptions`, `quoteCounterSale`, `sellAtCounter` (cuenta, documentos, reserva y cobro en una transacción; emite el ticket) |
+| `messaging` | Mensajes con proveedor intercambiable | `enqueueMessage`, `deliverPendingMessages`, `getWhatsAppProvider`, `renderPreview`, `renderStoredPreview`, `listMessagesForPhone`, `messageRoute` ("Caracas → Mérida"), `reminderRecommendations` |
+| `notices` | Avisos derivados del estado del pasajero | `buildNotices` (pura; incluye `SALDO_PENDIENTE`), `listNoticesForAccount` |
+| `payments` | Abonos, comprobantes y efectivo | `submitProof`, `approveProof`, `rejectProof`, `registerCashPayment`, `registerCashPaymentInTx` (bloquea la reserva), `ALREADY_PAID_CASH_MESSAGE`, `proofCoverage`, `getProofReview`, `countPendingProofs` |
+| `reports` | Agregados de agencia y de terminal | `agencyDashboard`, `agencyFleetStatus`, `unitStateOf` (incluye `ATRASADO`), `isOverdueDeparture`, `listAgencyPassengers`, `listTerminalTrips` (por llegada), `listNewAccounts` y `getTripDetail` (auditadas), `describeActivity`, `listPendingProofQueue`, y más |
+| `scheduler` | Ventanas y plazos | `dueForReminder24h`, `dueForRelease12h`, `dueForConfirmation2h`, `nextRetryDelayMinutes`, `paymentDeadline` y `cashCounterDeadline` (única fuente de la hora límite de pago para app, avisos y mensajes) |
+| `tickets` | PDF con QR firmado | `issueTicket` (PDF con el logo `public/brand/logo-morado-1200.png`, degrada sin él), `signTicketCode`, `verifyTicketQr`, `renderQrDataUrl` |
+| `trips` | Embarque, desembarque y abordaje | `startBoarding`, `registerDeparture`, `registerArrival`, `findForBoarding`, `confirmBoarding`, `availableTripActions` |
 
 | Archivo de `src/lib/` | Para qué sirve |
 |---|---|
-| `prisma.ts` | Cliente único de base de datos |
-| `env.ts` | Configuración validada con zod |
-| `decimal.ts` | `toDecimal`, `round2`, `formatMoney`, `formatUsdString` |
-| `time.ts` | Hora de Caracas y formato de 24 horas, duración de recorridos, ventanas por hora (`caracasHourStart`, `caracasHourEnd`, `caracasHourValue`), tiempo relativo de salida (`minutesUntil`, `formatRelativeDeparture`: "Sale ahora", "Sale en N min", "Sale a las HH:mm", "Salió"), periodos del tablero del operador (`caracasPeriodRange`, `caracasDayRange`, `periodFromSlug`) |
-| `identity.ts` | Cédulas, teléfonos, edad, enmascarado y primer nombre o apellido (`firstNamePart`) |
-| `storage.ts` | Archivos subidos, verificación por firma de bytes y borrado (`deleteUpload`, para deshacer un archivo ya guardado cuando falla la venta en taquilla que lo necesitaba) |
-| `brand.ts` | Colores e iniciales de bloque de agencia: `agencyColor(agencyId)`, `agencyColorIndex(agencyId)`, `agencyInitials(name)`, `AGENCY_COLORS` (derivados del id, sin tocar el esquema de base de datos) |
-| `labels.ts` | Traducciones y tonos de estado: `RESERVATION_STATUS_LABELS`, `reservationStatusLabel`, `reservationStatusTone`, `PROOF_STATUS_LABELS`, `MESSAGE_STATUS_LABELS`, `messageStatusTone`, `DEPARTURE_STATUS_LABELS`, `departureStatusLabel`, `departureStatusTone`, `UNIT_STATE_LABELS`, `unitStateTone` (estado operativo de una unidad), `SALES_CHANNEL_LABELS`, `salesChannelLabel`, tipo `StatusTone` |
-| `panel-nav.ts` | Menú agrupado del panel y utilidades de navegación, puro (sin React): `OPERATOR_NAV`, `isActivePanelPath`, `parsePanelOrigin` (contrato de "registro rápido"), `legacyPanelRedirect` (traduce una ruta vieja del panel a la nueva) |
-| `safe-next.ts` | `safeNext(value)`: valida una ruta de retorno interna tras ingresar o registrarse (rechaza vacío, `//`, `\` y URLs absolutas) |
-| `reservations.ts` | `splitByDeparture(reservas, now)`: separa una lista de reservas en "próximas" y "pasadas" según `departure.departsAt`, para "Mis viajes" |
+| `prisma.ts` / `env.ts` | Cliente único de base de datos / configuración validada con zod |
+| `decimal.ts` | `toDecimal`, `round2`, `formatMoney`, `formatUsdString`; el prefijo va pegado con `MONEY_SPACE` (U+00A0) para que un monto no se parta |
+| `time.ts` | Hora de Caracas en 24 horas, duraciones, ventanas por hora, `formatRelativeDeparture`, periodos del tablero (`caracasPeriodRange`, `periodFromSlug`) |
+| `identity.ts` | Cédulas, teléfonos, edad, enmascarado y `firstNamePart` |
+| `storage.ts` | Archivos subidos, verificación por firma de bytes y `deleteUpload` |
+| `brand.ts` | `agencyColor`, `agencyColorIndex`, `agencyInitials`, `AGENCY_COLORS` (paleta de la spec 3.5, contraste probado) |
+| `labels.ts` | Etiquetas y tonos de estado; `StatusTone` incluye `info` (`EN_VALIDACION`); `passengerStatusLabel` y `PASSENGER_STATUS_LABELS` (lenguaje del pasajero); `UNIT_STATE_LABELS` con `ATRASADO` |
+| `panel-nav.ts` | Menús `OPERATOR_NAV` y `ADMIN_NAV`, `panelNavHomeHref`, `panelHomeForPath`, `isActivePanelPath`, `parsePanelOrigin`, `legacyPanelRedirect` (puro) |
+| `safe-next.ts` | `safeNext(value)`: ruta de retorno interna segura tras ingresar o registrarse |
+| `reservations.ts` | `splitByDeparture(reservas, now)`: próximas y pasadas, para "Mis viajes" |
 
-| Componente de `src/components/` | Para qué sirve |
+## Glosario de componentes (`src/components/`)
+
+| Componente | Para qué sirve |
 |---|---|
-| `side-panel.tsx` | `SidePanel`: panel lateral controlado por la URL |
-| `close-on-escape.tsx` | `CloseOnEscape`: foco, bloqueo del desplazamiento y cierre con Escape |
+| `ui-classes.ts` | Clases puras y probadas: `cx`, `buttonClass`, `panelButtonClass`, `fieldControlClass`, `panelInputClass`, `pillClass`, tonos de alerta y progreso, `stepState`, `formatFileSize` |
+| `ui.tsx` | Piezas base: `Card`, `Field`, `Select`, `FieldHint`, `FieldError`, `FieldErrorSlot`, `Pill`, `SectionTitle`, `EmptyState`, `ProgressBar`; reexporta `buttonClass` y `FileField` |
+| `panel-ui.tsx` | Piezas del panel: `PanelPageHeader`, `StatCard`, `StatusBadge`, `PanelTabs`, `TableShell` (con `mobile`), `MobileCard`, `SectionCard`, `PANEL_TH_CLASS`/`PANEL_TD_CLASS`; reexporta clases de `ui-classes.ts` |
+| `logo.tsx` | `Logo` (completo, mínimo 64 px), `Isotipo` y `LogoLockup`, en tono morado o blanco |
+| `skeleton.tsx` | `Skeleton`, `SkeletonText`, `SkeletonCircle`, `SkeletonButton` (control quieto) y `SkeletonScreen` (anuncia la carga) |
+| `submit-button.tsx` | `SubmitButton`: envío de formulario de servidor con `pendingLabel`, `aria-disabled` y sin doble envío |
+| `alert.tsx` | `Alert`: aviso por tono (`exito`, `alerta`, `peligro`, `info`) con icono, título, texto y acción |
+| `confirm-dialog.tsx` | `ConfirmDialog`: confirmación con `<dialog>` nativo, foco en "Cancelar" y no se cierra mientras la acción corre |
+| `file-field.tsx` | `FileField`: subida con zona grande, cámara opcional, nombre, peso, vista previa y error propio |
+| `stepper.tsx` | `Stepper`: pasos numerados con `aria-current="step"` (asistente de reserva y taquilla) |
+| `panel-footer.tsx` | `PanelFooter`: pie del panel con la única nota de horas en 24 horas, hora de Caracas |
+| `panel-nav.tsx` | `PanelNav` (variantes `agencia` y `terminal`; barra lateral desde `lg`, menú plegable por debajo), `PanelNavBadge`, `PanelSkipLink` |
+| `panel-feedback.tsx` | `PanelFeedback`: `Alert` de `?error=` u `?ok=` en el panel |
+| `clear-feedback-params.tsx` | `ClearFeedbackParams`: quita `?ok=` y `?error=` de la URL tras mostrarlos |
+| `app-header.tsx` | `AppHeader`: banda morada de página del pasajero con `LogoLockup`, volver, título, subtítulo, `compact` y `titleOnlyAt`; `AppHeaderAction` con estado activo |
+| `bottom-nav.tsx` | `BottomNav`: cuatro destinos fijos abajo (tarjeta centrada desde `md`), `BottomNavBadge` de avisos |
+| `sticky-actions.tsx` | `StickyActions`: barra fija del asistente; oculta `BottomNav` y reserva su alto para que el foco no quede tapado |
+| `side-panel.tsx` | `SidePanel`: panel lateral controlado por la URL, con foco atrapado y barra de acciones pegada al pie |
+| `close-on-escape.tsx` | `CloseOnEscape`: foco, bloqueo del desplazamiento, cierre con Escape y retorno del foco |
 | `clickable-row.tsx` | `ClickableRow`: fila de tabla que navega al hacer clic |
-| `icons.tsx` | Set de 27 iconos SVG propios de trazo (componente de servidor), con `IconBase` interno para el estilo y la accesibilidad comunes; los del panel del operador son `IconCash`, `IconChart`, `IconList`, `IconPlus` e `IconStore` |
-| `ui.tsx` | Piezas base de la app del pasajero: `buttonClass(variant, extra?)`, `Card`, `Field`, `Pill`, `SectionTitle` |
-| `app-header.tsx` | `AppHeader`: cabecera azul de la app del pasajero, con botón de volver, título, subtítulo y acciones |
-| `bottom-nav.tsx` | `BottomNav`: barra de navegación inferior de cuatro destinos, con contador de avisos pendientes |
-| `search-card.tsx` | `SearchCard`: buscador de origen y destino con intercambio, variantes `azul` (portada) y `verde` (reservar) |
+| `icons.tsx` | 47 iconos SVG propios de trazo (servidor) con `IconBase` interno; se agregan solo al final del archivo |
+| `search-card.tsx` | `SearchCard`: origen y destino con intercambio; `SearchCardPreview` para skeletons |
 | `agency-badge.tsx` | `AgencyBadge`: bloque de color con las iniciales de la agencia |
-| `departure-row.tsx` | `DepartureRow`: fila de salida en línea de tiempo, exporta `DepartureRowData` |
-| `departure-board.tsx` | `DepartureBoard`: tablero de bloques de color por agencia para las próximas salidas |
+| `departure-format.ts` | Reglas puras de presentación de salidas: puestos, urgencia, día, duración y tarifa |
+| `departure-row.tsx` | `DepartureRow` (ya no se pinta en ninguna pantalla) y el tipo `DepartureRowData`, que sí usan la portada, `/mi`, el asistente y la lista de espera |
+| `departure-board.tsx` | `DepartureBoard`, `DepartureCard`, `DeparturePriceNote` y `DepartureBoardSkeleton` (portada y lista de espera) |
 | `notice-card.tsx` | `NoticeCard`: tarjeta de aviso por nivel (`alerta`, `info`, `exito`) |
-| `ticket-card.tsx` | `TicketCard`: tarjeta de ticket compacta o grande, con QR en pantalla o barra de progreso de pago, exporta `TicketCardData` |
-| `sticky-actions.tsx` | `StickyActions`: barra fija de botones de avance y retroceso del asistente de reserva |
-| `details-view.tsx` | `DetailsView`: muestra un valor JSON arbitrario (datos de cobro de un método de pago) como pares clave-valor, exporta el tipo `JsonValue` |
-| `panel-feedback.tsx` | `PanelFeedback`: aviso rojo o verde para las acciones del panel de agencia, según `error` u `ok` |
-| `panel-ui.tsx` | Piezas base del panel del operador: `panelButtonClass(variant, size?, extra?)`, `panelInputClass(extra?)`, `PANEL_LABEL_CLASS`, `PanelPageHeader`, `StatCard` (etiqueta, cifra tabular, detalle, `href` opcional), `StatusBadge` (texto y tono, nunca solo color), `PanelTabs` (enlaces con `aria-current` y contador), `EmptyState`, `TableShell`, `SectionCard` |
-| `panel-nav.tsx` | `PanelNav`: menú agrupado del panel del operador (cliente); barra lateral fija desde `lg` y menú plegable por debajo, con la insignia de comprobantes por revisar |
+| `ticket-card.tsx` | `TicketCard`: ticket con cabecera morada e isotipo, QR o barra de pago, apagado si ya no sirve |
+| `passenger-copy.ts` | Textos y reglas puras de la app del pasajero: tonos, acción siguiente, plazos de pago, frases de hora, avisos del inicio |
+| `details-view.tsx` | `DetailsView`: datos de cobro (JSON) como pares clave-valor, exporta `JsonValue` |
 
-`src/worker/sweeps.ts` contiene los seis barridos programados y `src/worker/index.ts` el proceso que los ejecuta.
+## Patrones del panel
 
-`src/app/panel/feedback.ts` (sin `"use server"`, porque ese archivo solo exporta funciones asíncronas) expone `userFacingMessage(error)` (traduce un error conocido del dominio a un mensaje en español, o devuelve `null` para que la acción lo relance; incluye `MissingDocumentsError`) y `panelFeedbackUrl(path, params)` (arma la URL de retorno omitiendo valores vacíos). Las acciones del panel de agencia (`pasajeros`, `salidas`, `flota`, `taquilla`) siguen el patrón: `safeParse` con mensajes en español, `try/catch` alrededor de la llamada al dominio, y `redirect` fuera del `try` hacia `?error=<mensaje>` o `?ok=<código corto>`; la página traduce el código de éxito a texto con un `Record` y muestra ambos con `<PanelFeedback>`.
+- Acciones de servidor (`pasajeros`, `salidas`, `flota`, `taquilla`, admin): `safeParse` con mensajes en español, `try/catch` alrededor del dominio con `userFacingMessage(error)` de `src/app/panel/feedback.ts`, y `redirect` fuera del `try` a `?error=<mensaje>` u `?ok=<código>` con `panelFeedbackUrl`; la página traduce el código con un `Record` y lo muestra con `<PanelFeedback>`.
+- "Registro rápido" del tablero: los formularios de `src/app/panel/_forms/` aceptan `returnTo="tablero"` y la acción lo lee con `parsePanelOrigin(formData.get("origen"))`.
+- Todo `<form action={...}>` de servidor envía con `SubmitButton`; lo irreversible pasa por `ConfirmDialog`.
 
-Los formularios reutilizables de `src/app/panel/_forms/` (`cash-payment-form`, `departure-form`, `vehicle-form`, `driver-form`) aceptan la prop opcional `returnTo="tablero"`: con ella agregan `<input type="hidden" name="origen" value="tablero" />`, y la acción de servidor lee ese campo con `parsePanelOrigin(formData.get("origen"))` (`src/lib/panel-nav.ts`) para redirigir al tablero en vez de a su propia página. Es el contrato del "registro rápido" del tablero.
+## Verificación visual
 
-`next.config.ts` fija `experimental.serverActions.bodySizeLimit` en `"12mb"`, porque la venta en taquilla y los documentos del pasajero suben imágenes de hasta 5 MB cada una y el límite por defecto de las acciones de servidor es de solo 1 MB.
+- El arnés de capturas de Playwright vive **fuera del repo**, en el scratchpad de la sesión (`qa/shoot.cjs`, `qa/shoot-extra.cjs`, a 375, 820 y 1280 px). Sus sesiones se crean por script (`qa/make-sessions.ts` con `tsx --tsconfig tsconfig.json`) llamando a `createPanelSession` y `createPassengerSession` de `@/modules/auth`, y se inyectan como cookies `tr_panel` y `tr_pax`: nunca se escriben contraseñas.
+- Las siluetas de carga se revisan en `/dev/esqueletos` con `pnpm dev`.
 
 ## Glosario de documentación (`Documentación/`)
 
@@ -145,3 +185,5 @@ Los formularios reutilizables de `src/app/panel/_forms/` (`cash-payment-form`, `
 ## Notas operativas
 
 - Los nombres de los PDF llevan acentos y la herramienta `Read` falla con ellos por normalización Unicode. Solución: copiarlos al scratchpad con nombres ASCII mediante PowerShell y leer la copia.
+- `src/worker/sweeps.ts` contiene los seis barridos programados y `src/worker/index.ts` el proceso que los ejecuta. `pnpm worker:dev` no siempre recarga: reinícialo tras cambiar el dominio o los barridos.
+- Clases de Tailwind nuevas pueden exigir reiniciar `pnpm dev` con `.next` limpio.
