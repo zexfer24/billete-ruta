@@ -3,18 +3,18 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { loginAccount, registerAccount } from "@/modules/accounts";
+import { loginAccount, missingDocuments, registerAccount } from "@/modules/accounts";
 import { PASSENGER_COOKIE } from "@/modules/auth";
 import { ValidationError } from "@/modules/booking/errors";
-import { safeNext } from "@/lib/safe-next";
 import {
   fieldErrorsFromIssues,
   formText,
   isExistingAccountError,
   REGISTER_FIELDS,
-  registerDomainErrorField,
+  registerDomainFieldError,
   type RegisterField,
 } from "../_publico/form-errors";
+import { afterRegisterHref } from "../_publico/links";
 
 /** Datos que se devuelven al formulario tras un error, para no volver a escribirlos. Nunca las contraseñas. */
 export type RegistroValues = Partial<Record<Exclude<RegisterField, "password" | "confirmPassword">, string>>;
@@ -31,18 +31,32 @@ export interface RegistroFormState {
   attempt?: number;
 }
 
+/*
+ * Cuando un campo tiene error, el error reemplaza a su ayuda (register-form),
+ * así que cada mensaje dice por sí solo qué escribir. El campo vacío se
+ * distingue del mal escrito: a quien no escribió nada se le pide el dato, no
+ * se le corrige el formato. Como zod informa todas las reglas que fallan y
+ * solo se muestra la primera, la regla de "vacío" va antes que la de formato.
+ */
 const registroSchema = z
   .object({
-    idNumber: z.string().trim().min(1, "Escribe tu cédula."),
-    givenNames: z.string().trim().min(2, "Escribe tus nombres."),
+    idNumber: z.string().trim().min(1, "Escribe tu cédula: la letra y el número, por ejemplo V12345678."),
+    givenNames: z.string().trim().min(2, "Escribe tus nombres como aparecen en tu cédula."),
     surnames: z.string().trim().min(2, "Escribe tus apellidos."),
-    phone: z.string().trim().min(6, "Escribe tu número de teléfono con el código de área."),
+    phone: z
+      .string()
+      .trim()
+      .min(6, "Escribe tu teléfono con el código de área, por ejemplo 0412‑1234567."),
     birthYear: z
       .string()
       .trim()
+      .min(1, "Escribe tu año de nacimiento, por ejemplo 1990.")
       .regex(/^\d{4}$/, "Escribe el año con cuatro números, por ejemplo 1990.")
       .transform((valor) => Number.parseInt(valor, 10)),
-    password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
+    password: z
+      .string()
+      .min(1, "Escribe una contraseña de al menos 8 caracteres.")
+      .min(8, "La contraseña debe tener al menos 8 caracteres."),
     confirmPassword: z.string().min(1, "Escribe otra vez tu contraseña."),
     next: z.string().optional(),
   })
@@ -80,8 +94,9 @@ export async function registrarAction(
     };
   }
 
+  let faltaCedula = true;
   try {
-    await registerAccount({
+    const { accountId } = await registerAccount({
       idNumber: parsed.data.idNumber,
       givenNames: parsed.data.givenNames,
       surnames: parsed.data.surnames,
@@ -107,11 +122,17 @@ export async function registrarAction(
       expires: sesion.expiresAt,
       path: "/",
     });
+
+    // Quien activa una cuenta de taquilla ya tiene la foto de la cédula.
+    // Si la consulta falla, se va a Documentos, que muestra lo que falte.
+    faltaCedula = await missingDocuments(accountId, false)
+      .then((faltantes) => faltantes.includes("CEDULA"))
+      .catch(() => true);
   } catch (error) {
     if (error instanceof ValidationError) {
-      const campo = registerDomainErrorField(error.message);
+      const campo = registerDomainFieldError(error.message);
       if (campo) {
-        return { error: null, fieldErrors: { [campo]: error.message }, values, attempt };
+        return { error: null, fieldErrors: { [campo.field]: campo.text }, values, attempt };
       }
       return {
         error: error.message,
@@ -124,6 +145,6 @@ export async function registrarAction(
   }
 
   // Quien venía de reservar una salida vuelve a ella; si no, a subir la foto
-  // de su cédula, el paso que le falta para poder reservar.
-  redirect(safeNext(parsed.data.next) ?? "/mi/documentos");
+  // de su cédula si le falta, o al inicio si ya la tiene.
+  redirect(afterRegisterHref(parsed.data.next, faltaCedula));
 }

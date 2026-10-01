@@ -1,8 +1,9 @@
-import { PANEL_LABEL_CLASS, PanelPageHeader, panelButtonClass } from "@/components/panel-ui";
+import { PANEL_LABEL_CLASS, panelButtonClass } from "@/components/panel-ui";
 import { Skeleton, SkeletonScreen } from "@/components/skeleton";
+import { InputSkeleton, PageHeaderSkeleton } from "../_shared/skeletons";
+import { AMOUNT_HINT, PAGE_DESCRIPTION } from "./texts";
 
 const CARD = "rounded-tarjeta border border-borde bg-superficie shadow-1";
-const HINT = "Usa coma para los decimales, sin puntos de miles.";
 
 /** Valor vigente con su etiqueta real; la cifra y la fecha van en barras. */
 function CurrentValueSkeleton({ label }: { label: string }) {
@@ -15,14 +16,13 @@ function CurrentValueSkeleton({ label }: { label: string }) {
   );
 }
 
-/** Campo de la tasa nueva con su etiqueta, su ayuda y el botón, todos reales. */
+/** Campo de la tasa nueva, vacío con su borde, con su etiqueta y el botón reales. */
 function RateFieldSkeleton({ label, primary = false }: { label: string; primary?: boolean }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <p className={PANEL_LABEL_CLASS}>{label}</p>
-        <Skeleton className="h-11 w-full" />
-        <p className="text-sm leading-snug text-tinta-suave">{HINT}</p>
+        <InputSkeleton />
       </div>
       <div>
         <span className={panelButtonClass(primary ? "primario" : "secundario", "md", "w-full sm:w-auto")}>
@@ -33,7 +33,17 @@ function RateFieldSkeleton({ label, primary = false }: { label: string; primary?
   );
 }
 
-function HistorySkeleton({ rows = 3 }: { rows?: number }) {
+/** Historial con su título real; la tasa de salida suele tener varios cambios y las de cambio, uno. */
+function HistorySkeleton({ rows }: { rows: number }) {
+  if (rows <= 1) {
+    // Una tasa sin cambios anteriores lo dice en una sola línea.
+    return (
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-semibold text-tinta-suave">Historial:</p>
+        <Skeleton className="h-4 w-40 rounded-pastilla" />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-1">
       <p className="text-sm font-semibold text-tinta-suave">Historial</p>
@@ -64,16 +74,14 @@ const EXCHANGE_BLOCKS = [
 
 /**
  * Silueta de tasas: la tasa de salida y las dos tasas de cambio con su
- * historial. Los títulos, las etiquetas, las ayudas y los botones son textos
- * fijos y se pintan reales; los montos y las fechas van en barras.
+ * historial. Los títulos, las etiquetas, la ayuda y los botones son textos
+ * fijos y se pintan reales, los campos van vacíos con su borde, y los montos
+ * y las fechas van en barras.
  */
 export default function TasasAdminLoading() {
   return (
     <SkeletonScreen label="Cargando las tasas…" className="flex flex-col gap-6">
-      <PanelPageHeader
-        title="Tasas y precios"
-        description="La tasa de salida que paga cada pasajero y las tasas de cambio para cobrar en bolívares y en pesos. Un cambio solo aplica a las reservas nuevas: las que ya existen mantienen su precio."
-      />
+      <PageHeaderSkeleton title="Tasas y precios" description={`${PAGE_DESCRIPTION} ${AMOUNT_HINT}`} />
 
       <div aria-hidden="true" className={CARD}>
         <SectionHeader
@@ -86,7 +94,7 @@ export default function TasasAdminLoading() {
             <RateFieldSkeleton label="Nueva tasa de salida, en dólares por pasajero" primary />
           </div>
           <div className="mt-6 border-t border-borde pt-4">
-            <HistorySkeleton />
+            <HistorySkeleton rows={3} />
           </div>
         </div>
       </div>
@@ -103,7 +111,7 @@ export default function TasasAdminLoading() {
               <CurrentValueSkeleton label="Vigente, por cada dólar" />
               <RateFieldSkeleton label={block.label} />
               <div className="border-t border-borde pt-4">
-                <HistorySkeleton />
+                <HistorySkeleton rows={1} />
               </div>
             </div>
           ))}

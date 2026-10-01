@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { RecentTicketRow } from "@/modules/reports";
 import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
-import { EmptyState, SectionCard, StatusBadge, panelButtonClass } from "@/components/panel-ui";
+import { EmptyState, StatusBadge, panelButtonClass } from "@/components/panel-ui";
+import { DashboardSection } from "./section-card";
 import { IconTicket } from "@/components/icons";
 import { ticketsSection } from "./section-texts";
 
@@ -34,7 +35,7 @@ export async function TicketsBlock({
   const textos = ticketsSection(periodPhrase);
 
   return (
-    <SectionCard
+    <DashboardSection
       title={textos.title}
       description={textos.description}
       action={
@@ -70,6 +71,6 @@ export async function TicketsBlock({
           ))}
         </ul>
       )}
-    </SectionCard>
+    </DashboardSection>
   );
 }

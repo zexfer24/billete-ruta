@@ -4,6 +4,8 @@ import Link, { useLinkStatus } from "next/link";
 import { IconSpinner } from "@/components/icons";
 import type { PanelTab } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
+import { formatCount } from "./format";
+import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TABS_ROW_CLASS } from "./tab-classes";
 
 /**
  * Contador de la pestaña, o un indicador de espera mientras se abre. Tiene
@@ -27,7 +29,7 @@ function TabStatus({ count, active }: { count?: number; active: boolean }) {
         active ? "bg-marca-600 text-white" : "bg-lienzo text-tinta-suave",
       )}
     >
-      {count}
+      {formatCount(count)}
     </span>
   );
 }
@@ -43,17 +45,16 @@ function TabStatus({ count, active }: { count?: number; active: boolean }) {
 export function AdminTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) {
   return (
     <nav aria-label={label}>
-      <div className="flex w-full flex-wrap gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1">
+      <div className={ADMIN_TABS_ROW_CLASS}>
         {tabs.map((tab) => (
           <Link
             key={tab.href}
             href={tab.href}
             aria-current={tab.active ? "page" : undefined}
             className={cx(
-              "foco inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none sm:grow-0 sm:justify-start",
-              tab.active
-                ? "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200"
-                : "text-tinta-suave hover:bg-lienzo hover:text-tinta",
+              ADMIN_TAB_CLASS,
+              "foco transition-colors duration-150 ease-out motion-reduce:transition-none",
+              tab.active ? ADMIN_TAB_ACTIVE_CLASS : "text-tinta-suave hover:bg-lienzo hover:text-tinta",
             )}
           >
             {tab.label}

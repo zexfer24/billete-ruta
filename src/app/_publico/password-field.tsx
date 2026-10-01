@@ -2,7 +2,7 @@
 
 import { useState, type InputHTMLAttributes } from "react";
 import { IconEye } from "@/components/icons";
-import { FieldError, FieldHint } from "@/components/ui";
+import { FieldErrorSlot, FieldHint } from "@/components/ui";
 import { fieldControlClass } from "@/components/ui-classes";
 
 interface PasswordFieldProps
@@ -58,13 +58,8 @@ export function PasswordField({ label, name, hint, error, errorAfterSubmit, id, 
         </button>
       </div>
       {hintId ? <FieldHint id={hintId}>{hint}</FieldHint> : null}
-      <div aria-live="polite">
-        {errorId ? (
-          <FieldError id={errorId} afterSubmit={errorAfterSubmit}>
-            {error}
-          </FieldError>
-        ) : null}
-      </div>
+      {/* Igual que `Field`: el error tras enviar no va dentro de la región viva, para que no se lea dos veces. */}
+      <FieldErrorSlot id={`${fieldId}-error`} error={error} afterSubmit={errorAfterSubmit} />
     </div>
   );
 }

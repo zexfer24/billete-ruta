@@ -146,9 +146,20 @@ function BoardItem({
             <span className="sr-only">Hacia </span>
             {departure.destination}
           </p>
+          {/*
+            En el teléfono la agencia va en su propia línea, sin el punto, para
+            que el "·" no quede colgando al final de la primera; desde `sm`
+            cabe todo en una línea con el separador.
+          */}
           <p className="break-words text-sm text-tinta-suave">
             Desde {departure.origin}
-            {departure.agencyName ? ` · ${departure.agencyName}` : null}
+            {departure.agencyName ? (
+              <span className="block sm:inline">
+                <span className="hidden sm:inline"> · </span>
+                <span className="sr-only sm:hidden">, </span>
+                {departure.agencyName}
+              </span>
+            ) : null}
           </p>
           {hideSeats && !urgencia ? null : (
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">

@@ -33,7 +33,7 @@ export interface BoardingTicket {
 export async function findForBoardingAction(
   departureId: string,
   codeOrQr: string,
-): Promise<{ ticket?: BoardingTicket; error?: string }> {
+): Promise<{ ticket?: BoardingTicket; error?: string; holderName?: string }> {
   const user = await requirePanelUser("boarding.manage");
   const agencyId = requireAgencyScope(user);
 
@@ -48,7 +48,11 @@ export async function findForBoardingAction(
 
   try {
     const resultado = await findForBoarding(parsedDepartureId.data, parsed.data, agencyId);
-    if ("error" in resultado) return { error: boardingErrorMessage(resultado.error) };
+    if ("error" in resultado) {
+      // `holderName` solo llega si la reserva es de esta agencia (otra salida o
+      // un estado que no aborda); nunca para otra agencia ni un código inválido.
+      return { error: boardingErrorMessage(resultado.error), holderName: resultado.holderName };
+    }
 
     const r = resultado.reservation;
     const saldo = toDecimal(r.balanceUsd);

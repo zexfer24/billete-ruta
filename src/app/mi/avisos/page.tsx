@@ -4,9 +4,9 @@ import { requirePassenger } from "@/modules/auth";
 import { listNoticesForAccount } from "@/modules/notices";
 import { listMessagesForPhone } from "@/modules/messaging";
 import { formatCaracasTime24 } from "@/lib/time";
-import { buttonClass, EmptyState, SectionTitle } from "@/components/ui";
+import { EmptyState, SectionTitle } from "@/components/ui";
 import { NoticeCard } from "@/components/notice-card";
-import { IconCheckCircle, IconMessage } from "@/components/icons";
+import { IconCheckCircle, IconChevronRight, IconMessage } from "@/components/icons";
 import { dayGroupLabel } from "@/components/passenger-copy";
 
 export const metadata: Metadata = {
@@ -116,11 +116,14 @@ export default async function AvisosPage() {
                         </p>
                         <p className="break-words leading-relaxed text-tinta">{mensaje.text}</p>
                         {mensaje.reservationCode ? (
+                          // Enlace de texto con flecha, como el pie de NoticeCard: ocho mensajes no
+                          // son ocho botones compitiendo con las acciones de "Lo importante ahora".
                           <Link
                             href={`/mi/reservas/${mensaje.reservationCode}`}
-                            className={buttonClass("secundario", "self-start", "sm")}
+                            className="foco -ml-1 inline-flex min-h-11 items-center gap-1 self-start rounded-control px-1 font-semibold text-marca-700 hover:underline"
                           >
                             Ver mi viaje
+                            <IconChevronRight aria-hidden="true" className="size-5 shrink-0" />
                           </Link>
                         ) : null}
                       </div>

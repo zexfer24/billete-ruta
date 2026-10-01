@@ -8,6 +8,7 @@ import { createDeparture } from "@/modules/catalog";
 import { registerArrival, registerDeparture, startBoarding } from "@/modules/trips";
 import { parsePanelOrigin } from "@/lib/panel-nav";
 import { panelFeedbackUrl, userFacingMessage } from "../feedback";
+import { inTodayOrTomorrow } from "./links";
 
 /**
  * Une la fecha y la hora elegidas, siempre en hora de Caracas, y devuelve el
@@ -72,6 +73,7 @@ export async function createDepartureAction(formData: FormData): Promise<void> {
     errorRedirect(issue?.message ?? "Revisa los datos de la salida.", issueField(issue?.path));
   }
   const data = parsed.data;
+  const departsAt = desdeFechaYHoraCaracas(data.fecha, data.hora);
 
   let errorMessage: string | null = null;
   try {
@@ -81,7 +83,7 @@ export async function createDepartureAction(formData: FormData): Promise<void> {
       routeId: data.routeId,
       vehicleId: data.vehicleId,
       driverId: data.driverId,
-      departsAt: desdeFechaYHoraCaracas(data.fecha, data.hora),
+      departsAt,
     });
   } catch (error) {
     const mensaje = userFacingMessage(error);
@@ -99,7 +101,12 @@ export async function createDepartureAction(formData: FormData): Promise<void> {
   if (origen === "tablero") {
     redirect(tableroUrl({ ok: "salida-creada" }));
   }
-  redirect(salidasUrl({ ok: "salida-creada" }));
+  // "Próximas" muestra por defecto solo hoy y mañana: una salida de pasado
+  // mañana o después se abre con todos los días, para que el aviso "ya
+  // aparece en la lista" sea cierto y nadie la cree dos veces.
+  redirect(
+    salidasUrl({ dias: inTodayOrTomorrow(departsAt, new Date()) ? undefined : "todos", ok: "salida-creada" }),
+  );
 }
 
 export async function startBoardingAction(formData: FormData): Promise<void> {

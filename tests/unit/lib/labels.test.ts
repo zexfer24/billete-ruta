@@ -57,10 +57,22 @@ describe("reservationStatusTone", () => {
     expect(reservationStatusTone("ABORDADA")).toBe("exito");
   });
 
-  it("EN_VALIDACION, ABONADA y PAGO_EN_SITIO son marca", () => {
-    expect(reservationStatusTone("EN_VALIDACION")).toBe("marca");
+  it("EN_VALIDACION es info, como pide la spec 3.4", () => {
+    expect(reservationStatusTone("EN_VALIDACION")).toBe("info");
+  });
+
+  it("ABONADA es marca, igual que la barra de progreso del pago parcial", () => {
     expect(reservationStatusTone("ABONADA")).toBe("marca");
-    expect(reservationStatusTone("PAGO_EN_SITIO")).toBe("marca");
+  });
+
+  it("PAGO_EN_SITIO es alerta: es deuda con plazo, no una reserva terminada", () => {
+    expect(reservationStatusTone("PAGO_EN_SITIO")).toBe("alerta");
+    expect(reservationStatusTone("PAGO_EN_SITIO")).not.toBe(reservationStatusTone("LIBERADA"));
+  });
+
+  it("los tres estados de pago en curso no comparten tono", () => {
+    const tonos = ["EN_VALIDACION", "ABONADA", "PAGO_EN_SITIO"].map(reservationStatusTone);
+    expect(new Set(tonos).size).toBe(3);
   });
 
   it("PENDIENTE_PAGO es alerta", () => {

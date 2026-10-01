@@ -3,7 +3,10 @@ import Link from "next/link";
 import { z } from "zod";
 import { listDocuments } from "@/modules/accounts";
 import { requirePassenger } from "@/modules/auth";
-import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
+import { formatInTimeZone } from "date-fns-tz";
+import { es } from "date-fns/locale/es";
+import { BUSINESS_TZ, formatCaracasTime24 } from "@/lib/time";
+import { dayTimePhrase } from "@/components/passenger-copy";
 import { Alert } from "@/components/alert";
 import { ClearFeedbackParams } from "@/components/clear-feedback-params";
 import { FileField } from "@/components/file-field";
@@ -40,8 +43,17 @@ const paramsSchema = z.object({
 
 type Documento = Awaited<ReturnType<typeof listDocuments>>[number];
 
-function guardadoEl(date: Date): string {
-  return `Guardada el ${formatCaracasDate(date)} a las ${formatCaracasTime24(date)}`;
+/**
+ * "Guardada hoy a las 09:13", "Guardada ayer a las 19:00" o, más atrás, con
+ * el día en palabras como en el ticket: "Guardada el 2 de julio a las 09:13"
+ * (con el año solo si no es el actual). Nunca "02/07/2026".
+ */
+function guardadoEl(date: Date, now: Date = new Date()): string {
+  const frase = dayTimePhrase(date, now);
+  if (/^(hoy|ayer) /.test(frase)) return `Guardada ${frase}`;
+  const mismoAno = formatInTimeZone(date, BUSINESS_TZ, "yyyy") === formatInTimeZone(now, BUSINESS_TZ, "yyyy");
+  const dia = formatInTimeZone(date, BUSINESS_TZ, mismoAno ? "d 'de' MMMM" : "d 'de' MMMM 'de' yyyy", { locale: es });
+  return `Guardada el ${dia} a las ${formatCaracasTime24(date)}`;
 }
 
 /**

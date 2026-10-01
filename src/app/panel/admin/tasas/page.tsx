@@ -14,6 +14,7 @@ import {
 import { setDepartureTaxAction, setExchangeRateAction } from "./actions";
 import { RateChangeForm } from "./rate-change-form";
 import { RateHistory, type RateHistoryEntry } from "./rate-history";
+import { AMOUNT_HINT, AMOUNT_HINT_ID, PAGE_DESCRIPTION } from "./texts";
 
 export const metadata: Metadata = { title: "Tasas y precios" };
 
@@ -131,7 +132,12 @@ export default async function TasasAdminPage({
     <div className="flex flex-col gap-6">
       <PanelPageHeader
         title="Tasas y precios"
-        description="La tasa de salida que paga cada pasajero y las tasas de cambio para cobrar en bolívares y en pesos. Un cambio solo aplica a las reservas nuevas: las que ya existen mantienen su precio."
+        description={
+          <>
+            {PAGE_DESCRIPTION}{" "}
+            <span id={AMOUNT_HINT_ID}>{AMOUNT_HINT}</span>
+          </>
+        }
       />
 
       <PanelFeedback error={error} ok={ok} />
@@ -151,7 +157,7 @@ export default async function TasasAdminPage({
             action={setDepartureTaxAction}
             fieldName="amountUsd"
             label="Nueva tasa de salida, en dólares por pasajero"
-            hint="Usa coma para los decimales, sin puntos de miles."
+            hintId={AMOUNT_HINT_ID}
             prefix="$"
             subject="la tasa de salida"
             unit=" por pasajero"
@@ -191,7 +197,7 @@ export default async function TasasAdminPage({
                   fieldName="rateFromUsd"
                   hiddenFields={{ currency: block.currency }}
                   label={`Nueva tasa, en ${block.plural} por cada dólar`}
-                  hint="Usa coma para los decimales, sin puntos de miles."
+                  hintId={AMOUNT_HINT_ID}
                   prefix={block.prefix}
                   subject={`la tasa del ${block.title.toLowerCase()}`}
                   unit=" por cada dólar"

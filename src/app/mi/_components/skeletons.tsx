@@ -39,7 +39,7 @@ function SkeletonPerforation() {
   );
 }
 
-/** Ticket compacto: cabecera morada de 72 px, perforación y cuerpo con agencia, ruta y estado. */
+/** Ticket compacto: cabecera morada de 72 px, perforación y cuerpo con la ruta, la agencia debajo y el estado. */
 export function SkeletonTicketCompact({ withAction = false }: { withAction?: boolean }) {
   return (
     <div aria-hidden="true" className="overflow-hidden rounded-tarjeta border border-borde bg-superficie shadow-1">
@@ -54,7 +54,10 @@ export function SkeletonTicketCompact({ withAction = false }: { withAction?: boo
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-center gap-3">
           <Skeleton className="h-8 w-12" />
-          <Skeleton className="h-5 w-3/5 rounded-pastilla" />
+          <div className="flex flex-1 flex-col gap-1.5">
+            <Skeleton className="h-5 w-3/5 rounded-pastilla" />
+            <Skeleton className="h-4 w-2/5 rounded-pastilla" />
+          </div>
         </div>
         <div className="flex items-center justify-between gap-3">
           <Skeleton className="h-6 w-28 rounded-pastilla" />

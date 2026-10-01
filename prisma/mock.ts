@@ -147,6 +147,208 @@ function redondear(valor: Prisma.Decimal): Prisma.Decimal {
   return valor.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
+const MIN = 60_000;
+const HORA = 60 * MIN;
+const DIA = 24 * HORA;
+
+function masMinutos(fecha: Date, minutos: number): Date {
+  return new Date(fecha.getTime() + minutos * MIN);
+}
+
+function minFecha(a: Date, b: Date): Date {
+  return a <= b ? a : b;
+}
+
+function maxFecha(a: Date, b: Date): Date {
+  return a >= b ? a : b;
+}
+
+/** Instante al azar entre dos fechas; si el rango está vacío, la primera. */
+function entre(desde: Date, hasta: Date): Date {
+  const a = desde.getTime();
+  const b = hasta.getTime();
+  if (b <= a) return new Date(a);
+  return new Date(a + Math.floor(Math.random() * (b - a)));
+}
+
+/** Fecha de calendario en hora de Caracas (UTC-4), como "2026-10-01". */
+function diaCaracas(fecha: Date): string {
+  return new Date(fecha.getTime() - 4 * HORA).toISOString().slice(0, 10);
+}
+
+/** Horas de descanso de la unidad y del chofer entre la llegada y la siguiente salida. */
+const DESCANSO_MIN = 6 * 60;
+/** La unidad debe estar en el terminal antes de que empiece el embarque. */
+const PREPARACION_MIN = 60;
+
+/**
+ * Vehículo o chofer libre para una salida: de los que ya llegaron y
+ * descansaron, el que lleva más tiempo sin viajar. Así nunca se solapan dos
+ * viajes de la misma unidad y el trabajo se reparte entre toda la flota.
+ */
+function unidadLibre<T extends { id: string }>(
+  unidades: readonly T[],
+  libres: Map<string, number>,
+  departsAt: Date,
+): T | null {
+  const limite = departsAt.getTime() - PREPARACION_MIN * MIN;
+  let mejor: T | null = null;
+  let mejorLibre = Number.POSITIVE_INFINITY;
+  for (const unidad of unidades) {
+    const libre = libres.get(unidad.id) ?? Number.NEGATIVE_INFINITY;
+    if (libre <= limite && libre < mejorLibre) {
+      mejor = unidad;
+      mejorLibre = libre;
+    }
+  }
+  return mejor;
+}
+
+/** Solo mayores de edad en las cuentas y acompañantes generados: un menor necesita permiso de viaje. */
+const ANIO_NACIMIENTO_MAX = new Date().getUTCFullYear() - 19;
+
+interface DatosGenerados {
+  ahora: Date;
+  cuentas: readonly { id: string; fullName: string; phone: string; createdAt: Date }[];
+  metodos: readonly PaymentMethod[];
+  reservas: readonly Prisma.ReservationCreateManyInput[];
+  mensajes: readonly Prisma.OutboundMessageCreateManyInput[];
+  comprobantes: readonly Prisma.PaymentProofCreateManyInput[];
+  efectivo: readonly Prisma.CashPaymentCreateManyInput[];
+  tickets: readonly Prisma.TicketCreateManyInput[];
+  viajes: readonly Prisma.TripLogCreateManyInput[];
+  bitacora: readonly Prisma.AuditLogCreateManyInput[];
+}
+
+function ms(valor: Date | string | null | undefined): number | null {
+  return valor ? new Date(valor).getTime() : null;
+}
+
+/**
+ * Revisa, antes de insertar, las reglas que los datos de demostración deben
+ * respetar para no mostrar nada imposible: fechas nunca posteriores a ahora y
+ * en orden, mensajes a nombre del titular de su reserva, plantillas según el
+ * método y el estado, pagos que suman lo abonado y unidades sin viajes
+ * solapados. Si algo falla, la carga se detiene sin escribir nada.
+ */
+function verificarCoherencia(datos: DatosGenerados): void {
+  const problemas: string[] = [];
+  const ahora = datos.ahora.getTime();
+  const cuentaPorId = new Map(datos.cuentas.map((c) => [c.id, c]));
+  const metodoPorId = new Map(datos.metodos.map((m) => [m.id, m]));
+  const reservaPorId = new Map(datos.reservas.map((r) => [r.id as string, r]));
+  const futuro = (valor: Date | string | null | undefined) => (ms(valor) ?? 0) > ahora;
+
+  const pagado = new Map<string, Prisma.Decimal>();
+  const sumar = (reservationId: string, monto: Prisma.Decimal.Value) =>
+    pagado.set(reservationId, (pagado.get(reservationId) ?? dec(0)).add(new Prisma.Decimal(monto)));
+
+  for (const r of datos.reservas) {
+    const creada = ms(r.createdAt) ?? 0;
+    const cuenta = cuentaPorId.get(r.accountId);
+    const metodo = metodoPorId.get(r.paymentMethodId);
+    if (futuro(r.createdAt) || futuro(r.updatedAt)) problemas.push(`${r.code}: fecha futura`);
+    if (!cuenta || cuenta.createdAt.getTime() > creada) {
+      problemas.push(`${r.code}: la cuenta no existía al reservar`);
+    }
+    const pago = ms(r.paidAt);
+    if (pago !== null && (pago < creada || pago > ahora)) problemas.push(`${r.code}: paidAt fuera de rango`);
+    if (r.status === "PENDIENTE_PAGO" && (ms(r.expiresAt) ?? 0) <= ahora) {
+      problemas.push(`${r.code}: sin pago y con el plazo de 2 horas vencido`);
+    }
+    if (
+      metodo?.kind === "FISICO" &&
+      ["ABONADA", "EN_VALIDACION", "PENDIENTE_PAGO"].includes(r.status ?? "")
+    ) {
+      problemas.push(`${r.code}: ${r.status} con un método de pago físico`);
+    }
+  }
+
+  for (const m of datos.mensajes) {
+    if (futuro(m.createdAt) || futuro(m.sentAt) || futuro(m.scheduledFor)) {
+      problemas.push(`Mensaje ${m.templateKey}: fecha futura`);
+    }
+    if (!m.reservationId) continue;
+    const reserva = reservaPorId.get(m.reservationId);
+    const cuenta = reserva ? cuentaPorId.get(reserva.accountId) : undefined;
+    const nombre = (m.payload as Record<string, unknown>).nombre;
+    if (!reserva || !cuenta || nombre !== cuenta.fullName || m.phone !== cuenta.phone) {
+      problemas.push(`Mensaje ${m.templateKey} de ${reserva?.code}: no va dirigido al titular`);
+      continue;
+    }
+    if ((ms(m.createdAt) ?? 0) < (ms(reserva.createdAt) ?? 0)) {
+      problemas.push(`Mensaje ${m.templateKey} de ${reserva.code}: anterior a la reserva`);
+    }
+    const kind = metodoPorId.get(reserva.paymentMethodId)?.kind;
+    const esperado = kind === "FISICO" ? "reserva_condicional" : "solicitud_recibida";
+    const otro = kind === "FISICO" ? "solicitud_recibida" : "reserva_condicional";
+    if (m.templateKey === otro) {
+      problemas.push(`Mensaje de ${reserva.code}: ${otro} en lugar de ${esperado}`);
+    }
+  }
+
+  for (const t of datos.tickets) {
+    const reserva = reservaPorId.get(t.reservationId);
+    if (futuro(t.issuedAt) || (ms(t.issuedAt) ?? 0) < (ms(reserva?.createdAt) ?? 0)) {
+      problemas.push(`Ticket de ${reserva?.code}: emitido fuera de rango`);
+    }
+  }
+
+  for (const c of datos.comprobantes) {
+    const reserva = reservaPorId.get(c.reservationId);
+    if (futuro(c.createdAt) || futuro(c.reviewedAt)) problemas.push(`Comprobante de ${reserva?.code}: fecha futura`);
+    if ((ms(c.createdAt) ?? 0) < (ms(reserva?.createdAt) ?? 0)) {
+      problemas.push(`Comprobante de ${reserva?.code}: anterior a la reserva`);
+    }
+    if (c.status === "APROBADO") sumar(c.reservationId, c.amountUsd as Prisma.Decimal.Value);
+  }
+  for (const e of datos.efectivo) {
+    if (futuro(e.collectedAt)) problemas.push("Cobro en efectivo con fecha futura");
+    sumar(e.reservationId, e.amountUsd as Prisma.Decimal.Value);
+  }
+  for (const r of datos.reservas) {
+    const registrado = pagado.get(r.id as string) ?? dec(0);
+    if (!registrado.equals(new Prisma.Decimal((r.paidUsd ?? 0) as Prisma.Decimal.Value))) {
+      problemas.push(`${r.code}: los pagos registrados no suman lo abonado`);
+    }
+  }
+
+  for (const b of datos.bitacora) {
+    if (futuro(b.createdAt)) problemas.push(`Bitácora ${b.action}: fecha futura`);
+    const reserva = b.entityType === "Reservation" ? reservaPorId.get(b.entityId) : undefined;
+    if (reserva && b.actorType === "PASAJERO" && b.actorAccountId !== reserva.accountId) {
+      problemas.push(`Bitácora de ${reserva.code}: la creó otra cuenta`);
+    }
+  }
+
+  // Ningún vehículo ni chofer puede estar en dos viajes a la vez.
+  for (const campo of ["vehicleId", "driverId"] as const) {
+    const porUnidad = new Map<string, { desde: number; hasta: number }[]>();
+    for (const v of datos.viajes) {
+      const lista = porUnidad.get(v[campo]) ?? [];
+      lista.push({ desde: ms(v.departedAt) ?? 0, hasta: ms(v.arrivedAt) ?? 0 });
+      porUnidad.set(v[campo], lista);
+    }
+    for (const [unidad, lista] of porUnidad) {
+      lista.sort((a, b) => a.desde - b.desde);
+      for (let i = 1; i < lista.length; i += 1) {
+        if (lista[i]!.desde < lista[i - 1]!.hasta) {
+          problemas.push(`Viajes solapados de ${campo} ${unidad}`);
+          break;
+        }
+      }
+    }
+  }
+
+  if (problemas.length > 0) {
+    throw new Error(
+      `Los datos de demostración no son coherentes (${problemas.length} problemas):\n  ${problemas
+        .slice(0, 20)
+        .join("\n  ")}`,
+    );
+  }
+}
+
 /** Imágenes de demostración versionadas en el repositorio. */
 const IMAGEN_COMPROBANTE = path.resolve("prisma/mock-assets/comprobante-demo.png");
 const IMAGEN_CEDULA = path.resolve("prisma/mock-assets/cedula-demo.png");
@@ -234,6 +436,8 @@ async function main(): Promise<void> {
     choferesPorAgencia.set(agencia.id, agencia.drivers.map((d) => ({ id: d.id })));
   }
 
+  const RECOMENDACION_GENERAL = "Llega 30 minutos antes con tu cédula en mano.";
+
   interface SalidaMock {
     id: string;
     routeId: string;
@@ -245,21 +449,26 @@ async function main(): Promise<void> {
     fareUsd: Prisma.Decimal;
     estimatedMinutes: number;
     meetingPoint: string;
+    recomendaciones: string;
     pasada: boolean;
+    /** Hora real de partida y de llegada; solo en las salidas ya cumplidas. */
+    partida: Date | null;
+    llegada: Date | null;
   }
 
-  const salidasNuevas: SalidaMock[] = [];
-  let contadorUnidad = 0;
+  type Candidata = Omit<SalidaMock, "vehicleId" | "driverId" | "capacity" | "partida" | "llegada"> & {
+    partida: Date;
+    llegada: Date;
+  };
 
+  // Una salida por ruta y por día, con su hora real de partida y de llegada
+  // (el retraso o el adelanto que se ve en la operación).
+  const candidatas: Candidata[] = [];
   for (const ruta of rutas) {
     // Se reutiliza el horario de la primera salida ya sembrada de esa ruta.
     const referencia = ruta.departures[0];
     if (!referencia) continue;
     const horaUtc = referencia.departsAt.getUTCHours();
-
-    const vehiculos = vehiculosPorAgencia.get(ruta.agencyId) ?? [];
-    const choferes = choferesPorAgencia.get(ruta.agencyId) ?? [];
-    if (vehiculos.length === 0 || choferes.length === 0) continue;
 
     for (let dia = DIAS_PASADOS; dia >= 1; dia -= 1) {
       const departsAt = new Date(ahora);
@@ -267,34 +476,53 @@ async function main(): Promise<void> {
       departsAt.setUTCHours(horaUtc, 0, 0, 0);
       if (departsAt >= ahora) continue;
 
-      const vehiculo = vehiculos[contadorUnidad % vehiculos.length]!;
-      const chofer = choferes[contadorUnidad % choferes.length]!;
-      contadorUnidad += 1;
-
-      salidasNuevas.push({
+      const partida = masMinutos(departsAt, entero(-5, 25));
+      const duracion = Math.round(ruta.estimatedMinutes * (1 + entero(-12, 25) / 100));
+      candidatas.push({
         id: randomUUID(),
         routeId: ruta.id,
         agencyId: ruta.agencyId,
-        vehicleId: vehiculo.id,
-        driverId: chofer.id,
         departsAt,
-        capacity: vehiculo.seatCount,
         fareUsd: ruta.fareUsd,
         estimatedMinutes: ruta.estimatedMinutes,
         meetingPoint: ruta.meetingPoint,
+        recomendaciones: ruta.travelTips ?? RECOMENDACION_GENERAL,
         pasada: true,
+        partida,
+        llegada: masMinutos(partida, duracion),
       });
     }
   }
+  candidatas.sort((a, b) => a.departsAt.getTime() - b.departsAt.getTime());
 
-  // Se descartan choques de vehículo y hora, que la base no admite.
-  const ocupacionVehiculo = new Set<string>();
-  const salidasFiltradas = salidasNuevas.filter((s) => {
-    const clave = `${s.vehicleId}|${s.departsAt.toISOString()}`;
-    if (ocupacionVehiculo.has(clave)) return false;
-    ocupacionVehiculo.add(clave);
-    return true;
-  });
+  // Cada salida recibe un vehículo y un chofer que ya llegaron de su viaje
+  // anterior y descansaron. Si no hay ninguno libre, la salida no se crea:
+  // nunca se asigna una unidad ocupada.
+  const libreVehiculo = new Map<string, number>();
+  const libreChofer = new Map<string, number>();
+  const salidasFiltradas: SalidaMock[] = [];
+  for (const candidata of candidatas) {
+    const vehiculo = unidadLibre(
+      vehiculosPorAgencia.get(candidata.agencyId) ?? [],
+      libreVehiculo,
+      candidata.departsAt,
+    );
+    const chofer = unidadLibre(
+      choferesPorAgencia.get(candidata.agencyId) ?? [],
+      libreChofer,
+      candidata.departsAt,
+    );
+    if (!vehiculo || !chofer) continue;
+    const libre = candidata.llegada.getTime() + DESCANSO_MIN * MIN;
+    libreVehiculo.set(vehiculo.id, libre);
+    libreChofer.set(chofer.id, libre);
+    salidasFiltradas.push({
+      ...candidata,
+      vehicleId: vehiculo.id,
+      driverId: chofer.id,
+      capacity: vehiculo.seatCount,
+    });
+  }
 
   await prisma.departure.createMany({
     data: salidasFiltradas.map((s) => ({
@@ -305,7 +533,7 @@ async function main(): Promise<void> {
       departsAt: s.departsAt,
       capacity: s.capacity,
       status: "FINALIZADA" as const,
-      manifestClosedAt: new Date(s.departsAt.getTime() - 40 * 60_000),
+      manifestClosedAt: new Date(s.departsAt.getTime() - 40 * MIN),
     })),
   });
 
@@ -327,7 +555,10 @@ async function main(): Promise<void> {
       fareUsd: d.route.fareUsd,
       estimatedMinutes: d.route.estimatedMinutes,
       meetingPoint: d.route.meetingPoint,
+      recomendaciones: d.route.travelTips ?? RECOMENDACION_GENERAL,
       pasada: false,
+      partida: null,
+      llegada: null,
     })),
   ];
 
@@ -341,7 +572,7 @@ async function main(): Promise<void> {
   const cedulasUsadas = new Set<string>(PASAJEROS_FIJOS.map((p) => p.idNumber));
 
   const cuentasFijas = PASAJEROS_FIJOS.map((fijo) => {
-    const registro = new Date(ahora.getTime() - 90 * 24 * 3_600_000);
+    const registro = new Date(ahora.getTime() - 90 * DIA);
     return {
       id: randomUUID(),
       idNumber: fijo.idNumber,
@@ -353,13 +584,13 @@ async function main(): Promise<void> {
       passwordHash: hashCompartido,
       createdAt: registro,
       updatedAt: registro,
-      lastLoginAt: new Date(ahora.getTime() - entero(1, 48) * 3_600_000),
+      lastLoginAt: new Date(ahora.getTime() - entero(1, 48) * HORA),
     };
   });
 
   const cuentasAleatorias = Array.from({ length: CUENTAS - cuentasFijas.length }, () => {
     const registro = new Date(
-      ahora.getTime() - entero(0, ANTIGUEDAD_MAX_DIAS) * 24 * 3_600_000 - entero(0, 86_400) * 1000,
+      ahora.getTime() - entero(0, ANTIGUEDAD_MAX_DIAS) * DIA - entero(0, 86_400) * 1000,
     );
     const nombre = nombreCompleto();
     return {
@@ -369,7 +600,8 @@ async function main(): Promise<void> {
       surnames: nombre.surnames,
       fullName: nombre.fullName,
       phone: telefono(),
-      birthYear: entero(1955, 2012),
+      // Solo mayores de edad: un menor necesita permiso de viaje para reservar.
+      birthYear: entero(1955, ANIO_NACIMIENTO_MAX),
       passwordHash: hashCompartido,
       createdAt: registro,
       updatedAt: registro,
@@ -399,6 +631,22 @@ async function main(): Promise<void> {
     }));
   for (let i = 0; i < documentos.length; i += 500) {
     await prisma.passengerDocument.createMany({ data: documentos.slice(i, i + 500) });
+  }
+
+  // Sin la foto de la cédula no se puede reservar. Las cuentas del README
+  // quedan fuera del reparto al azar: sus reservas se eligen más abajo.
+  const idsConCedula = new Set(documentos.map((d) => d.accountId));
+  const cuentasQueReservan = cuentasAleatorias.filter((c) => idsConCedula.has(c.id));
+  const cuentaMasAntigua = cuentasQueReservan.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b));
+
+  /** Una cuenta que ya existía, con su cédula cargada, cuando se hizo la reserva. */
+  function cuentaPara(creada: Date): (typeof cuentas)[number] {
+    const tope = creada.getTime() - 10 * MIN;
+    for (let intento = 0; intento < 40; intento += 1) {
+      const cuenta = elegir(cuentasQueReservan);
+      if (cuenta.createdAt.getTime() <= tope) return cuenta;
+    }
+    return cuentaMasAntigua;
   }
 
   // --- Reservas -----------------------------------------------------------
@@ -436,8 +684,15 @@ async function main(): Promise<void> {
     };
   }
 
-  // Marca las dos primeras reservas pagadas con método físico como vendidas
-  // en taquilla, para ver ese canal en el panel sin crear flujos nuevos.
+  /** Estados en los que la reserva ocupa un puesto de la unidad. */
+  const SIN_PUESTO = new Set<ReservationStatus>(["LIBERADA", "CANCELADA"]);
+  /** Estados con el pago completo: tienen ticket emitido. */
+  const PAGO_COMPLETO = new Set<ReservationStatus>(["PAGADA", "ABORDADA", "NO_SHOW"]);
+  /** Estados con algún pago registrado. */
+  const CON_PAGO = new Set<ReservationStatus>([...PAGO_COMPLETO, "ABONADA", "CANCELADA"]);
+
+  // Marca las dos primeras reservas pagadas con método físico en salidas
+  // próximas como vendidas en taquilla, para ver ese canal en el panel.
   let ventasEnTaquillaMarcadas = 0;
 
   for (const salida of todas) {
@@ -445,7 +700,7 @@ async function main(): Promise<void> {
     if (!operador) continue;
 
     // Ocupación típica: más llena en salidas pasadas que en las de dentro de días.
-    const diasHasta = (salida.departsAt.getTime() - ahora.getTime()) / (24 * 3_600_000);
+    const diasHasta = (salida.departsAt.getTime() - ahora.getTime()) / DIA;
     const ocupacionObjetivo = salida.pasada
       ? entero(58, 96) / 100
       : diasHasta < 1
@@ -457,71 +712,153 @@ async function main(): Promise<void> {
     let ocupados = 0;
     const limite = Math.floor(salida.capacity * ocupacionObjetivo);
     let abordados = 0;
+    const corte12 = masMinutos(salida.departsAt, -12 * 60);
+    const estadoMensaje = salida.pasada ? ("LEIDO" as const) : ("ENTREGADO" as const);
+    const salidaTexto = formatCaracasDateTime24(salida.departsAt);
 
     while (ocupados < limite) {
       const pax = Math.min(tamanoGrupo(), limite - ocupados);
       if (pax < 1) break;
-      ocupados += pax;
 
-      const cuenta = elegir(cuentas);
-      const usaEfectivo = suerte(0.35);
-      const metodo = usaEfectivo ? elegir(fisicos) : elegir(digitales);
+      // El estado define el método de pago posible: un método físico nace en
+      // PAGO_EN_SITIO y solo pasa a PAGADA o LIBERADA; los abonos y los
+      // comprobantes en revisión son siempre de métodos digitales.
+      let status: ReservationStatus;
+      let fisico: boolean;
+      const r = Math.random();
+      if (salida.pasada) {
+        // Un día ya cerrado: casi todos viajaron, algunos no se presentaron.
+        if (r < 0.86) {
+          status = "ABORDADA";
+          fisico = suerte(0.35);
+        } else if (r < 0.93) {
+          status = "NO_SHOW";
+          fisico = suerte(0.35);
+        } else if (r < 0.97) {
+          // Abonada que nunca completó el pago: se cancela al registrar la salida.
+          status = "CANCELADA";
+          fisico = false;
+        } else {
+          // Pago en sitio que llegó a 12 horas de la salida sin pagar.
+          status = "LIBERADA";
+          fisico = true;
+        }
+      } else if (r < 0.46) {
+        status = "PAGADA";
+        fisico = suerte(0.35);
+      } else if (r < 0.58) {
+        status = "ABONADA";
+        fisico = false;
+      } else if (r < 0.7) {
+        status = "EN_VALIDACION";
+        fisico = false;
+      } else if (r < 0.82) {
+        status = "PAGO_EN_SITIO";
+        fisico = true;
+      } else if (r < 0.88) {
+        status = "PENDIENTE_PAGO";
+        fisico = false;
+      } else {
+        // Sin ningún pago a las 2 horas de creada.
+        status = "LIBERADA";
+        fisico = false;
+      }
+      // Un pago en sitio sin pagar a 12 horas de la salida ya se liberó.
+      if (status === "PAGO_EN_SITIO" && corte12 <= ahora) status = "LIBERADA";
+
+      if (!SIN_PUESTO.has(status)) ocupados += pax;
+
+      const metodo = fisico ? elegir(fisicos) : elegir(digitales);
       const m = montos(salida.fareUsd, pax, metodo);
       const code = serialUnico(salida.departsAt, pax);
       const reservationId = randomUUID();
-      const creada = new Date(
-        salida.departsAt.getTime() - entero(1, 10) * 24 * 3_600_000 - entero(0, 86_400) * 1000,
+
+      const ventaEnTaquilla =
+        !salida.pasada && status === "PAGADA" && fisico && ventasEnTaquillaMarcadas < 2;
+      if (ventaEnTaquilla) ventasEnTaquillaMarcadas += 1;
+      // En la app, el pago en sitio solo se admite con 12 horas o más de antelación.
+      const pagoEnSitioApp = fisico && !ventaEnTaquilla;
+
+      // --- Fecha de creación: siempre en el pasado y coherente con el estado.
+      let creada = new Date(
+        salida.departsAt.getTime() - entero(1, 10) * DIA - entero(0, 86_400) * 1000,
       );
-
-      let status: ReservationStatus;
-      let paidUsd = dec(0);
-      let paidAt: Date | null = null;
-      let boardedAt: Date | null = null;
-
-      if (salida.pasada) {
-        // Un día ya cerrado: casi todos viajaron, algunos no se presentaron.
-        const r = Math.random();
-        if (r < 0.88) {
-          status = "ABORDADA";
-          paidUsd = m.totalUsd;
-          paidAt = new Date(salida.departsAt.getTime() - entero(1, 72) * 3_600_000);
-          boardedAt = new Date(salida.departsAt.getTime() - entero(5, 35) * 60_000);
-          abordados += pax;
-        } else if (r < 0.95) {
-          status = "NO_SHOW";
-          paidUsd = m.totalUsd;
-          paidAt = new Date(salida.departsAt.getTime() - entero(1, 72) * 3_600_000);
-        } else {
-          status = "CANCELADA";
-        }
-      } else {
-        const r = Math.random();
-        if (r < 0.42) {
-          status = "PAGADA";
-          paidUsd = m.totalUsd;
-          paidAt = new Date(creada.getTime() + entero(10, 600) * 60_000);
-        } else if (r < 0.54) {
-          status = "ABONADA";
-          paidUsd = redondear(m.totalUsd.mul(entero(25, 70)).div(100));
-        } else if (r < 0.66) {
-          status = "EN_VALIDACION";
-        } else if (r < 0.86) {
-          status = usaEfectivo ? "PAGO_EN_SITIO" : "PENDIENTE_PAGO";
-        } else if (r < 0.94) {
-          status = "PENDIENTE_PAGO";
-        } else {
-          status = "LIBERADA";
-        }
+      const techo = pagoEnSitioApp
+        ? minFecha(masMinutos(ahora, -30), masMinutos(salida.departsAt, -13 * 60))
+        : masMinutos(ahora, -30);
+      if (creada > techo) creada = masMinutos(techo, -entero(0, 72 * 60));
+      if (status === "PENDIENTE_PAGO") {
+        // Sigue sin pago, así que su plazo de 2 horas todavía no vence.
+        creada = masMinutos(ahora, -entero(5, 110));
+      } else if (status === "EN_VALIDACION") {
+        // El comprobante llegó dentro del plazo y aún espera revisión.
+        creada = masMinutos(ahora, -entero(20, 12 * 60));
+      } else if (status === "LIBERADA" && !fisico && creada > masMinutos(ahora, -150)) {
+        creada = masMinutos(ahora, -entero(150, 72 * 60));
       }
 
-      // La tasa de salida del terminal se cobra al momento de saldar la reserva.
-      if (paidAt && paidAt > ahora) paidAt = new Date(ahora.getTime() - entero(1, 120) * 60_000);
+      const cuenta = cuentaPara(creada);
 
-      // Las dos primeras reservas pagadas con método físico se marcan como
-      // vendidas en taquilla, para ver ese canal en el panel sin más flujos.
-      const ventaEnTaquilla =
-        status === "PAGADA" && metodo.kind === "FISICO" && ventasEnTaquillaMarcadas < 2;
-      if (ventaEnTaquilla) ventasEnTaquillaMarcadas += 1;
+      // --- Pagos: el comprobante llega dentro de las 2 horas de la reserva, y
+      // el pago en sitio se cobra antes de que falten 12 horas para la salida.
+      const limitePago = salida.pasada
+        ? masMinutos(salida.departsAt, -40)
+        : masMinutos(ahora, -1);
+      let envioComprobante: Date | null = null;
+      let momentoPago: Date | null = null;
+      if (CON_PAGO.has(status)) {
+        if (ventaEnTaquilla) {
+          momentoPago = creada;
+        } else if (fisico) {
+          momentoPago = entre(masMinutos(creada, 10), minFecha(limitePago, corte12));
+        } else {
+          envioComprobante = entre(
+            masMinutos(creada, 5),
+            minFecha(masMinutos(creada, 115), masMinutos(limitePago, -10)),
+          );
+          momentoPago = entre(
+            masMinutos(envioComprobante, 5),
+            minFecha(masMinutos(envioComprobante, 12 * 60), limitePago),
+          );
+        }
+      }
+      const pagoCompleto = PAGO_COMPLETO.has(status);
+      const paidUsd = pagoCompleto
+        ? m.totalUsd
+        : momentoPago
+          ? redondear(m.totalUsd.mul(entero(25, 70)).div(100))
+          : dec(0);
+      const paidAt = pagoCompleto ? momentoPago : null;
+
+      const boardedAt =
+        status === "ABORDADA" ? masMinutos(salida.departsAt, -entero(5, 35)) : null;
+      if (status === "ABORDADA") abordados += pax;
+      const cancelledAt = status === "CANCELADA" ? (salida.partida ?? salida.departsAt) : null;
+      const liberadaAt =
+        status !== "LIBERADA"
+          ? null
+          : minFecha(
+              fisico ? masMinutos(corte12, entero(0, 5)) : masMinutos(creada, 120 + entero(0, 5)),
+              masMinutos(ahora, -1),
+            );
+      const comprobantePendienteAt =
+        status === "EN_VALIDACION"
+          ? entre(
+              masMinutos(creada, 5),
+              minFecha(masMinutos(creada, 115), masMinutos(ahora, -2)),
+            )
+          : null;
+      const actualizada = [
+        creada,
+        momentoPago,
+        boardedAt,
+        cancelledAt,
+        liberadaAt,
+        comprobantePendienteAt,
+        status === "NO_SHOW" ? salida.partida : null,
+      ]
+        .filter((f): f is Date => f !== null)
+        .reduce((a, b) => maxFecha(a, b));
 
       reservas.push({
         id: reservationId,
@@ -544,25 +881,26 @@ async function main(): Promise<void> {
         currency: metodo.currency,
         exchangeRateUsed: m.exchangeRateUsed,
         amountInCurrency: m.amountInCurrency,
+        // El plazo de 2 horas se conserva en las que siguen sin pago o se liberaron por él.
         expiresAt:
-          status === "PENDIENTE_PAGO"
-            ? new Date(creada.getTime() + 120 * 60_000)
+          status === "PENDIENTE_PAGO" || (status === "LIBERADA" && !fisico)
+            ? masMinutos(creada, 120)
             : null,
         paidAt,
-        reconfirmedAt:
-          status === "PAGO_EN_SITIO" && suerte(0.55)
-            ? new Date(creada.getTime() + entero(60, 2000) * 60_000)
-            : null,
+        // En el MVP ningún flujo marca la reconfirmación: el puesto se conserva pagando.
+        reconfirmedAt: null,
         boardedAt,
-        cancelledAt: status === "CANCELADA" ? new Date(salida.departsAt.getTime() - 3_600_000) : null,
+        cancelledAt,
         cancellationReason:
           status === "CANCELADA"
             ? "No abordó y no completó el pago"
             : status === "LIBERADA"
-              ? "No se registró ningún pago dentro del plazo"
+              ? fisico
+                ? "No reconfirmó el pago en sitio dentro del plazo"
+                : "No se registró ningún pago dentro del plazo"
               : null,
         createdAt: creada,
-        updatedAt: paidAt ?? creada,
+        updatedAt: actualizada,
       });
 
       // Titular más acompañantes.
@@ -583,7 +921,7 @@ async function main(): Promise<void> {
           reservationId,
           fullName: nombreCompleto().fullName,
           idNumber: cedulaUnica(cedulasUsadas),
-          birthYear: entero(1955, 2014),
+          birthYear: entero(1955, ANIO_NACIMIENTO_MAX),
           isHolder: false,
           boardedAt,
           boardedByPanelUserId: boardedAt ? operador : null,
@@ -591,9 +929,8 @@ async function main(): Promise<void> {
         });
       }
 
-      // Pagos que respaldan el estado de la reserva.
-      const conPago = paidUsd.greaterThan(0);
-      if (conPago && metodo.kind === "FISICO") {
+      // Un solo registro por pago: cobro en taquilla o comprobante aprobado.
+      if (momentoPago && fisico) {
         efectivo.push({
           id: randomUUID(),
           reservationId,
@@ -601,10 +938,10 @@ async function main(): Promise<void> {
           currency: metodo.currency,
           amountUsd: paidUsd,
           collectedByPanelUserId: operador,
-          collectedAt: paidAt ?? creada,
-          createdAt: paidAt ?? creada,
+          collectedAt: momentoPago,
+          createdAt: momentoPago,
         });
-      } else if (conPago) {
+      } else if (momentoPago && envioComprobante) {
         comprobantes.push({
           id: randomUUID(),
           reservationId,
@@ -616,13 +953,13 @@ async function main(): Promise<void> {
           amountUsd: paidUsd,
           status: "APROBADO",
           reviewedByPanelUserId: operador,
-          reviewedAt: paidAt ?? creada,
-          createdAt: new Date((paidAt ?? creada).getTime() - entero(5, 240) * 60_000),
+          reviewedAt: momentoPago,
+          createdAt: envioComprobante,
         });
       }
 
       // Cola de revisión del operador: comprobantes todavía sin validar.
-      if (status === "EN_VALIDACION") {
+      if (comprobantePendienteAt) {
         const parcial = suerte(0.4);
         const montoUsd = parcial
           ? redondear(m.totalUsd.mul(entero(30, 70)).div(100))
@@ -637,107 +974,140 @@ async function main(): Promise<void> {
           currency: metodo.currency,
           amountUsd: montoUsd,
           status: "PENDIENTE",
-          createdAt: new Date(ahora.getTime() - entero(5, 900) * 60_000),
-        });
-      }
-
-      if (status === "ABONADA") {
-        comprobantes.push({
-          id: randomUUID(),
-          reservationId,
-          paymentMethodId: metodo.id,
-          reference: `REF-${entero(100000, 999999)}`,
-          imagePath: `comprobantes/${cuenta.id}/${randomUUID()}.png`,
-          amount: redondear(paidUsd.mul(m.exchangeRateUsed)),
-          currency: metodo.currency,
-          amountUsd: paidUsd,
-          status: "APROBADO",
-          reviewedByPanelUserId: operador,
-          reviewedAt: new Date(creada.getTime() + entero(20, 900) * 60_000),
-          createdAt: new Date(creada.getTime() + entero(5, 60) * 60_000),
+          createdAt: comprobantePendienteAt,
         });
       }
 
       // Ticket emitido para toda reserva saldada.
-      if (paidUsd.equals(m.totalUsd) && status !== "CANCELADA" && status !== "LIBERADA") {
+      if (pagoCompleto && paidAt) {
         tickets.push({
           id: randomUUID(),
           reservationId,
           pdfPath: `tickets/${reservationId}/${code}.pdf`,
           qrPayload: `${code}.MOCKMOCKMOCKMOCK`,
-          issuedAt: paidAt ?? creada,
-          sentAt: paidAt ?? creada,
+          issuedAt: paidAt,
+          sentAt: paidAt,
         });
+      }
+
+      // --- Mensajes: los mismos que envían los flujos y barridos reales, en
+      // el orden en que ocurren y nunca con fecha posterior a ahora.
+      const avisar = (templateKey: string, payload: Record<string, string>, momento: Date): void => {
+        const enviado = minFecha(momento, ahora);
         mensajes.push({
           id: randomUUID(),
           reservationId,
           phone: cuenta.phone,
-          templateKey: "ticket_emitido",
-          payload: {
-            nombre: cuenta.fullName,
-            serial: code,
-            salida: formatCaracasDateTime24(salida.departsAt),
-            punto: salida.meetingPoint,
-          },
-          status: "ENTREGADO",
+          templateKey,
+          payload: { nombre: cuenta.fullName, serial: code, ...payload },
+          status: estadoMensaje,
           providerMessageId: `mock-${randomUUID()}`,
           attempts: 1,
-          scheduledFor: paidAt ?? creada,
-          sentAt: paidAt ?? creada,
-          createdAt: paidAt ?? creada,
+          scheduledFor: enviado,
+          sentAt: enviado,
+          createdAt: enviado,
         });
-      }
+      };
 
-      mensajes.push({
-        id: randomUUID(),
-        reservationId,
-        phone: cuenta.phone,
-        templateKey: metodo.kind === "FISICO" ? "reserva_condicional" : "solicitud_recibida",
-        payload:
-          metodo.kind === "FISICO"
-            ? {
-                nombre: cuenta.fullName,
-                serial: code,
-                monto: formatMoney(m.amountInCurrency, metodo.currency),
-                salida: formatCaracasDateTime24(salida.departsAt),
-              }
-            : { nombre: cuenta.fullName, pasajeros: String(pax), serial: code },
-        status: salida.pasada ? "LEIDO" : "ENTREGADO",
-        providerMessageId: `mock-${randomUUID()}`,
-        attempts: 1,
-        scheduledFor: creada,
-        sentAt: creada,
-        createdAt: creada,
-      });
+      // Al reservar en la app (la venta en taquilla no envía este aviso).
+      if (!ventaEnTaquilla) {
+        if (fisico) {
+          avisar(
+            "reserva_condicional",
+            { monto: formatMoney(m.amountInCurrency, metodo.currency), salida: salidaTexto },
+            creada,
+          );
+        } else {
+          avisar("solicitud_recibida", { pasajeros: String(pax) }, creada);
+        }
+      }
+      // Abono aprobado que no completa el total.
+      if (momentoPago && !pagoCompleto) {
+        avisar(
+          "abono_registrado",
+          {
+            abonado: formatMoney(paidUsd, "USD"),
+            saldo: formatMoney(m.totalUsd.sub(paidUsd), "USD"),
+          },
+          momentoPago,
+        );
+      }
+      if (pagoCompleto && paidAt) {
+        avisar("ticket_emitido", { salida: salidaTexto, punto: salida.meetingPoint }, paidAt);
+      }
+      // Barrido de 24 horas: recordatorio a las pagadas o abonadas y pedido de
+      // pago a las de pago en sitio. Corre entre las 24 y las 12 horas previas.
+      const inicio24 = masMinutos(salida.departsAt, -24 * 60);
+      const momento24 = fisico
+        ? maxFecha(inicio24, creada)
+        : momentoPago
+          ? maxFecha(inicio24, momentoPago)
+          : null;
+      if (momento24 && momento24 <= minFecha(ahora, corte12)) {
+        const enviado = masMinutos(momento24, entero(0, 5));
+        const recordatorio = {
+          salida: salidaTexto,
+          punto: salida.meetingPoint,
+          recomendaciones: salida.recomendaciones,
+        };
+        const yaPagada = momentoPago !== null && momentoPago <= momento24;
+        if (!fisico || yaPagada) {
+          avisar("recordatorio_24h", recordatorio, enviado);
+        } else {
+          avisar(
+            "reconfirmacion_pago_sitio",
+            { salida: salidaTexto, monto: formatMoney(m.amountInCurrency, metodo.currency) },
+            enviado,
+          );
+          // Si paga en la taquilla dentro de la ventana, el barrido siguiente
+          // ya la ve pagada y le manda también el recordatorio.
+          if (momentoPago) {
+            avisar("recordatorio_24h", recordatorio, masMinutos(momentoPago, entero(1, 5)));
+          }
+        }
+      }
+      // Confirmación de asistencia dos horas antes, a las ya pagadas.
+      const momento2h = masMinutos(salida.departsAt, -2 * 60);
+      if (paidAt && paidAt <= momento2h && momento2h <= ahora) {
+        avisar("confirmacion_2h", {}, masMinutos(momento2h, entero(0, 5)));
+      }
+      if (liberadaAt) {
+        avisar("reserva_liberada", {}, liberadaAt);
+      }
 
       bitacora.push({
         id: randomUUID(),
-        actorType: "PASAJERO",
-        actorAccountId: cuenta.id,
+        actorType: ventaEnTaquilla ? "PANEL" : "PASAJERO",
+        actorPanelUserId: ventaEnTaquilla ? operador : null,
+        actorAccountId: ventaEnTaquilla ? null : cuenta.id,
         entityType: "Reservation",
         entityId: reservationId,
         action: "RESERVA_CREADA",
         before: {},
-        after: { code, passengerCount: pax, totalUsd: m.totalUsd.toString() },
+        after: {
+          code,
+          passengerCount: pax,
+          totalUsd: m.totalUsd.toString(),
+          status: fisico ? "PAGO_EN_SITIO" : "PENDIENTE_PAGO",
+          ...(ventaEnTaquilla ? { channel: "TAQUILLA" } : {}),
+        },
         createdAt: creada,
       });
     }
 
     // Registro de movimiento del chofer para las salidas ya cumplidas.
-    if (salida.pasada) {
-      const partida = new Date(salida.departsAt.getTime() + entero(-5, 25) * 60_000);
-      const desvio = entero(-12, 25) / 100;
-      const duracion = Math.round(salida.estimatedMinutes * (1 + desvio));
+    if (salida.pasada && salida.partida && salida.llegada) {
+      const inicioEmbarque = masMinutos(salida.departsAt, -entero(35, 55));
       viajes.push({
         id: randomUUID(),
         departureId: salida.id,
         driverId: salida.driverId,
         vehicleId: salida.vehicleId,
-        boardingStartedAt: new Date(salida.departsAt.getTime() - entero(35, 55) * 60_000),
-        departedAt: partida,
-        arrivedAt: new Date(partida.getTime() + duracion * 60_000),
+        boardingStartedAt: inicioEmbarque,
+        departedAt: salida.partida,
+        arrivedAt: salida.llegada,
         passengerCount: abordados,
-        createdAt: new Date(salida.departsAt.getTime() - 3_600_000),
+        createdAt: inicioEmbarque,
       });
     }
 
@@ -747,45 +1117,75 @@ async function main(): Promise<void> {
         espera.push({
           id: randomUUID(),
           departureId: salida.id,
-          accountId: elegir(cuentas).id,
+          accountId: elegir(cuentasQueReservan).id,
           passengerCount: tamanoGrupo(),
           status: "EN_ESPERA",
-          createdAt: new Date(ahora.getTime() - entero(30, 4000) * 60_000),
+          createdAt: new Date(ahora.getTime() - entero(30, 4000) * MIN),
         });
       }
     }
   }
 
   // --- Reservas visibles para las cuentas documentadas --------------------
-  // Sin esto las cuentas del README podrían quedar sin ninguna reserva y el
-  // recorrido de prueba del sistema no tendría nada que mostrar.
-  const salidasFuturas = new Set(todas.filter((s) => !s.pasada).map((s) => s.id));
+  // Sin esto las cuentas del README quedarían sin reservas y el recorrido de
+  // prueba del sistema no tendría nada que mostrar. Se les pasa una reserva
+  // por estado, de salidas y días distintos, y todo lo que cuelga de ella
+  // (titular, mensajes, bitácora y comprobantes) queda a su nombre.
+  const salidaPorId = new Map(todas.map((s) => [s.id, s]));
   const titularPorReserva = new Map<string, Prisma.PassengerCreateManyInput>();
   for (const pasajero of pasajeros) {
     if (pasajero.isHolder) titularPorReserva.set(pasajero.reservationId, pasajero);
   }
-  const mensajesPorReserva = new Map<string, Prisma.OutboundMessageCreateManyInput[]>();
-  for (const mensaje of mensajes) {
-    if (!mensaje.reservationId) continue;
-    const lista = mensajesPorReserva.get(mensaje.reservationId) ?? [];
-    lista.push(mensaje);
-    mensajesPorReserva.set(mensaje.reservationId, lista);
+  function agrupar<T>(filas: T[], clave: (fila: T) => string | null | undefined): Map<string, T[]> {
+    const mapa = new Map<string, T[]>();
+    for (const fila of filas) {
+      const id = clave(fila);
+      if (!id) continue;
+      const lista = mapa.get(id) ?? [];
+      lista.push(fila);
+      mapa.set(id, lista);
+    }
+    return mapa;
   }
+  const mensajesPorReserva = agrupar(mensajes, (f) => f.reservationId);
+  const comprobantesPorReserva = agrupar(comprobantes, (f) => f.reservationId);
+  const bitacoraPorReserva = agrupar(bitacora, (f) =>
+    f.entityType === "Reservation" ? f.entityId : null,
+  );
 
   const yaAsignadas = new Set<string>();
+  const ESTADOS_DE_SALIDAS_PASADAS = new Set<ReservationStatus>(["ABORDADA", "NO_SHOW"]);
 
   function reasignar(cuenta: (typeof cuentas)[number], estados: ReservationStatus[]): void {
+    const salidasUsadas = new Set<string>();
+    const diasUsados = new Set<string>();
+    const diaDe = (reserva: Prisma.ReservationCreateManyInput) =>
+      diaCaracas(salidaPorId.get(reserva.departureId)!.departsAt);
+
     for (const estado of estados) {
-      const candidata = reservas.find(
+      const pasada = ESTADOS_DE_SALIDAS_PASADAS.has(estado);
+      const aptas = reservas.filter(
         (r) =>
           r.status === estado &&
-          salidasFuturas.has(r.departureId) &&
+          r.passengerCount === 1 &&
+          r.salesChannel === "APP" &&
           !yaAsignadas.has(r.id as string) &&
-          r.passengerCount === 1,
+          salidaPorId.get(r.departureId)?.pasada === pasada,
       );
-      if (!candidata) continue;
+      // Primero una salida y un día nuevos; si no hay, al menos otra salida.
+      const grupo = [
+        aptas.filter((r) => !salidasUsadas.has(r.departureId) && !diasUsados.has(diaDe(r))),
+        aptas.filter((r) => !salidasUsadas.has(r.departureId)),
+        aptas,
+      ].find((lista) => lista.length > 0);
+      if (!grupo) continue;
+
+      const candidata = elegir(grupo);
       const id = candidata.id as string;
       yaAsignadas.add(id);
+      salidasUsadas.add(candidata.departureId);
+      diasUsados.add(diaDe(candidata));
+      const anterior = candidata.accountId;
       candidata.accountId = cuenta.id;
 
       const titular = titularPorReserva.get(id);
@@ -796,6 +1196,16 @@ async function main(): Promise<void> {
       }
       for (const mensaje of mensajesPorReserva.get(id) ?? []) {
         mensaje.phone = cuenta.phone;
+        mensaje.payload = {
+          ...(mensaje.payload as Record<string, string>),
+          nombre: cuenta.fullName,
+        };
+      }
+      for (const entrada of bitacoraPorReserva.get(id) ?? []) {
+        if (entrada.actorAccountId === anterior) entrada.actorAccountId = cuenta.id;
+      }
+      for (const comprobante of comprobantesPorReserva.get(id) ?? []) {
+        comprobante.imagePath = `comprobantes/${cuenta.id}/${path.posix.basename(comprobante.imagePath)}`;
       }
     }
   }
@@ -806,10 +1216,26 @@ async function main(): Promise<void> {
     "EN_VALIDACION",
     "PENDIENTE_PAGO",
     "PAGO_EN_SITIO",
+    "ABORDADA",
+    "ABORDADA",
   ];
   for (const cuenta of cuentasFijas) {
     reasignar(cuenta, estadosDemo);
   }
+
+  verificarCoherencia({
+    ahora,
+    cuentas,
+    metodos,
+    reservas,
+    mensajes,
+    comprobantes,
+    efectivo,
+    tickets,
+    viajes,
+    bitacora,
+  });
+
 
   async function insertar<T>(
     nombre: string,

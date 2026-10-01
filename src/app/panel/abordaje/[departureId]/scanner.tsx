@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Alert } from "@/components/alert";
-import { IconCamera, IconCheckCircle, IconSearch, IconSpinner, IconXCircle } from "@/components/icons";
+import { IconCamera, IconCheckCircle, IconSearch, IconSpinner, IconWarning, IconXCircle } from "@/components/icons";
 import { StatusBadge, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { plural } from "../../_shared/day-label";
@@ -24,12 +24,15 @@ declare global {
 /**
  * Lo que muestra el escáner tras buscar o confirmar. `falta` es un aviso
  * junto al campo (no se escribió nada); los demás abren el veredicto a
- * pantalla completa, en verde o en rojo.
+ * pantalla completa, en verde o en rojo. Un ticket con saldo pendiente no
+ * abre el verde: va directo a la ficha con el aviso "Falta cobrar", para que
+ * nadie suba sin pagar por leer "Puede abordar". El rechazo lleva el nombre
+ * del titular solo si el servidor lo da (reserva de esta misma agencia).
  */
 type Resultado =
   | { kind: "falta" }
   | { kind: "ticket"; ticket: BoardingTicket }
-  | { kind: "rechazo"; title: string; message: string }
+  | { kind: "rechazo"; title: string; message: string; name?: string }
   | { kind: "listo"; count: number; code: string; names: string[] };
 
 const FALLA_CONEXION = "No pudimos conectar con el sistema. Revisa la conexión a internet e inténtalo de nuevo.";
@@ -44,6 +47,9 @@ const VEREDICTO_BOTON_SECUNDARIO =
 /**
  * Botón con estado de espera para las acciones del escáner, que corren en el
  * cliente y no en un `<form action>`: mismo aspecto que `SubmitButton`.
+ * Mientras espera no usa `disabled` nativo (sacaría el foco del botón, y
+ * dentro del veredicto modal quien usa teclado o lector perdería su lugar):
+ * queda con `aria-disabled` y el clic se ignora.
  */
 function PendingButton({
   pending,
@@ -68,8 +74,14 @@ function PendingButton({
     <button
       ref={buttonRef}
       type={type}
-      onClick={onClick}
-      disabled={disabled || pending}
+      onClick={(event) => {
+        if (pending) {
+          event.preventDefault();
+          return;
+        }
+        onClick?.();
+      }}
+      disabled={disabled && !pending}
       aria-disabled={disabled || pending ? true : undefined}
       className={className}
     >
@@ -174,9 +186,11 @@ function Veredicto({
           {secondary ? (
             <button
               type="button"
-              onClick={secondary.onClick}
-              disabled={primary.pending}
-              className={cx(VEREDICTO_BOTON_SECUNDARIO, VEREDICTO_FOCO)}
+              onClick={() => {
+                if (!primary.pending) secondary.onClick();
+              }}
+              aria-disabled={primary.pending ? true : undefined}
+              className={cx(VEREDICTO_BOTON_SECUNDARIO, VEREDICTO_FOCO, primary.pending && "opacity-80")}
             >
               {secondary.label}
             </button>
@@ -216,7 +230,11 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
 
   const mostrar = useCallback((nuevo: Resultado) => {
     setResultado(nuevo);
-    setVeredicto(nuevo.kind !== "falta");
+    // Con saldo pendiente no hay veredicto verde: la ficha con "Falta cobrar"
+    // aparece directo y recibe el foco.
+    const conSaldo = nuevo.kind === "ticket" && nuevo.ticket.balanceLabel !== null;
+    setVeredicto(nuevo.kind !== "falta" && !conSaldo);
+    if (conSaldo) requestAnimationFrame(() => tituloTicketRef.current?.focus());
   }, []);
 
   const buscar = useCallback(
@@ -238,7 +256,12 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
           setSeleccionados(new Set(ticket.passengers.filter((p) => !p.boardedAtLabel).map((p) => p.id)));
           mostrar({ kind: "ticket", ticket });
         } else {
-          mostrar({ kind: "rechazo", title: "No puede abordar", message: r.error ?? "No encontramos ese ticket." });
+          mostrar({
+            kind: "rechazo",
+            title: "No puede abordar",
+            message: r.error ?? "No encontramos ese ticket.",
+            name: r.holderName,
+          });
         }
       } catch {
         mostrar({ kind: "rechazo", title: "No se pudo buscar", message: FALLA_CONEXION });
@@ -332,13 +355,18 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
     try {
       const r = await confirmBoardingAction(ticket.reservationId, [...seleccionados]);
       if (r.error) {
-        mostrar({ kind: "rechazo", title: "No se registró el abordaje", message: r.error });
+        mostrar({ kind: "rechazo", title: "No se registró el abordaje", message: r.error, name: ticket.holderName });
       } else {
         mostrar({ kind: "listo", count: r.boarded ?? seleccionados.size, code: ticket.code, names: nombres });
         setCode("");
       }
     } catch {
-      mostrar({ kind: "rechazo", title: "No se registró el abordaje", message: FALLA_CONEXION });
+      mostrar({
+        kind: "rechazo",
+        title: "No se registró el abordaje",
+        message: FALLA_CONEXION,
+        name: ticket.holderName,
+      });
     } finally {
       setConfirmando(false);
     }
@@ -364,7 +392,7 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void buscar(code);
+            if (!buscando) void buscar(code);
           }}
           className="flex flex-col gap-3"
         >
@@ -473,9 +501,10 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
 
       {veredicto && resultado?.kind === "rechazo" ? (
         <Veredicto
-          key={`rechazo-${resultado.title}-${resultado.message}`}
+          key={`rechazo-${resultado.title}-${resultado.message}-${resultado.name ?? ""}`}
           tone="peligro"
           title={resultado.title}
+          name={resultado.name}
           primary={{ label: "Buscar otro ticket", onClick: limpiar }}
           onDismiss={limpiar}
         >
@@ -508,9 +537,10 @@ export function AbordajeScanner({ departureId }: { departureId: string }) {
 }
 
 /**
- * Veredicto verde de un ticket válido: el titular en grande y qué sigue. Si
- * solo falta subir una persona y no hay saldo, se confirma desde aquí mismo;
- * si no, se pasa a elegir quiénes suben.
+ * Veredicto verde de un ticket válido y sin saldo pendiente (un ticket con
+ * saldo no llega aquí): el titular en grande y qué sigue. Si solo falta subir
+ * una persona, se confirma desde aquí mismo; si no, se pasa a elegir quiénes
+ * suben.
  */
 function TicketVeredicto({
   ticket,
@@ -526,7 +556,7 @@ function TicketVeredicto({
   onCancel: () => void;
 }) {
   const porSubir = ticket.passengers.filter((p) => !p.boardedAtLabel);
-  const directo = porSubir.length === 1 && !ticket.balanceLabel;
+  const directo = porSubir.length === 1;
   return (
     <Veredicto
       tone="exito"
@@ -549,14 +579,15 @@ function TicketVeredicto({
         Ticket <span className="tabular font-semibold">{ticket.code}</span> ·{" "}
         {plural(ticket.passengers.length, "pasajero", "pasajeros")}
       </p>
-      {ticket.balanceLabel ? (
-        <p className="font-bold">Falta cobrar {ticket.balanceLabel} antes de que suba.</p>
-      ) : null}
     </Veredicto>
   );
 }
 
-/** Ticket válido: quiénes suben, avisos de saldo y la confirmación. */
+/**
+ * Ticket válido: quiénes suben y la confirmación. Con saldo pendiente la
+ * cabecera no dice "Puede abordar" en verde sino "Falta cobrar …" en ámbar,
+ * para que la señal principal sea cobrar antes de que suba.
+ */
 function TicketResult({
   ticket,
   seleccionados,
@@ -577,18 +608,37 @@ function TicketResult({
   const porSubir = ticket.passengers.filter((p) => !p.boardedAtLabel);
   const sinMarcar = porSubir.filter((p) => !seleccionados.has(p.id)).length;
   const cuantos = seleccionados.size;
+  const saldo = ticket.balanceLabel;
 
   return (
-    <section className="overflow-hidden rounded-tarjeta border-2 border-exito bg-superficie shadow-1">
-      <div className="flex items-center gap-4 bg-exito-suave px-5 py-4">
-        <IconCheckCircle className="size-12 shrink-0 text-exito" />
+    <section
+      className={cx(
+        "overflow-hidden rounded-tarjeta border-2 bg-superficie shadow-1",
+        saldo ? "border-alerta" : "border-exito",
+      )}
+    >
+      <div className={cx("flex items-center gap-4 px-5 py-4", saldo ? "bg-alerta-suave" : "bg-exito-suave")}>
+        {saldo ? (
+          <IconWarning className="size-12 shrink-0 text-alerta" />
+        ) : (
+          <IconCheckCircle className="size-12 shrink-0 text-exito" />
+        )}
         <div className="min-w-0">
-          <h2 ref={tituloRef} tabIndex={-1} className="text-2xl font-bold tracking-tight text-exito outline-none">
-            Puede abordar
+          <h2
+            ref={tituloRef}
+            tabIndex={-1}
+            className={cx("text-2xl font-bold tracking-tight outline-none", saldo ? "text-alerta" : "text-exito")}
+          >
+            {saldo ? `Falta cobrar ${saldo}` : "Puede abordar"}
           </h2>
           <p className="text-base text-tinta">
             Ticket <span className="tabular font-semibold">{ticket.code}</span> · {ticket.holderName}
           </p>
+          {saldo ? (
+            <p className="text-base font-semibold text-tinta">
+              Cóbralo antes de que suba, en Pasajeros y pagos o en la taquilla.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -597,12 +647,6 @@ function TicketResult({
           Pago:
           <StatusBadge label={ticket.statusLabel} tone={ticket.statusTone} />
         </div>
-
-        {ticket.balanceLabel ? (
-          <Alert tone="alerta" role="none" title={`Falta cobrar ${ticket.balanceLabel}`}>
-            Cóbralo antes de que suba, en Pasajeros y pagos o en la taquilla.
-          </Alert>
-        ) : null}
 
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 text-base font-semibold text-tinta">¿Quiénes suben ahora?</legend>

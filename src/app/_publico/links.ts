@@ -31,6 +31,16 @@ export function registerHref(next?: string | null): string {
 }
 
 /**
+ * A dónde va la persona al terminar de crear o activar su cuenta: a `next` si
+ * venía de reservar una salida; si no, a subir la foto de su cédula cuando le
+ * falta (el paso que necesita para poder reservar), o al inicio de `/mi`
+ * cuando ya la tiene, como pasa al activar una cuenta creada en la taquilla.
+ */
+export function afterRegisterHref(next: string | null | undefined, needsIdPhoto: boolean): string {
+  return safeNext(next) ?? (needsIdPhoto ? "/mi/documentos" : "/mi");
+}
+
+/**
  * Enlace a una pantalla de `/mi`: directo si hay sesión, o pasando antes por
  * ingresar (con la pantalla como `next`) si no la hay.
  */

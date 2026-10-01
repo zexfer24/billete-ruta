@@ -95,8 +95,9 @@ function fechaHora(date: Date): string {
 
 /**
  * Frase llana del rango aplicado, para que siempre se sepa qué periodo se
- * está viendo: "Hoy, de 00:00 a 14:32", "Últimos 7 días: del 24/09/2026 00:00
- * al 30/09/2026 14:32" o "Del 10/09/2026 08:00 al 11/09/2026 18:59".
+ * está viendo: "Hoy, de 00:00 a 14:32", "Últimos 7 días, del 24/09/2026 00:00
+ * al 30/09/2026 14:32" o "Del 10/09/2026 08:00 al 11/09/2026 18:59". Va sola,
+ * sin una etiqueta "Mostrando:" delante, para no encadenar dos dos puntos.
  */
 export function describeReportRange(range: ReportRange): string {
   const tramo = `del ${fechaHora(range.from)} al ${fechaHora(range.to)}`;
@@ -104,11 +105,11 @@ export function describeReportRange(range: ReportRange): string {
     case "hoy":
       return `Hoy, de ${formatCaracasTime24(range.from)} a ${formatCaracasTime24(range.to)}`;
     case "24h":
-      return `Últimas 24 horas: ${tramo}`;
+      return `Últimas 24 horas, ${tramo}`;
     case "7d":
-      return `Últimos 7 días: ${tramo}`;
+      return `Últimos 7 días, ${tramo}`;
     case "30d":
-      return `Últimos 30 días: ${tramo}`;
+      return `Últimos 30 días, ${tramo}`;
     case "personalizado":
       return `Del ${fechaHora(range.from)} al ${fechaHora(range.to)}`;
   }

@@ -116,18 +116,21 @@ export async function TripDetailPanel({
                     <p className="font-semibold text-tinta">{p.fullName}</p>
                     {p.isHolder ? <StatusBadge label="Titular" tone="marca" /> : null}
                   </div>
-                  <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
-                    <div>
+                  {/* Cédula y hora en una fila; el código del ticket en la suya, de ancho
+                      completo y sin cortarse a mitad (se compara con el ticket del
+                      pasajero: partido se presta a leerlo mal). */}
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    <div className="min-w-0">
                       <dt className="text-tinta-suave">Cédula</dt>
                       <dd className="tabular font-medium text-tinta">{p.idNumber}</dd>
                     </div>
-                    <div>
-                      <dt className="text-tinta-suave">Código del ticket</dt>
-                      <dd className="tabular break-all font-medium text-tinta">{p.reservationCode}</dd>
-                    </div>
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-tinta-suave">Abordó</dt>
                       <dd className="tabular font-medium text-tinta">{formatCaracasTime24(p.boardedAt)}</dd>
+                    </div>
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-tinta-suave">Código del ticket</dt>
+                      <dd className="tabular break-words font-medium text-tinta">{p.reservationCode}</dd>
                     </div>
                   </dl>
                 </li>
@@ -146,7 +149,9 @@ export async function TripDetailPanel({
 export function TripDetailPanelSkeleton({ closeHref }: { closeHref: string }) {
   return (
     <SidePanel title="Cargando el viaje…" closeHref={closeHref}>
-      <div role="status" aria-live="polite" aria-busy="true" className="flex flex-col gap-6">
+      {/* Sin aria-busy: una región ocupada retiene sus anuncios y el lector de
+          pantalla no diría "Cargando…". Los bloques van con aria-hidden. */}
+      <div role="status" aria-live="polite" className="flex flex-col gap-6">
         <span className="sr-only">Cargando el detalle del viaje…</span>
         <Skeleton className="h-7 w-40 rounded-pastilla" />
         <div className="flex flex-col gap-4">

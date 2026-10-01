@@ -1,21 +1,21 @@
 import type { MessageStatus } from "@prisma/client";
 import Link from "next/link";
 import { IconMessage } from "@/components/icons";
-import {
-  EmptyState,
-  PANEL_TD_CLASS,
-  PANEL_TH_CLASS,
-  StatusBadge,
-  TableShell,
-  panelButtonClass,
-} from "@/components/panel-ui";
+import { EmptyState, StatusBadge, TableShell, panelButtonClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { MESSAGE_STATUS_LABELS, messageStatusTone } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
-import { formatCaracasDateTime24 } from "@/lib/time";
+import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
 import { isTemplateKey, renderStoredPreview } from "@/modules/messaging";
 import { countLabel, formatCount, formatPhone } from "../_shared/format";
-import { DISCLOSURE_SUMMARY_CLASS, DisclosureChevron, Pagination } from "../_shared/lists";
+import {
+  ADMIN_TD_CLASS,
+  ADMIN_TH_CLASS,
+  DISCLOSURE_SUMMARY_CLASS,
+  DisclosureChevron,
+  Pagination,
+  TimeCell,
+} from "../_shared/lists";
 import { withQuery } from "../_shared/period";
 import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
 import { MESSAGES_PATH, payloadToParams, templateName } from "./messages";
@@ -89,9 +89,11 @@ function MessageStatusBlock({ message }: { message: MessageRow }) {
 /**
  * Cuándo salió el mensaje. La hora programada solo se agrega si todavía no
  * sale o si salió en otro momento (un reintento): casi siempre coinciden y
- * repetirla en cada fila era ruido.
+ * repetirla en cada fila era ruido. En la tabla va como `TimeCell` (la hora
+ * y debajo la fecha), igual que en las demás tablas del terminal; en la
+ * tarjeta del teléfono, fecha y hora en una línea.
  */
-function SendTime({ message }: { message: MessageRow }) {
+function SendTime({ message, layout }: { message: MessageRow; layout: "tabla" | "tarjeta" }) {
   const scheduled = formatCaracasDateTime24(message.scheduledFor);
   if (!message.sentAt) {
     return (
@@ -104,7 +106,11 @@ function SendTime({ message }: { message: MessageRow }) {
   const differs = Math.abs(message.sentAt.getTime() - message.scheduledFor.getTime()) >= SCHEDULE_GAP_MS;
   return (
     <span className="flex flex-col">
-      <span className="tabular font-medium text-tinta">{formatCaracasDateTime24(message.sentAt)}</span>
+      {layout === "tabla" ? (
+        <TimeCell time={formatCaracasTime24(message.sentAt)} date={formatCaracasDate(message.sentAt)} />
+      ) : (
+        <span className="tabular font-medium text-tinta">{formatCaracasDateTime24(message.sentAt)}</span>
+      )}
       {differs ? <span className="tabular text-sm text-tinta-suave">Programado para el {scheduled}</span> : null}
     </span>
   );
@@ -212,18 +218,22 @@ export async function MessagesList({
                 key={m.id}
                 className="flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-base font-semibold text-tinta">{m.name}</p>
+                {/* Como en `MobileCard`: el título envuelve su texto y el estado
+                    queda siempre arriba a la derecha, sin bajar de línea. */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-base font-semibold text-tinta">{m.name}</p>
                     <p className="tabular text-sm text-tinta-suave">Para {m.phone}</p>
                   </div>
-                  <MessageStatusBlock message={m} />
+                  <div className="max-w-[55%] shrink-0">
+                    <MessageStatusBlock message={m} />
+                  </div>
                 </div>
                 <MessageText text={m.text} />
                 <dl>
                   <dt className="text-sm text-tinta-suave">Enviado</dt>
                   <dd className="text-[15px]">
-                    <SendTime message={m} />
+                    <SendTime message={m} layout="tarjeta" />
                   </dd>
                 </dl>
               </li>
@@ -231,12 +241,14 @@ export async function MessagesList({
           </ul>
         }
       >
-        <table className="w-full min-w-[52rem] text-left">
+        {/* Sin ancho mínimo: el texto del mensaje, la columna más larga, se
+            reparte el espacio y la tabla cabe entera desde 768 px. */}
+        <table className="w-full text-left">
           <caption className="sr-only">Mensajes a pasajeros</caption>
           <thead>
             <tr className="border-b border-borde">
               {MESSAGE_COLUMNS.map((column) => (
-                <th key={column} scope="col" className={cx(PANEL_TH_CLASS, column === "Mensaje" && "w-1/2")}>
+                <th key={column} scope="col" className={ADMIN_TH_CLASS}>
                   {column}
                 </th>
               ))}
@@ -245,16 +257,16 @@ export async function MessagesList({
           <tbody>
             {rows.map((m) => (
               <tr key={m.id} className="border-b border-borde align-top last:border-0">
-                <td className={cx(PANEL_TD_CLASS, "tabular align-top whitespace-nowrap")}>{m.phone}</td>
-                <td className={cx(PANEL_TD_CLASS, "align-top")}>
+                <td className={cx(ADMIN_TD_CLASS, "tabular align-top whitespace-nowrap")}>{m.phone}</td>
+                <td className={cx(ADMIN_TD_CLASS, "align-top")}>
                   <p className="font-semibold text-tinta">{m.name}</p>
                   <MessageText text={m.text} />
                 </td>
-                <td className={cx(PANEL_TD_CLASS, "align-top")}>
+                <td className={cx(ADMIN_TD_CLASS, "align-top")}>
                   <MessageStatusBlock message={m} />
                 </td>
-                <td className={cx(PANEL_TD_CLASS, "align-top")}>
-                  <SendTime message={m} />
+                <td className={cx(ADMIN_TD_CLASS, "align-top")}>
+                  <SendTime message={m} layout="tabla" />
                 </td>
               </tr>
             ))}

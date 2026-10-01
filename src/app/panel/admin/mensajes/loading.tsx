@@ -1,7 +1,6 @@
 import { Alert } from "@/components/alert";
-import { PanelPageHeader } from "@/components/panel-ui";
 import { SkeletonScreen } from "@/components/skeleton";
-import { TabsSkeleton } from "../_shared/skeletons";
+import { PageHeaderSkeleton, TabsSkeleton } from "../_shared/skeletons";
 import { MESSAGE_TAB_LABELS } from "./messages";
 import { MessagesListSkeleton } from "./messages-list";
 
@@ -12,7 +11,7 @@ import { MessagesListSkeleton } from "./messages-list";
 export default function MensajesAdminLoading() {
   return (
     <SkeletonScreen label="Cargando los mensajes…" className="flex flex-col gap-6">
-      <PanelPageHeader
+      <PageHeaderSkeleton
         title="Mensajes a pasajeros"
         description="Los avisos que el sistema envía a los pasajeros: confirmaciones de reserva, pagos, tickets y recordatorios de viaje."
       />

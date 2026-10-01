@@ -303,7 +303,9 @@ export function PanelNav({
         />
       </aside>
 
-      <div className="sticky top-0 z-40 lg:hidden">
+      {/* `data-barra-panel` activa el relleno de desplazamiento de globals.css
+          para que el foco no quede bajo esta barra pegajosa (WCAG 2.2, 2.4.11). */}
+      <div data-barra-panel="" className="sticky top-0 z-40 lg:hidden">
         <div
           className={`flex min-h-16 items-center justify-between gap-3 px-4 py-2 shadow-1 ${theme.band}`}
         >

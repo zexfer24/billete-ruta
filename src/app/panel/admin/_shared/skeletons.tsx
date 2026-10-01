@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { IconChevronRight } from "@/components/icons";
+import { IconChevronDown, IconChevronRight } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
-import { cx, panelButtonClass } from "@/components/ui-classes";
+import { cx, panelButtonClass, panelInputClass } from "@/components/ui-classes";
+import { ADMIN_TAB_ACTIVE_CLASS, ADMIN_TAB_CLASS, ADMIN_TABS_ROW_CLASS } from "./tab-classes";
 
 /**
  * Siluetas de carga de las pantallas del administrador (spec 6.5). Reproducen
@@ -18,6 +19,51 @@ import { cx, panelButtonClass } from "@/components/ui-classes";
 const CARD = "rounded-tarjeta border border-borde bg-superficie shadow-1";
 
 /**
+ * Cabecera de página (`PanelPageHeader`) con su título y su frase reales, pero
+ * quieta: el título es un `<p>` con las clases del `h1`, para que la página
+ * tenga un solo `h1` y el lector de pantalla no lo oiga dentro del aviso de
+ * carga. `actions` es la copia quieta de los botones de la cabecera.
+ */
+export function PageHeaderSkeleton({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div aria-hidden="true" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-3xl">
+          <p className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">{title}</p>
+          <p className="mt-1.5 text-base leading-relaxed text-tinta-suave">{description}</p>
+        </div>
+        {actions ? (
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Campo vacío y quieto, con el borde y el fondo del campo real: un campo
+ * nunca es un bloque lila, así que no cambia de aspecto al llegar la página.
+ * `select` le agrega la flecha de la lista desplegable.
+ */
+export function InputSkeleton({ className, select = false }: { className?: string; select?: boolean }) {
+  return (
+    <span className={panelInputClass(cx("relative block", className))}>
+      {select ? (
+        <IconChevronDown className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-tinta-suave" />
+      ) : null}
+    </span>
+  );
+}
+
+/**
  * Pestañas de `AdminTabs` con sus etiquetas reales: mismas medidas, el mismo
  * reparto en varias filas en pantallas angostas y la primera como elegida.
  * `counts` pinta el hueco del contador de cada pestaña.
@@ -32,15 +78,9 @@ export function TabsSkeleton({
   counts?: boolean;
 }) {
   return (
-    <div aria-hidden="true" className={`${CARD} flex w-full flex-wrap gap-1 p-1`}>
+    <div aria-hidden="true" className={ADMIN_TABS_ROW_CLASS}>
       {labels.map((label, index) => (
-        <span
-          key={label}
-          className={cx(
-            "inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold sm:grow-0 sm:justify-start",
-            index === active ? "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200" : "text-tinta-suave",
-          )}
-        >
+        <span key={label} className={cx(ADMIN_TAB_CLASS, index === active ? ADMIN_TAB_ACTIVE_CLASS : "text-tinta-suave")}>
           {label}
           {counts ? <Skeleton className="h-5 w-7 rounded-pastilla" /> : null}
         </span>
@@ -62,6 +102,8 @@ export function LineSkeleton({ className = "w-72" }: { className?: string }) {
 export function StatCardSkeleton({ label, link = false }: { label: string; link?: boolean }) {
   return (
     <div aria-hidden="true" className={`${CARD} relative flex flex-col overflow-hidden p-5`}>
+      {/* La barra de color de las tarjetas del terminal, que siempre van en tono de marca. */}
+      <span className="absolute inset-x-0 top-0 h-1 bg-marca-600" />
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-semibold text-tinta-suave">{label}</p>
         <Skeleton className="size-10 shrink-0 rounded-full" />
@@ -78,14 +120,17 @@ export function StatCardSkeleton({ label, link = false }: { label: string; link?
   );
 }
 
-/** Formulario de filtros en una tarjeta: campos de 44 px con su etiqueta real y el botón. */
+/**
+ * Formulario de filtros en una tarjeta: listas desplegables vacías de 44 px
+ * con su etiqueta real, y el botón.
+ */
 export function FilterCardSkeleton({ labels, button }: { labels: readonly string[]; button: string }) {
   return (
     <div aria-hidden="true" className={`${CARD} flex flex-wrap items-end gap-3 p-4`}>
       {labels.map((label) => (
         <div key={label} className="flex min-w-56 flex-1 flex-col gap-1.5 sm:flex-none">
           <p className="text-sm font-semibold text-tinta">{label}</p>
-          <Skeleton className="h-11 w-full sm:w-64" />
+          <InputSkeleton select className="sm:w-64" />
         </div>
       ))}
       <span className={panelButtonClass("secundario", "md", "w-full sm:w-auto")}>{button}</span>
@@ -166,15 +211,31 @@ export function TableSkeleton({
  * Título de sección (`h2` de 18 px) con su texto real. La frase de ayuda se
  * pinta real si es fija (`description`) y como barra si depende del periodo.
  */
-export function SectionHeadingSkeleton({ title, description }: { title: string; description?: ReactNode }) {
-  return (
-    <div aria-hidden="true" className="flex flex-col gap-1">
+export function SectionHeadingSkeleton({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description?: ReactNode;
+  /** Enlace fijo a la derecha del título, como "Ver todos los movimientos". */
+  action?: ReactNode;
+}) {
+  const heading = (
+    <div className="flex min-w-0 flex-col gap-1">
       <p className="text-lg font-semibold text-tinta">{title}</p>
       {description ? (
         <p className="text-sm leading-snug text-tinta-suave">{description}</p>
       ) : (
         <Skeleton className="mt-1 h-4 w-2/3 max-w-sm rounded-pastilla" />
       )}
+    </div>
+  );
+  if (!action) return <div aria-hidden="true">{heading}</div>;
+  return (
+    <div aria-hidden="true" className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+      {heading}
+      {action}
     </div>
   );
 }

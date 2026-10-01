@@ -1,13 +1,19 @@
 "use client";
 
-import { useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
+import { DepartureRow } from "@/components/departure-row";
 import { IconChevronDown, IconClock, IconShield, IconStore, IconTicket, type IconProps } from "@/components/icons";
 import { StickyActions } from "@/components/sticky-actions";
 import { Card } from "@/components/ui";
 import { buttonClass } from "@/components/ui-classes";
+import { toDepartureRowData, type DepartureVM } from "./booking-form";
+import { revealAndFocus } from "./reveal";
 
 interface StepPoliciesProps {
+  /** Salida elegida: se repite arriba para que se sepa a qué bus corresponde el total. */
+  departure: DepartureVM;
+  now: Date;
   accepted: boolean;
   onChangeAccepted: (value: boolean) => void;
   summary: ReactNode;
@@ -23,26 +29,39 @@ const CONDICIONES: { Icon: ComponentType<IconProps>; texto: string }[] = [
 ];
 
 /**
- * Paso 3 del asistente: las condiciones en cuatro frases cortas con icono,
- * el texto completo plegado y la casilla de aceptación. "Continuar" no se
- * deshabilita: si falta marcar la casilla, lo dice y lleva el foco a ella.
+ * Paso 3 del asistente: la salida elegida, las condiciones en cuatro frases
+ * cortas con icono, el texto completo plegado y la casilla de aceptación.
+ * "Continuar" no se deshabilita: si falta marcar la casilla, lo dice, lleva
+ * la casilla y el aviso al centro de la zona visible (por encima de las
+ * barras fijas) y le da el foco. Cada toque vuelve a hacerlo.
  */
-export function StepPolicies({ accepted, onChangeAccepted, summary, onBack, onNext }: StepPoliciesProps) {
-  const [intentado, setIntentado] = useState(false);
+export function StepPolicies({ departure, now, accepted, onChangeAccepted, summary, onBack, onNext }: StepPoliciesProps) {
+  // Contador y no booleano: cada toque de "Continuar" sin la casilla vuelve a disparar el efecto.
+  const [intentos, setIntentos] = useState(0);
   const checkboxRef = useRef<HTMLInputElement>(null);
-  const falta = intentado && !accepted;
+  const grupoRef = useRef<HTMLDivElement>(null);
+  const falta = intentos > 0 && !accepted;
+
+  // Después del render en que aparece el aviso, para que también quede a la vista.
+  useEffect(() => {
+    if (intentos === 0 || accepted) return;
+    revealAndFocus(grupoRef.current, checkboxRef.current);
+    // Solo cuando la persona vuelve a tocar "Continuar".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intentos]);
 
   function continuar() {
     if (accepted) {
       onNext();
       return;
     }
-    setIntentado(true);
-    checkboxRef.current?.focus();
+    setIntentos((n) => n + 1);
   }
 
   return (
     <section className="flex flex-col gap-5">
+      <DepartureRow departure={toDepartureRowData(departure)} now={now} selected />
+
       <Card>
         <ul className="flex flex-col gap-4">
           {CONDICIONES.map(({ Icon, texto }) => (
@@ -85,7 +104,7 @@ export function StepPolicies({ accepted, onChangeAccepted, summary, onBack, onNe
         </ul>
       </details>
 
-      <div className="flex flex-col gap-2">
+      <div ref={grupoRef} className="flex flex-col gap-2">
         <label
           className={[
             "flex min-h-12 cursor-pointer items-start gap-3 rounded-control border-2 bg-superficie p-4",

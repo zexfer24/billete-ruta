@@ -15,6 +15,7 @@ import type { AgencyReservationDetail } from "@/modules/reports";
 import { CashPaymentForm } from "@/app/panel/_forms/cash-payment-form";
 import { countLabel } from "../_dashboard/text";
 import { coverageBadge, PaymentHistory, ProofActions } from "./proof-review";
+import { showsUsdEquivalent } from "./money";
 import { Disclosure, DetailList } from "./disclosure";
 
 /** Título de una sección del panel lateral. */
@@ -124,7 +125,7 @@ export function ReservationDetailPanel({
                   </a>
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <p className="tabular text-xl font-bold text-tinta">{formatMoney(p.amount, p.currency)}</p>
-                    {p.currency !== "USD" ? (
+                    {showsUsdEquivalent(p.currency) ? (
                       <p className="tabular text-sm text-tinta-suave">Equivale a {formatMoney(p.amountUsd, "USD")}</p>
                     ) : null}
                     <p className="text-sm text-tinta-suave">

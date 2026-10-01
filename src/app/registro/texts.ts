@@ -8,9 +8,14 @@
 export const REGISTER_TITLE = "Crea tu cuenta";
 export const REGISTER_DESCRIPTION = "Con tu cuenta reservas tus pasajes, pagas y guardas tus tickets.";
 
-export const COUNTER_NOTICE_TITLE = "¿Te registraron en la taquilla?";
+/**
+ * Nota de una línea para quien fue registrado en la taquilla. Va al pie, junto
+ * a "¿Ya tienes cuenta?": es un caso minoritario y no debe empujar el
+ * formulario hacia abajo (spec 1.3). Si los datos no coinciden, el error del
+ * registro ya explica qué hacer.
+ */
 export const COUNTER_NOTICE_TEXT =
-  "Llena este mismo formulario con la cédula, el teléfono y el año de nacimiento que diste allí. No se crea otra cuenta: se activa la tuya y eliges tu contraseña.";
+  "¿Te registraron en la taquilla? Usa aquí la misma cédula, teléfono y año de nacimiento que diste allí.";
 
 /** Títulos de los tres grupos del formulario. */
 export const REGISTER_GROUPS = {

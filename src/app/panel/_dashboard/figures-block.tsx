@@ -1,9 +1,12 @@
 import type { AgencyDashboard, RecentTicketRow } from "@/modules/reports";
+import type { AgencyDepartureRow } from "@/modules/catalog";
 import { formatMoney } from "@/lib/decimal";
 import { formatCaracas, formatCaracasDate, formatCaracasTime24, type DashboardPeriod } from "@/lib/time";
 import { StatCard } from "@/components/panel-ui";
 import { IconBus, IconCash, IconClock, IconTicket } from "@/components/icons";
-import { countLabel, joinPhrases, porCobrarDetail } from "./text";
+import { countLabel, departuresDetail, porCobrarDetail } from "./text";
+import { isOverdue } from "./attention";
+import { FIGURE_LABELS } from "./section-texts";
 
 /**
  * Las cuatro cifras del periodo (spec 1.3: nunca más de cuatro a la vez), cada
@@ -13,26 +16,26 @@ import { countLabel, joinPhrases, porCobrarDetail } from "./text";
 export async function FiguresBlock({
   summary,
   tickets,
+  todayDepartures,
   periodo,
   now,
 }: {
   summary: Promise<AgencyDashboard>;
   tickets: Promise<{ rows: RecentTicketRow[]; total: number }>;
+  /** Salidas del día, para contar las atrasadas en el periodo "hoy". */
+  todayDepartures: Promise<AgencyDepartureRow[]>;
   periodo: DashboardPeriod;
   now: Date;
 }) {
-  const [resumen, emitidos] = await Promise.all([summary, tickets]);
+  const [resumen, emitidos, salidasHoy] = await Promise.all([summary, tickets, todayDepartures]);
   const { pendingTickets, departures, revenue } = resumen;
 
   const detallePorCobrar = porCobrarDetail(pendingTickets.total, pendingTickets.payOnSite);
 
-  const detalleSalidas =
-    joinPhrases([
-      departures.programadas > 0 && countLabel(departures.programadas, "programada", "programadas"),
-      departures.embarcando > 0 && `${departures.embarcando} embarcando`,
-      departures.enRuta > 0 && `${departures.enRuta} en ruta`,
-      departures.finalizadas > 0 && countLabel(departures.finalizadas, "finalizada", "finalizadas"),
-    ]) || "No hay salidas en este periodo";
+  const detalleSalidas = departuresDetail(
+    departures,
+    periodo === "hoy" ? salidasHoy.filter((salida) => isOverdue(salida, now)).length : null,
+  );
 
   const ultimo = emitidos.rows[0];
   const detalleTickets = ultimo
@@ -46,21 +49,21 @@ export async function FiguresBlock({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
-        label="Reservas por cobrar"
+        label={FIGURE_LABELS.porCobrar}
         value={pendingTickets.total}
         detail={detallePorCobrar}
         href="/panel/pasajeros?vista=por-cobrar"
         icon={<IconClock />}
       />
       <StatCard
-        label="Salidas"
+        label={FIGURE_LABELS.salidas}
         value={departures.total}
         detail={detalleSalidas}
         href="/panel/salidas"
         icon={<IconBus />}
       />
       <StatCard
-        label="Recaudado"
+        label={FIGURE_LABELS.recaudado}
         value={formatMoney(revenue.totalUsd, "USD")}
         detail={
           revenue.payments > 0
@@ -71,7 +74,7 @@ export async function FiguresBlock({
         icon={<IconCash />}
       />
       <StatCard
-        label="Tickets emitidos"
+        label={FIGURE_LABELS.tickets}
         value={emitidos.total}
         detail={detalleTickets}
         href="/panel/pasajeros?vista=pagadas"

@@ -39,6 +39,43 @@ function salidaEnDias(dias: number, horaCaracas: number): Date {
   return base;
 }
 
+/** Horas de descanso de la unidad y del chofer entre la llegada y la siguiente salida. */
+const DESCANSO_MIN = 6 * 60;
+/** La unidad debe estar en el terminal antes de que empiece el embarque. */
+const PREPARACION_MIN = 60;
+
+/**
+ * Momento, en milisegundos, en que una unidad vuelve a quedar libre: llegada
+ * con el peor retraso que se registra en la operación (25 % del tiempo
+ * estimado y 25 minutos de salida tardía) más el descanso.
+ */
+function libreDesde(departsAt: Date, estimatedMinutes: number): number {
+  return departsAt.getTime() + (estimatedMinutes * 1.25 + 25 + DESCANSO_MIN) * 60_000;
+}
+
+/**
+ * Vehículo o chofer libre para una salida: de los que ya descansaron, el que
+ * lleva más tiempo sin viajar. Así nunca se solapan dos viajes de la misma
+ * unidad y el trabajo se reparte entre toda la flota.
+ */
+function unidadLibre<T extends { id: string }>(
+  unidades: readonly T[],
+  libres: Map<string, number>,
+  departsAt: Date,
+): T | null {
+  const limite = departsAt.getTime() - PREPARACION_MIN * 60_000;
+  let mejor: T | null = null;
+  let mejorLibre = Number.POSITIVE_INFINITY;
+  for (const unidad of unidades) {
+    const libre = libres.get(unidad.id) ?? Number.NEGATIVE_INFINITY;
+    if (libre <= limite && libre < mejorLibre) {
+      mejor = unidad;
+      mejorLibre = libre;
+    }
+  }
+  return mejor;
+}
+
 async function main(): Promise<void> {
   const existentes = await prisma.agency.count();
   if (existentes > 0) {
@@ -77,7 +114,7 @@ async function main(): Promise<void> {
         name: "Pago Móvil",
         kind: "DIGITAL",
         currency: "VES",
-        details: { banco: "0102 Banco de Venezuela", rif: "J-408112233", telefono: "0412-1112233" },
+        details: { banco: "0102 Banco de Venezuela", rif: "J-40811223-3", telefono: "0412-1112233" },
         sortOrder: 2,
       },
       {
@@ -130,7 +167,7 @@ async function main(): Promise<void> {
     {
       agencia: {
         name: "Expresos Los Andes",
-        taxId: "J-301234567",
+        taxId: "J-30123456-7",
         contactPhone: "+582127778899",
         contactEmail: "contacto@losandes.test",
       },
@@ -139,11 +176,19 @@ async function main(): Promise<void> {
         { plate: "AB123CD", brand: "Mercedes-Benz", model: "O500 RS", seatCount: 44 },
         { plate: "AC456EF", brand: "Scania", model: "K360", seatCount: 40 },
         { plate: "AD789GH", brand: "Volvo", model: "9800", seatCount: 36 },
+        { plate: "AE012JK", brand: "Mercedes-Benz", model: "O500 RSD", seatCount: 44 },
+        { plate: "AF345LM", brand: "Scania", model: "K410", seatCount: 40 },
+        { plate: "AG678NP", brand: "Volvo", model: "B420R", seatCount: 36 },
+        { plate: "AH901QR", brand: "Marcopolo", model: "Paradiso 1350", seatCount: 42 },
       ],
       choferes: [
         { fullName: "Jesús Antonio Mora", idNumber: "V10111222", phone: "+584161112233" },
         { fullName: "Carmen Elena Duque", idNumber: "V13444555", phone: "+584161112244" },
         { fullName: "Rafael Ignacio Pino", idNumber: "V09888777", phone: "+584161112255" },
+        { fullName: "María Gabriela Colmenares", idNumber: "V15222333", phone: "+584161112266" },
+        { fullName: "José Gregorio Quintero", idNumber: "V11777888", phone: "+584161112277" },
+        { fullName: "Douglas Enrique Sivira", idNumber: "V12999000", phone: "+584161112288" },
+        { fullName: "Nubia Josefina Escalona", idNumber: "V14555666", phone: "+584161112299" },
       ],
       rutas: [
         {
@@ -181,7 +226,7 @@ async function main(): Promise<void> {
     {
       agencia: {
         name: "Transporte Caribe",
-        taxId: "J-405556667",
+        taxId: "J-40555666-7",
         contactPhone: "+582812223344",
         contactEmail: "contacto@caribe.test",
       },
@@ -189,10 +234,12 @@ async function main(): Promise<void> {
       vehiculos: [
         { plate: "BA321DC", brand: "Yutong", model: "ZK6122", seatCount: 48 },
         { plate: "BB654FE", brand: "Marcopolo", model: "Paradiso 1200", seatCount: 42 },
+        { plate: "BC987HG", brand: "Busscar", model: "Vissta Buss 340", seatCount: 44 },
       ],
       choferes: [
         { fullName: "Pedro José Marcano", idNumber: "V14222333", phone: "+584241112233" },
         { fullName: "Yubisay Coromoto Ríos", idNumber: "V16333444", phone: "+584241112244" },
+        { fullName: "Wilmer Rafael Bastidas", idNumber: "V17444555", phone: "+584241112255" },
       ],
       rutas: [
         {
@@ -244,37 +291,46 @@ async function main(): Promise<void> {
       choferes.push(await prisma.driver.create({ data: { ...chofer, agencyId: agencia.id } }));
     }
 
-    let indiceUnidad = 0;
+    // Primero las rutas; luego las salidas de toda la agencia en orden de hora,
+    // para asignar a cada una un vehículo y un chofer que ya estén libres.
+    const planificadas: { routeId: string; departsAt: Date; estimatedMinutes: number }[] = [];
     for (const rutaDef of definicion.rutas) {
       const { horas, ...datosRuta } = rutaDef;
       const ruta = await prisma.route.create({
         data: { ...datosRuta, agencyId: agencia.id },
       });
-
       for (let dia = 1; dia <= 7; dia += 1) {
         for (const hora of horas) {
-          const vehiculo = vehiculos[indiceUnidad % vehiculos.length]!;
-          const chofer = choferes[indiceUnidad % choferes.length]!;
-          indiceUnidad += 1;
-          const departsAt = salidaEnDias(dia, hora);
-
-          // Un mismo vehículo no puede tener dos salidas a la misma hora.
-          const ocupado = await prisma.departure.findFirst({
-            where: { vehicleId: vehiculo.id, departsAt },
-          });
-          if (ocupado) continue;
-
-          await prisma.departure.create({
-            data: {
-              routeId: ruta.id,
-              vehicleId: vehiculo.id,
-              driverId: chofer.id,
-              departsAt,
-              capacity: vehiculo.seatCount,
-            },
+          planificadas.push({
+            routeId: ruta.id,
+            departsAt: salidaEnDias(dia, hora),
+            estimatedMinutes: ruta.estimatedMinutes,
           });
         }
       }
+    }
+    planificadas.sort((a, b) => a.departsAt.getTime() - b.departsAt.getTime());
+
+    const libreVehiculo = new Map<string, number>();
+    const libreChofer = new Map<string, number>();
+    for (const salida of planificadas) {
+      const vehiculo = unidadLibre(vehiculos, libreVehiculo, salida.departsAt);
+      const chofer = unidadLibre(choferes, libreChofer, salida.departsAt);
+      // Sin una unidad libre, la salida no se programa: nunca se usa una ocupada.
+      if (!vehiculo || !chofer) continue;
+      const libre = libreDesde(salida.departsAt, salida.estimatedMinutes);
+      libreVehiculo.set(vehiculo.id, libre);
+      libreChofer.set(chofer.id, libre);
+
+      await prisma.departure.create({
+        data: {
+          routeId: salida.routeId,
+          vehicleId: vehiculo.id,
+          driverId: chofer.id,
+          departsAt: salida.departsAt,
+          capacity: vehiculo.seatCount,
+        },
+      });
     }
   }
 

@@ -64,13 +64,21 @@ export function PanelLoginForm() {
 
   const emailInvalid = Boolean(fieldErrors.email || state.error);
   const passwordInvalid = Boolean(fieldErrors.password || state.error);
+  // Los dos campos se marcan inválidos con el error del servidor: los dos apuntan al aviso que lo explica.
+  const serverErrorId = state.error ? "panel-login-error" : undefined;
+  const emailDescribedBy = [fieldErrors.email ? "panel-email-error" : undefined, serverErrorId].filter(Boolean).join(" ");
+  const passwordDescribedBy = [fieldErrors.password ? "panel-password-error" : undefined, serverErrorId]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <form action={formAction} onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
       {state.error ? (
-        <Alert tone="peligro" title="No pudimos darte acceso">
-          {state.error}
-        </Alert>
+        <div id="panel-login-error">
+          <Alert tone="peligro" title="No pudimos darte acceso">
+            {state.error}
+          </Alert>
+        </div>
       ) : null}
 
       <div className="flex flex-col gap-1.5">
@@ -88,7 +96,7 @@ export function PanelLoginForm() {
           defaultValue={state.email ?? ""}
           onChange={() => clearError("email")}
           aria-invalid={emailInvalid ? true : undefined}
-          aria-describedby={fieldErrors.email ? "panel-email-error" : undefined}
+          aria-describedby={emailDescribedBy || undefined}
           className={panelInputClass("min-h-12")}
         />
         {fieldErrors.email ? (
@@ -111,23 +119,25 @@ export function PanelLoginForm() {
             autoComplete="current-password"
             onChange={() => clearError("password")}
             aria-invalid={passwordInvalid ? true : undefined}
-            aria-describedby={fieldErrors.password ? "panel-password-error" : undefined}
+            aria-describedby={passwordDescribedBy || undefined}
             className={panelInputClass("min-h-12 w-full pr-28")}
           />
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
-            aria-pressed={showPassword}
             aria-controls="panel-password"
-            aria-label={showPassword ? "Ocultar la contraseña" : "Mostrar la contraseña"}
             className={panelButtonClass(
               "fantasma",
               "sm",
               "absolute right-1 top-1/2 min-h-11 -translate-y-1/2 px-2.5",
             )}
           >
+            {/* Como `PasswordField` del pasajero: el texto visible dice la acción
+                ("Mostrar" u "Ocultar") y el lector de pantalla oye lo mismo más
+                "contraseña", sin un `aria-pressed` que lo contradiga. */}
             <IconEye className="size-5" />
             {showPassword ? "Ocultar" : "Mostrar"}
+            <span className="sr-only"> contraseña</span>
           </button>
         </div>
         {fieldErrors.password ? (

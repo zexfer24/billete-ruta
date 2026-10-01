@@ -7,12 +7,12 @@ import {
   EmptyState,
   PANEL_TD_CLASS,
   PANEL_TH_CLASS,
-  SectionCard,
   StatusBadge,
   panelButtonClass,
 } from "@/components/panel-ui";
 import { IconBus, IconChevronRight } from "@/components/icons";
-import { sortTodayDepartures } from "./attention";
+import { isOverdue, sortTodayDepartures } from "./attention";
+import { DashboardSection } from "./section-card";
 import { tripMovementText } from "./movements";
 import { ResponsiveTable } from "./responsive-table";
 import { TRIPS_TODAY_SECTION } from "./section-texts";
@@ -37,19 +37,31 @@ function routeLabel(salida: AgencyDepartureRow): string {
   return `${salida.origin} → ${salida.destination}`;
 }
 
-function StatusOf({ salida }: { salida: AgencyDepartureRow }) {
+/**
+ * Estado de la salida. Una programada cuya hora ya pasó se marca "Atrasada"
+ * en tono de alerta, igual que la avisa "Lo que necesita tu atención": si no,
+ * la misma salida salía como "Programada" justo debajo del aviso.
+ */
+function StatusOf({ salida, now }: { salida: AgencyDepartureRow; now: Date }) {
+  if (isOverdue(salida, now)) return <StatusBadge label="Atrasada" tone="alerta" />;
   return <StatusBadge label={departureStatusLabel(salida.status)} tone={departureStatusTone(salida.status)} />;
 }
 
-/** "Se muestran 4 de 12 salidas de hoy. Ver todas", solo si hay más de las visibles. */
+/** Movimientos de la salida; si está atrasada, a qué hora debía salir. */
+function movementOf(salida: AgencyDepartureRow, now: Date): string {
+  if (isOverdue(salida, now)) return `Debía salir a las ${formatCaracasTime24(salida.departsAt)}`;
+  return tripMovementText(salida);
+}
+
+/**
+ * "Se muestran 4 de 12 salidas de hoy", solo si hay más de las visibles. Sin
+ * enlace propio: "Ver todas las salidas" ya está en la cabecera de la sección.
+ */
 function MoreNote({ shown, total, className }: { shown: number; total: number; className: string }) {
   if (total <= shown) return null;
   return (
     <p className={`text-sm text-tinta-suave ${className}`}>
-      Se muestran {shown} de {total} salidas de hoy.{" "}
-      <Link href="/panel/salidas" className={TEXT_LINK_CLASS}>
-        Ver todas
-      </Link>
+      Se muestran {shown} de {total} salidas de hoy.
     </p>
   );
 }
@@ -62,9 +74,11 @@ function MoreNote({ shown, total, className }: { shown: number; total: number; c
  */
 export async function TripsTodayBlock({
   departures,
+  now,
   createDepartureHref,
 }: {
   departures: Promise<AgencyDepartureRow[]>;
+  now: Date;
   createDepartureHref: string;
 }) {
   const salidas = sortTodayDepartures(await departures);
@@ -72,7 +86,7 @@ export async function TripsTodayBlock({
   const tarjetas = salidas.slice(0, MAX_TARJETAS);
 
   return (
-    <SectionCard
+    <DashboardSection
       title={TRIPS_TODAY_SECTION.title}
       description={TRIPS_TODAY_SECTION.description}
       action={
@@ -108,12 +122,12 @@ export async function TripsTodayBlock({
                           <span className="tabular min-w-0 text-base font-semibold text-tinta">
                             {formatCaracasTime24(salida.departsAt)} · {routeLabel(salida)}
                           </span>
-                          <StatusOf salida={salida} />
+                          <StatusOf salida={salida} now={now} />
                         </span>
                         <span className="text-sm text-tinta-suave">
                           {salida.vehiclePlate} · {salida.driverName}
                         </span>
-                        <span className="tabular text-[15px] font-medium text-tinta">{tripMovementText(salida)}</span>
+                        <span className="tabular text-[15px] font-medium text-tinta">{movementOf(salida, now)}</span>
                       </span>
                       <IconChevronRight className="size-5 shrink-0 text-marca-700" />
                     </Link>
@@ -158,9 +172,9 @@ export async function TripsTodayBlock({
                         </span>
                       </td>
                       <td className={PANEL_TD_CLASS}>
-                        <StatusOf salida={salida} />
+                        <StatusOf salida={salida} now={now} />
                       </td>
-                      <td className={`${PANEL_TD_CLASS} tabular`}>{tripMovementText(salida)}</td>
+                      <td className={`${PANEL_TD_CLASS} tabular`}>{movementOf(salida, now)}</td>
                     </ClickableRow>
                   ))}
                 </tbody>
@@ -172,6 +186,6 @@ export async function TripsTodayBlock({
           <MoreNote shown={filas.length} total={salidas.length} className="hidden xl:block" />
         </div>
       )}
-    </SectionCard>
+    </DashboardSection>
   );
 }

@@ -30,12 +30,6 @@ const paramsSchema = z.object({
   dia: z.string().regex(DAY_KEY_PATTERN).optional().catch(undefined),
 });
 
-/**
- * Horizonte de salidas del asistente: una semana. Lo que sale más tarde aún
- * no se ofrece, para que la lista de días siga siendo corta.
- */
-const HORIZONTE_MS = 7 * 24 * 60 * 60 * 1000;
-
 export default async function ReservarPage({
   searchParams,
 }: {
@@ -46,22 +40,16 @@ export default async function ReservarPage({
   const params = parsed.success ? parsed.data : {};
   const now = new Date();
 
-  const [salidasSemana, sinHorizonte, origenesDestinos, tasaSalida, documentos, tasaVes, tasaCop] = await Promise.all([
-    listBookableDepartures({ to: new Date(now.getTime() + HORIZONTE_MS), onlyWithSeats: false }, now),
-    // Un enlace con `departureId` (por ejemplo, de la lista de espera) puede apuntar más allá de la semana.
-    params.departureId ? listBookableDepartures({ onlyWithSeats: false }, now) : Promise.resolve([]),
+  // Todas las salidas reservables, sin tope de días: el paso 1 muestra un día
+  // a la vez y como mucho ocho salidas por día, así la lista no se recarga.
+  const [salidas, origenesDestinos, tasaSalida, documentos, tasaVes, tasaCop] = await Promise.all([
+    listBookableDepartures({ onlyWithSeats: false }, now),
     listOriginsAndDestinations(),
     getCurrentDepartureTax(),
     listDocuments(pasajero.id),
     getCurrentExchangeRate("VES", now),
     getCurrentExchangeRate("COP", now),
   ]);
-
-  const pedida =
-    params.departureId && !salidasSemana.some((s) => s.id === params.departureId)
-      ? sinHorizonte.find((s) => s.id === params.departureId)
-      : undefined;
-  const salidas = pedida ? [...salidasSemana, pedida] : salidasSemana;
 
   const departures: DepartureVM[] = salidas.map((s) => ({
     id: s.id,
@@ -104,19 +92,14 @@ export default async function ReservarPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">Reservar un viaje</h1>
-        <p className="leading-relaxed text-tinta-suave">
-          Cuatro pasos: eliges la salida, dices quiénes viajan, aceptas las condiciones y eliges
-          cómo pagar.
-        </p>
-      </div>
+      {/* Sin párrafo de introducción: los pasos del Stepper ya dicen qué viene. */}
+      <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">Reservar un viaje</h1>
 
       {departures.length === 0 ? (
         <EmptyState
           icon={<IconBus />}
           title="No hay salidas disponibles por ahora"
-          description="Las agencias todavía no han programado salidas. Vuelve a mirar más tarde."
+          description="Vuelve a mirar más tarde."
           action={
             <Link href="/mi" className={buttonClass("secundario")}>
               Volver al inicio

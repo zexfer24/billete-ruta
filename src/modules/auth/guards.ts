@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ForbiddenError, can, panelHomeFor, type Permission } from "./permissions";
@@ -11,13 +12,38 @@ import {
 } from "./sessions";
 
 /**
+ * Resolución de sesión memorizada por valor de la cookie durante un mismo
+ * render de servidor: el layout y la página piden la sesión en la misma
+ * navegación, y así se consulta (y se actualiza `lastSeenAt`) una sola vez.
+ * Fuera del render (acciones de servidor, rutas de API) `cache` no guarda
+ * nada y cada llamada consulta de nuevo. Se memoriza el ayudante, no las
+ * guardas completas, porque éstas redirigen lanzando y reciben un permiso.
+ */
+const resolvePanelSessionCached = cache((token: string | undefined) =>
+  resolvePanelSession(token),
+);
+
+const resolvePassengerSessionCached = cache((token: string | undefined) =>
+  resolvePassengerSession(token),
+);
+
+async function panelSessionFromCookie(): Promise<PanelSessionUser | null> {
+  const store = await cookies();
+  return resolvePanelSessionCached(store.get(PANEL_COOKIE)?.value);
+}
+
+async function passengerSessionFromCookie(): Promise<PassengerSessionUser | null> {
+  const store = await cookies();
+  return resolvePassengerSessionCached(store.get(PASSENGER_COOKIE)?.value);
+}
+
+/**
  * Usuario de panel con el permiso exigido. Sin sesión, redirige al acceso.
  * Con sesión pero sin el permiso, redirige al inicio de su propio rol en vez
  * de lanzar: un acceso cruzado entre roles no debe romper la pantalla.
  */
 export async function requirePanelUser(permission: Permission): Promise<PanelSessionUser> {
-  const store = await cookies();
-  const usuario = await resolvePanelSession(store.get(PANEL_COOKIE)?.value);
+  const usuario = await panelSessionFromCookie();
   if (!usuario) redirect("/panel/ingresar");
   if (!can(usuario.role, permission)) redirect(panelHomeFor(usuario.role));
   return usuario;
@@ -25,21 +51,18 @@ export async function requirePanelUser(permission: Permission): Promise<PanelSes
 
 /** Pasajero con sesión activa, o redirección al acceso. */
 export async function requirePassenger(): Promise<PassengerSessionUser> {
-  const store = await cookies();
-  const cuenta = await resolvePassengerSession(store.get(PASSENGER_COOKIE)?.value);
+  const cuenta = await passengerSessionFromCookie();
   if (!cuenta) redirect("/ingresar");
   return cuenta;
 }
 
 /** Igual que requirePanelUser pero sin redirigir, para usar en rutas de API. */
 export async function currentPanelUser(): Promise<PanelSessionUser | null> {
-  const store = await cookies();
-  return resolvePanelSession(store.get(PANEL_COOKIE)?.value);
+  return panelSessionFromCookie();
 }
 
 export async function currentPassenger(): Promise<PassengerSessionUser | null> {
-  const store = await cookies();
-  return resolvePassengerSession(store.get(PASSENGER_COOKIE)?.value);
+  return passengerSessionFromCookie();
 }
 
 /**

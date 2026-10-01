@@ -54,7 +54,12 @@ interface IsotipoProps {
   decorative?: boolean;
 }
 
-/** Isotipo: solo el frente del autobús, para cabeceras compactas y el menú móvil. */
+/**
+ * Isotipo: solo el frente del autobús, para cabeceras compactas y el menú
+ * móvil. Siempre va arriba y a la vista, así que carga sin diferir
+ * (`loading="eager"`): con la carga diferida de `next/image` aparecía un
+ * instante después que la banda morada de la cabecera.
+ */
 export function Isotipo({ tone = "marca", className, decorative }: IsotipoProps) {
   return (
     <Image
@@ -63,6 +68,7 @@ export function Isotipo({ tone = "marca", className, decorative }: IsotipoProps)
       width={930}
       height={1262}
       unoptimized
+      loading="eager"
       className={className}
     />
   );

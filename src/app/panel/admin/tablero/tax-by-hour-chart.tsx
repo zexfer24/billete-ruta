@@ -11,6 +11,19 @@ interface HourTotal {
   totalUsd: Prisma.Decimal;
 }
 
+/** Frase de ayuda del gráfico, según abarque un día o varios. La usa también su silueta. */
+export function chartDescription(severalDays: boolean): string {
+  return severalDays
+    ? "Suma de todos los días del periodo, según la hora en que se pagó cada reserva."
+    : "Según la hora en que se pagó cada reserva.";
+}
+
+/** Texto de la leyenda bajo las barras, compartido con la silueta. */
+export const CHART_CAPTION = "Horas del día, de 00 a 23. La barra más oscura es la hora con más cobro.";
+
+/** Texto del desplegable con las cifras exactas, compartido con la silueta. */
+export const CHART_DETAIL_LABEL = "Ver el monto de cada hora";
+
 /**
  * Gráfico de barras de la tasa de salida cobrada por hora del día. Las 24
  * barras reparten el ancho disponible, así que nunca obligan a desplazarse de
@@ -28,9 +41,7 @@ export function TaxByHourChart({
   hours: HourTotal[];
   severalDays: boolean;
 }) {
-  const description = severalDays
-    ? "Suma de todos los días del periodo, según la hora en que se pagó cada reserva."
-    : "Según la hora en que se pagó cada reserva.";
+  const description = chartDescription(severalDays);
 
   const total = hours.reduce((sum, h) => sum.add(h.totalUsd), ZERO);
   const peak = hours.reduce<HourTotal | null>(
@@ -52,14 +63,14 @@ export function TaxByHourChart({
 
   const peakValue = Number(peak.totalUsd);
   const peakLabel = formatMoney(peak.totalUsd, "USD");
-  const summary = `La hora con más cobro fue las ${peak.hour}, con ${peakLabel}. En total se cobraron ${formatMoney(total, "USD")}.`;
+  const summary = `Se cobró más a las ${peak.hour}: ${peakLabel}. En total se cobraron ${formatMoney(total, "USD")}.`;
   const paidHours = hours.filter((h) => h.totalUsd.gt(ZERO));
 
   return (
     <SectionCard title={title} description={description}>
       <div className="flex flex-col gap-5">
         <p className="text-base leading-relaxed text-tinta">
-          La hora con más cobro fue las <strong className="tabular">{peak.hour}</strong>, con{" "}
+          Se cobró más a las <strong className="tabular">{peak.hour}</strong>:{" "}
           <strong className="tabular">{peakLabel}</strong>. En total se cobraron{" "}
           <strong className="tabular">{formatMoney(total, "USD")}</strong>.
         </p>
@@ -113,14 +124,12 @@ export function TaxByHourChart({
               </div>
             </div>
           </div>
-          <figcaption className="text-sm text-tinta-suave">
-            Horas del día, de 00 a 23. La barra más oscura es la hora con más cobro.
-          </figcaption>
+          <figcaption className="text-sm text-tinta-suave">{CHART_CAPTION}</figcaption>
         </figure>
 
         <details className="group">
           <summary className={DISCLOSURE_SUMMARY_CLASS}>
-            Ver el monto de cada hora
+            {CHART_DETAIL_LABEL}
             <DisclosureChevron />
           </summary>
           <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">

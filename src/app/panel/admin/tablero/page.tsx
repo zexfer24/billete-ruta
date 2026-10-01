@@ -1,20 +1,25 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PanelPageHeader } from "@/components/panel-ui";
-import { formatMoney } from "@/lib/decimal";
 import { requirePanelUser } from "@/modules/auth";
 import { departureTaxRevenue, last24h } from "@/modules/reports";
 import { PeriodFilter } from "../_shared/period-filter";
-import { periodParamsSchema, rangeKey, resolveAdminRange } from "../_shared/period";
-import { LiveTaxCard } from "./live-tax";
+import { periodParamsSchema, rangeKey, resolveAdminRange, spansSeveralDays } from "../_shared/period";
 import { PeriodData, PeriodDataSkeleton } from "./period-data";
+import { LiveTax, LiveTaxSkeleton, RecurringCard, RecurringCardSkeleton } from "./top-cards";
 
 export const metadata: Metadata = { title: "Tablero del terminal" };
 
 /**
- * Inicio del administrador: la tasa de salida cobrada en vivo (últimas 24
- * horas) arriba y destacada; debajo, el periodo elegido con sus cifras, los
- * recorridos completados, los usuarios nuevos y el gráfico por hora.
+ * Inicio del administrador. Arriba, lo que no depende del periodo: la tasa de
+ * salida cobrada en vivo (últimas 24 horas), destacada, y los usuarios
+ * recurrentes. Debajo, el periodo elegido con sus cifras, los recorridos
+ * completados, los usuarios nuevos y el gráfico por hora.
+ *
+ * Ninguna consulta se espera antes de pintar la página: la de la tasa se
+ * inicia aquí y se resuelve dentro de su propio `<Suspense>` sin clave, que
+ * sigue montado al cambiar de periodo; solo el bloque del periodo, con clave,
+ * vuelve a su silueta.
  */
 export default async function TableroAdminPage({
   searchParams,
@@ -26,7 +31,7 @@ export default async function TableroAdminPage({
   const range = resolveAdminRange(parsed.success ? parsed.data : {});
 
   const window24h = last24h();
-  const tax = await departureTaxRevenue(window24h.from, window24h.to);
+  const tax = departureTaxRevenue(window24h.from, window24h.to);
 
   return (
     <div className="flex flex-col gap-6">
@@ -35,14 +40,16 @@ export default async function TableroAdminPage({
         description="Lo que pasa en el terminal con todas las agencias: la tasa de salida cobrada, los viajes y los pasajeros nuevos."
       />
 
-      <LiveTaxCard
-        initial={{
-          totalUsd: formatMoney(tax.totalUsd, "USD"),
-          reservations: tax.reservations,
-          passengers: tax.passengers,
-          generatedAt: window24h.to.toISOString(),
-        }}
-      />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <Suspense fallback={<LiveTaxSkeleton />}>
+            <LiveTax tax={tax} generatedAt={window24h.to} />
+          </Suspense>
+        </div>
+        <Suspense fallback={<RecurringCardSkeleton />}>
+          <RecurringCard />
+        </Suspense>
+      </div>
 
       <PeriodFilter
         path="/panel/admin/tablero"
@@ -50,7 +57,10 @@ export default async function TableroAdminPage({
         caption="Viajes, usuarios nuevos y gráfico"
       />
 
-      <Suspense key={rangeKey(range)} fallback={<PeriodDataSkeleton />}>
+      <Suspense
+        key={rangeKey(range)}
+        fallback={<PeriodDataSkeleton severalDays={range.period !== "24h" && spansSeveralDays(range)} />}
+      >
         <PeriodData range={range} panelUserId={panelUser.id} />
       </Suspense>
     </div>

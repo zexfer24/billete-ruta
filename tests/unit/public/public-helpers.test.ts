@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  afterRegisterHref,
   firstParam,
   loginHref,
   passengerHref,
@@ -12,6 +13,7 @@ import {
   isExistingAccountError,
   REGISTER_FIELDS,
   registerDomainErrorField,
+  registerDomainFieldError,
 } from "@/app/_publico/form-errors";
 import {
   claimActionLabel,
@@ -43,6 +45,16 @@ describe("enlaces con next", () => {
   it("lleva a /mi directo con sesión y pasando por ingresar sin ella", () => {
     expect(passengerHref("/mi/reservar", true)).toBe("/mi/reservar");
     expect(passengerHref("/mi/reservar", false)).toBe("/ingresar?next=%2Fmi%2Freservar");
+  });
+
+  it("tras registrarse va a next, a Documentos si falta la cédula o al inicio si ya está", () => {
+    expect(afterRegisterHref("/mi/reservar?departureId=abc", true)).toBe("/mi/reservar?departureId=abc");
+    expect(afterRegisterHref("/mi/reservar", false)).toBe("/mi/reservar");
+    expect(afterRegisterHref(undefined, true)).toBe("/mi/documentos");
+    // Cuenta activada tras la venta en taquilla: ya tiene la foto de la cédula.
+    expect(afterRegisterHref(undefined, false)).toBe("/mi");
+    expect(afterRegisterHref("https://evil.com", false)).toBe("/mi");
+    expect(afterRegisterHref("//evil.com", true)).toBe("/mi/documentos");
   });
 
   it("toma el primer valor de un parámetro repetido", () => {
@@ -86,6 +98,16 @@ describe("errores de los formularios públicos", () => {
         "Esta cédula tiene una cuenta creada en taquilla y los datos no coinciden. Acércate a la taquilla de tu agencia.",
       ),
     ).toBeNull();
+  });
+
+  it("muestra los errores de formato del registro con el ejemplo de la ayuda que reemplazan", () => {
+    expect(registerDomainFieldError("La cédula no tiene un formato válido.")).toEqual({
+      field: "idNumber",
+      text: "La cédula no es válida. Escribe la letra y el número, por ejemplo V12345678.",
+    });
+    expect(registerDomainFieldError("El año de nacimiento no es válido.")?.text).toContain("por ejemplo 1990");
+    expect(registerDomainFieldError("El número de teléfono no es válido.")?.field).toBe("phone");
+    expect(registerDomainFieldError("Ya existe una cuenta con la cédula V1.")).toBeNull();
   });
 
   it("reconoce el aviso de cuenta existente", () => {

@@ -11,7 +11,7 @@ export default function FlotaLoading() {
         description="Quién está en ruta, quién está libre y qué salidas vienen."
         action
       />
-      <FleetBodySkeleton vista="vehiculos" />
+      <FleetBodySkeleton />
     </SkeletonScreen>
   );
 }

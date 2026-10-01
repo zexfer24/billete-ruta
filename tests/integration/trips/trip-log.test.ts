@@ -241,6 +241,15 @@ describe("abordaje", () => {
       agencia.id,
     );
     expect(resultado).toEqual({ error: expect.stringMatching(/inválido/i) });
+    expect("holderName" in resultado).toBe(false);
+  });
+
+  it("no revela el titular de un código que no existe", async () => {
+    const { salida, agencia } = await escenario();
+
+    const resultado = await findForBoarding(salida.id, "TR-0000-1PAX-NADA", agencia.id);
+    expect(resultado).toEqual({ error: expect.stringMatching(/no existe/i) });
+    expect("holderName" in resultado).toBe(false);
   });
 
   it("rechaza un serial de otra salida y de otra agencia", async () => {
@@ -248,12 +257,22 @@ describe("abordaje", () => {
     const reserva = await reservaPagada(salida.id, fisico.id, agencia.id, operador.id);
 
     const otra = await createDepartureFixture({ agencyId: agencia.id, capacity: 10 });
+    const titular = await prisma.reservation.findUniqueOrThrow({
+      where: { id: reserva.reservationId },
+      include: { account: true },
+    });
     const enOtraSalida = await findForBoarding(otra.salida.id, reserva.code, agencia.id);
-    expect(enOtraSalida).toEqual({ error: expect.stringMatching(/otra salida/i) });
+    // Misma agencia: el escáner puede mostrar de quién es el ticket.
+    expect(enOtraSalida).toEqual({
+      error: expect.stringMatching(/otra salida/i),
+      holderName: titular.account.fullName,
+    });
 
     const otraAgencia = await createAgencyFixture();
     const desdeOtraAgencia = await findForBoarding(salida.id, reserva.code, otraAgencia.id);
+    // Otra agencia: nunca se revela el nombre del titular.
     expect(desdeOtraAgencia).toEqual({ error: expect.stringMatching(/otra agencia/i) });
+    expect("holderName" in desdeOtraAgencia).toBe(false);
   });
 
   it("no permite abordar una reserva que no está pagada", async () => {
@@ -268,7 +287,10 @@ describe("abordaje", () => {
     });
 
     const resultado = await findForBoarding(salida.id, reserva.code, agencia.id);
-    expect(resultado).toEqual({ error: expect.stringMatching(/PENDIENTE_PAGO/) });
+    expect(resultado).toEqual({
+      error: expect.stringMatching(/PENDIENTE_PAGO/),
+      holderName: cuenta.fullName,
+    });
   });
 
   it("marca abordados a los pasajeros del grupo", async () => {

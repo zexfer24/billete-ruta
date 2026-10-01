@@ -1,11 +1,9 @@
 import type { ReactNode } from "react";
-import { Alert } from "@/components/alert";
 import { SkeletonScreen } from "@/components/skeleton";
 import { FieldPreview, PrimaryButtonPreview } from "../_publico/form-skeleton";
 import { PublicCard, PublicShell } from "../_publico/public-shell";
 import {
   COUNTER_NOTICE_TEXT,
-  COUNTER_NOTICE_TITLE,
   REGISTER_DESCRIPTION,
   REGISTER_GROUPS,
   REGISTER_HINTS,
@@ -14,21 +12,16 @@ import {
 
 /**
  * Silueta del registro (spec 6.5 y 2.2). La pantalla no consulta datos, así
- * que se pinta el formulario real quieto: el logo, el título, el aviso de
- * taquilla, los tres grupos con sus etiquetas y ayudas, los campos vacíos y
- * el botón "Crear mi cuenta". Solo el lector de pantalla oye el aviso de
- * carga.
+ * que se pinta el formulario real quieto: el logo, el título, los tres
+ * grupos con sus etiquetas y ayudas, los campos vacíos, el botón "Crear mi
+ * cuenta" y, al pie, el enlace a ingresar y la nota de taquilla. Solo el
+ * lector de pantalla oye el aviso de carga.
  */
 export default function RegistroLoading() {
   return (
     <SkeletonScreen label="Cargando el registro…">
       <PublicShell>
         <PublicCard title={REGISTER_TITLE} description={REGISTER_DESCRIPTION}>
-          <div aria-hidden="true">
-            <Alert tone="info" role="none" title={COUNTER_NOTICE_TITLE}>
-              {COUNTER_NOTICE_TEXT}
-            </Alert>
-          </div>
           <div aria-hidden="true" className="flex flex-col gap-6">
             <PreviewGroup title={REGISTER_GROUPS.datos}>
               <FieldPreview label="Cédula" hint={REGISTER_HINTS.idNumber} />
@@ -46,12 +39,15 @@ export default function RegistroLoading() {
             <PrimaryButtonPreview>Crear mi cuenta</PrimaryButtonPreview>
           </div>
         </PublicCard>
-        <p aria-hidden="true" className="text-center text-base text-tinta-suave">
-          ¿Ya tienes cuenta?{" "}
-          <span className="inline-flex min-h-11 items-center px-1 font-semibold text-marca-700 underline decoration-marca-200 decoration-2 underline-offset-4">
-            Ingresa aquí
-          </span>
-        </p>
+        <div aria-hidden="true" className="flex flex-col gap-2 text-center">
+          <p className="text-base text-tinta-suave">
+            ¿Ya tienes cuenta?{" "}
+            <span className="inline-flex min-h-11 items-center px-1 font-semibold text-marca-700 underline decoration-marca-200 decoration-2 underline-offset-4">
+              Ingresa aquí
+            </span>
+          </p>
+          <p className="text-sm leading-relaxed text-tinta-suave">{COUNTER_NOTICE_TEXT}</p>
+        </div>
       </PublicShell>
     </SkeletonScreen>
   );

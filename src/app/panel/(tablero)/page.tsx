@@ -213,12 +213,18 @@ export default async function PanelPage({
           />
         </div>
         <Suspense key={periodo} fallback={<FiguresSkeleton />}>
-          <FiguresBlock summary={resumen} tickets={tickets} periodo={periodo} now={now} />
+          <FiguresBlock
+            summary={resumen}
+            tickets={tickets}
+            todayDepartures={salidasHoy}
+            periodo={periodo}
+            now={now}
+          />
         </Suspense>
       </section>
 
       <Suspense fallback={<TripsTodaySkeleton />}>
-        <TripsTodayBlock departures={salidasHoy} createDepartureHref={registrarHref("salida")} />
+        <TripsTodayBlock departures={salidasHoy} now={now} createDepartureHref={registrarHref("salida")} />
       </Suspense>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">

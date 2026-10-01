@@ -4,7 +4,8 @@ import { Alert } from "@/components/alert";
 import { panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { createVehicleAction, updateVehicleAction } from "@/app/panel/flota/actions";
 import { PanelField, PanelFixedValue, errorFieldFor, panelFieldAria } from "./panel-field";
-import { UnitStatusChoice, upcomingTitle } from "./unit-status-choice";
+import { upcomingTitle } from "./upcoming-title";
+import { UnitStatusChoice } from "./unit-status-choice";
 
 /** Campos del formulario, para ubicar el error de `?campo=`. */
 const CAMPOS = ["plate", "brand", "model", "seatCount", "active"] as const;
@@ -31,7 +32,7 @@ export function VehicleForm(props: VehicleFormProps) {
   const campoConError = errorFieldFor(props.error, props.errorField, CAMPOS);
   const errorDe = (campo: (typeof CAMPOS)[number]) => (campoConError === campo ? props.error : undefined);
 
-  const ayudaPlaca = "Entre 5 y 10 letras y números. Puedes escribirla con o sin guiones.";
+  const ayudaPlaca = "Entre 5 y 10 letras y números, con o sin guiones. Por ejemplo, AA000AA.";
   const ayudaPuestos = "Solo los puestos para pasajeros, sin contar al chofer. Entre 4 y 80.";
 
   return (
@@ -55,7 +56,6 @@ export function VehicleForm(props: VehicleFormProps) {
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
-            placeholder="AB123CD"
             className={panelInputClass("tabular uppercase")}
             {...panelFieldAria("vehiculo-placa", ayudaPlaca, errorDe("plate"))}
           />
@@ -68,7 +68,6 @@ export function VehicleForm(props: VehicleFormProps) {
             name="brand"
             required
             autoComplete="off"
-            placeholder="Encava"
             defaultValue={isEdit ? props.vehicle.brand : undefined}
             className={panelInputClass()}
             {...panelFieldAria("vehiculo-marca", undefined, errorDe("brand"))}
@@ -80,7 +79,6 @@ export function VehicleForm(props: VehicleFormProps) {
             name="model"
             required
             autoComplete="off"
-            placeholder="ENT-610"
             defaultValue={isEdit ? props.vehicle.model : undefined}
             className={panelInputClass()}
             {...panelFieldAria("vehiculo-modelo", undefined, errorDe("model"))}

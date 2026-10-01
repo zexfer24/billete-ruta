@@ -26,6 +26,34 @@ export function joinPhrases(parts: ReadonlyArray<string | null | undefined | fal
 }
 
 /**
+ * Frase de la cifra "Salidas". Con `overdueToday` (solo en el periodo "hoy",
+ * donde el conteo coincide con las salidas del día), las programadas se
+ * separan en atrasadas y por salir, igual que avisa "Lo que necesita tu
+ * atención": así la cifra no repite su número ("8 · 8 programadas") ni
+ * contradice el aviso. En los otros periodos, las programadas de días pasados
+ * no se pueden separar así, y se dice solo cuántas hay en cada estado.
+ */
+export function departuresDetail(
+  counts: { programadas: number; embarcando: number; enRuta: number; finalizadas: number },
+  overdueToday: number | null,
+): string {
+  const atrasadas = overdueToday === null ? 0 : Math.min(Math.max(0, overdueToday), counts.programadas);
+  const programadas = counts.programadas - atrasadas;
+  return (
+    joinPhrases([
+      atrasadas > 0 && countLabel(atrasadas, "atrasada", "atrasadas"),
+      programadas > 0 &&
+        (overdueToday === null
+          ? countLabel(programadas, "programada", "programadas")
+          : countLabel(programadas, "por salir", "por salir")),
+      counts.embarcando > 0 && `${counts.embarcando} embarcando`,
+      counts.enRuta > 0 && `${counts.enRuta} en ruta`,
+      counts.finalizadas > 0 && countLabel(counts.finalizadas, "finalizada", "finalizadas"),
+    ]) || "No hay salidas en este periodo"
+  );
+}
+
+/**
  * Frase de "Reservas por cobrar". La cifra cuenta reservas cuya salida aún no
  * parte y que todavía deben dinero (sin pago, con un pago en revisión, abonadas
  * o por pagar en la taquilla). El detalle habla de esas mismas reservas: la

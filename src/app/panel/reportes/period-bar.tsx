@@ -15,10 +15,16 @@ const CHIP_CLASS =
   "foco inline-flex min-h-11 shrink-0 items-center gap-2 rounded-pastilla border px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none";
 
 /**
+ * Rejilla de las cuatro pastillas: en el teléfono, dos filas de dos del mismo
+ * ancho (antes "30 días" quedaba sola en un renglón); desde `sm`, en fila.
+ */
+const CHIP_LIST_CLASS = "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap";
+
+/**
  * Elección del periodo de un reporte. Es un filtro, no una navegación, así que
  * se ve distinto de las pestañas de tipo de reporte: la etiqueta "Periodo",
- * pastillas compactas que bajan de línea si no caben (nunca se esconden a la
- * derecha) y, en la misma fila, "Otras fechas", que despliega el formulario de
+ * pastillas compactas (dos por fila en el teléfono, en fila desde `sm`; nunca
+ * se esconden a la derecha) y "Otras fechas", que despliega el formulario de
  * rango debajo. El formulario arranca abierto si ya hay fechas elegidas.
  */
 export function PeriodBar({ vista, range }: { vista: ReportView; range: ReportRange }) {
@@ -41,8 +47,8 @@ export function PeriodBar({ vista, range }: { vista: ReportView; range: ReportRa
         Periodo
       </p>
       <div className="flex flex-wrap items-start gap-2">
-        <nav aria-labelledby={etiquetaId}>
-          <ul className="flex flex-wrap gap-2">
+        <nav aria-labelledby={etiquetaId} className="w-full sm:w-auto">
+          <ul className={CHIP_LIST_CLASS}>
             {opciones.map((opcion) => (
               <li key={opcion.href}>
                 <Link
@@ -50,6 +56,7 @@ export function PeriodBar({ vista, range }: { vista: ReportView; range: ReportRa
                   aria-current={opcion.active ? "page" : undefined}
                   className={cx(
                     CHIP_CLASS,
+                    "w-full justify-center sm:w-auto sm:justify-start",
                     opcion.active
                       ? "border-marca-600 bg-marca-600 text-white"
                       : "border-borde-control bg-superficie text-tinta hover:bg-marca-50",

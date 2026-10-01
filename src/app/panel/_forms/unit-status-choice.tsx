@@ -1,5 +1,4 @@
 import { FieldError } from "@/components/ui";
-import { plural } from "../_shared/day-label";
 
 /**
  * Elección del estado de un vehículo o chofer al editarlo, con las mismas
@@ -55,13 +54,3 @@ export function UnitStatusChoice({
   );
 }
 
-/**
- * Título del aviso de salidas asignadas al editar una unidad. La flota trae
- * como mucho las 3 próximas de los siguientes 7 días, así que 3 se lee como
- * "3 o más".
- */
-export function upcomingTitle(count: number): string {
-  const cuantas =
-    count >= 3 ? `${count} o más salidas asignadas` : plural(count, "salida asignada", "salidas asignadas");
-  return `Tiene ${cuantas} en los próximos 7 días`;
-}

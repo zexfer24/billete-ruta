@@ -39,15 +39,15 @@ const ORDEN_RESUMEN: readonly UnitState[] = ["EN_RUTA", "EMBARCANDO", "ASIGNADO"
 
 /**
  * Viaje en curso o próxima salida de una unidad, compartido por las tablas y
- * las tarjetas de vehículos y choferes. Recibe la fila completa: si trae el
- * total de próximas salidas (`upcomingCount`), la cifra "N salidas más" es
- * exacta aunque `upcoming` venga recortada.
+ * las tarjetas de vehículos y choferes. Recibe la fila completa, que trae el
+ * total de próximas salidas (`upcomingCount`): la cifra "N salidas más" es
+ * exacta aunque `upcoming` venga recortada a 3.
  */
 function TripSummary({
   unit,
   now,
 }: {
-  unit: { current: UnitDeparture | null; upcoming: UnitDeparture[]; upcomingCount?: number };
+  unit: { current: UnitDeparture | null; upcoming: UnitDeparture[]; upcomingCount: number };
   now: Date;
 }) {
   const viaje = describeUnitTrip(unit, now);
@@ -382,7 +382,7 @@ export async function FleetBody({
           <VehicleForm
             mode="edit"
             vehicle={vehiculoEnEdicion}
-            upcomingCount={vehiculoEnEdicion.upcoming.length}
+            upcomingCount={vehiculoEnEdicion.upcomingCount}
             error={error}
             errorField={errorField}
           />
@@ -394,7 +394,7 @@ export async function FleetBody({
           <DriverForm
             mode="edit"
             driver={choferEnEdicion}
-            upcomingCount={choferEstado?.upcoming.length ?? 0}
+            upcomingCount={choferEstado?.upcomingCount ?? 0}
             error={error}
             errorField={errorField}
           />

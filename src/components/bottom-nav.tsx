@@ -75,6 +75,9 @@ export function BottomNav({ noticeCount = 0 }: BottomNavProps) {
   return (
     <nav
       aria-label="Principal"
+      // Activa el relleno de desplazamiento de globals.css para que el foco
+      // nunca quede tapado por esta barra fija (WCAG 2.2, 2.4.11).
+      data-barra-inferior=""
       className="fixed inset-x-0 bottom-0 z-30 border-t border-borde bg-superficie pb-[env(safe-area-inset-bottom)] shadow-2 md:mx-auto md:w-full md:max-w-2xl md:rounded-t-tarjeta md:border-x md:px-2"
     >
       <div className="mx-auto flex w-full max-w-md md:max-w-none">

@@ -14,6 +14,8 @@ import type { ProofCoverage, ProofHistoryItem, ProofReview } from "@/modules/pay
 import { countLabel } from "../_dashboard/text";
 import { approveProofAction, rejectProofAction } from "./actions";
 import { Disclosure, DetailList } from "./disclosure";
+import { ProofDecisionBar } from "./proof-decision";
+import { showsUsdEquivalent } from "./money";
 import { pasajerosUrlFromHidden } from "./urls";
 
 /**
@@ -45,6 +47,16 @@ function approvalConsequence(coverage: ProofCoverage, amountUsd: Prisma.Decimal)
     case "EXCEDE_SALDO":
       return `Este pago supera el saldo en ${formatMoney(coverage.excessUsd, "USD")}. El saldo quedará en ${formatMoney(coverage.balanceAfterUsd, "USD")} y se emitirá el ticket.`;
   }
+}
+
+/** Descripción de la confirmación de "Aprobar pago": las consecuencias y que no se deshace. */
+function approveDescription(coverage: ProofCoverage | null, amountUsd: Prisma.Decimal) {
+  return (
+    <p>
+      {coverage ? approvalConsequence(coverage, amountUsd) : `Se sumarán ${formatMoney(amountUsd, "USD")} a lo pagado.`}{" "}
+      Esta acción no se puede deshacer.
+    </p>
+  );
 }
 
 /**
@@ -80,14 +92,7 @@ export function ProofActions({
         }
         triggerClassName={panelButtonClass("exito", "lg", "w-full sm:w-auto")}
         title={`¿Aprobar el pago de la reserva ${code}?`}
-        description={
-          <p>
-            {coverage
-              ? approvalConsequence(coverage, amountUsd)
-              : `Se sumarán ${formatMoney(amountUsd, "USD")} a lo pagado.`}{" "}
-            Esta acción no se puede deshacer.
-          </p>
-        }
+        description={approveDescription(coverage, amountUsd)}
         confirmLabel="Sí, aprobar el pago"
         confirmClassName={panelButtonClass("exito", "lg", "w-full sm:w-auto")}
         pendingLabel="Aprobando…"
@@ -157,7 +162,7 @@ export function ProofHistoryTable({ history }: { history: ProofHistoryItem[] }) 
     return <p className="text-[15px] text-tinta-suave">Esta reserva todavía no tiene pagos anteriores.</p>;
   }
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full text-left">
         <thead className="border-b border-borde">
           <tr>
@@ -182,8 +187,8 @@ export function ProofHistoryTable({ history }: { history: ProofHistoryItem[] }) 
               <td className={PANEL_TD_CLASS}>{item.kind === "COMPROBANTE" ? "Comprobante" : "Efectivo"}</td>
               <td className={`${PANEL_TD_CLASS} tabular`}>
                 {formatMoney(item.amount, item.currency)}
-                {item.currency !== "USD" ? (
-                  <span className="block text-tinta-suave">{formatMoney(item.amountUsd, "USD")}</span>
+                {showsUsdEquivalent(item.currency) ? (
+                  <span className="block text-tinta-suave">Equivale a {formatMoney(item.amountUsd, "USD")}</span>
                 ) : null}
               </td>
               <td className={PANEL_TD_CLASS}>
@@ -218,8 +223,9 @@ export function ProofNotFound({ closeHref }: { closeHref: string }) {
 
 /**
  * Contenido del panel lateral de revisión de un comprobante, en el orden en
- * que se decide: cuánto envió y qué cubre, la imagen, la decisión y, plegado,
- * el resto de los datos de la reserva y su historial.
+ * que se decide: cuánto envió y qué cubre, la imagen y, plegado, el resto de
+ * los datos de la reserva y su historial. La decisión va en una barra fija al
+ * pie del panel (`ProofDecisionBar`), visible desde la primera pantalla.
  */
 export function ProofReviewPanel({
   review,
@@ -254,7 +260,7 @@ export function ProofReviewPanel({
           <p className="tabular text-3xl font-bold tracking-tight text-tinta">
             {formatMoney(proof.amount, proof.currency)}
           </p>
-          {proof.currency !== "USD" ? (
+          {showsUsdEquivalent(proof.currency) ? (
             <p className="tabular text-[15px] text-tinta-suave">Equivale a {formatMoney(proof.amountUsd, "USD")}</p>
           ) : null}
         </div>
@@ -283,7 +289,7 @@ export function ProofReviewPanel({
         <img
           src={imagen}
           alt={`Comprobante de pago con referencia ${proof.reference}`}
-          className="max-h-80 w-full rounded-control border border-borde bg-lienzo object-contain"
+          className="max-h-64 w-full rounded-control border border-borde bg-lienzo object-contain"
         />
         <figcaption>
           <a
@@ -299,23 +305,7 @@ export function ProofReviewPanel({
         </figcaption>
       </figure>
 
-      {proof.status === "PENDIENTE" ? (
-        <section aria-labelledby="decision-titulo" className="flex flex-col gap-3">
-          <h3 id="decision-titulo" className="text-base font-semibold text-tinta">
-            ¿El pago está en tu cuenta?
-          </h3>
-          <p className="text-[15px] text-tinta-suave">
-            Compara la referencia y el monto con tu banco antes de decidir.
-          </p>
-          <ProofActions
-            proofId={proof.id}
-            code={reservation.code}
-            amountUsd={proof.amountUsd}
-            coverage={coverage}
-            hidden={hidden}
-          />
-        </section>
-      ) : (
+      {proof.status === "PENDIENTE" ? null : (
         <Alert tone={proof.status === "APROBADO" ? "exito" : "info"} role="none" title="Este comprobante ya se revisó">
           Fue {proof.status === "APROBADO" ? "aprobado" : "rechazado"}
           {proof.reviewedAt ? ` el ${formatCaracasDateTime24(proof.reviewedAt)}` : ""}.
@@ -349,6 +339,17 @@ export function ProofReviewPanel({
         </Disclosure>
         <PaymentHistory history={history} />
       </div>
+
+      {/* Al final del cuerpo: la barra queda pegada al pie del panel desde la
+          primera pantalla y, al llegar abajo, no tapa el historial. */}
+      {proof.status === "PENDIENTE" ? (
+        <ProofDecisionBar
+          proofId={proof.id}
+          code={reservation.code}
+          approveDescription={approveDescription(coverage, proof.amountUsd)}
+          hidden={hidden}
+        />
+      ) : null}
     </div>
   );
 }

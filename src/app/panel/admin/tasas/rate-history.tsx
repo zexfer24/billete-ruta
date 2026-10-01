@@ -32,11 +32,21 @@ function HistoryItem({ entry, until, isCurrent }: { entry: RateHistoryEntry; unt
 /**
  * Historial de una tasa, del cambio más reciente al más antiguo, con el
  * periodo en que estuvo vigente cada valor. Muestra los últimos cinco y
- * guarda el resto detrás de "Ver historial completo".
+ * guarda el resto detrás de "Ver historial completo". Si la tasa nunca cambió
+ * solo lo dice en una línea.
  */
 export function RateHistory({ entries, title }: { entries: RateHistoryEntry[]; title: string }) {
   if (entries.length === 0) {
     return <p className="text-sm text-tinta-suave">Todavía no hay cambios registrados.</p>;
+  }
+  // Con un solo valor, la lista repetiría el valor vigente y su fecha, que ya
+  // se ven arriba en grande.
+  if (entries.length === 1) {
+    return (
+      <p className="text-sm text-tinta-suave">
+        <span className="font-semibold">{title}:</span> sin cambios anteriores.
+      </p>
+    );
   }
 
   const items = entries.map((entry, index) => (

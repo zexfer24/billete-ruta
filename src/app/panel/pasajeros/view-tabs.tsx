@@ -33,23 +33,24 @@ function TabCount({ count, active }: { count?: number; active: boolean }) {
 }
 
 /**
- * Pestañas de "Pasajeros y pagos": las mismas medidas y estilos que
- * `PanelTabs`, pero la pestaña pulsada responde en el mismo instante. Como
+ * Pestañas de "Pasajeros y pagos": las mismas clases que `PanelTabs` (bajan
+ * de fila en vez de desplazarse de lado, y en el teléfono cada fila se
+ * reparte el ancho), pero la pestaña pulsada responde en el mismo instante. Como
  * solo cambian los `searchParams`, el `loading.tsx` no vuelve a mostrarse y,
  * sin esto, la pantalla quedaba quieta hasta que llegaban los datos: ahora la
  * pestaña cambia el contador por un indicador de espera mientras se abre.
  */
 export function ViewTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) {
   return (
-    <nav aria-label={label} className="-m-1 overflow-x-auto p-1">
-      <div className="inline-flex min-w-full gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1">
+    <nav aria-label={label}>
+      <div className="flex w-full flex-wrap gap-1 rounded-tarjeta border border-borde bg-superficie p-1 shadow-1">
         {tabs.map((tab) => (
           <Link
             key={tab.href}
             href={tab.href}
             aria-current={tab.active ? "page" : undefined}
             className={cx(
-              "foco inline-flex min-h-11 shrink-0 items-center gap-2 rounded-control px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none",
+              "foco relative inline-flex min-h-11 grow items-center justify-center gap-2 rounded-control px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none sm:grow-0 sm:justify-start",
               tab.active
                 ? "bg-marca-50 text-marca-800 ring-1 ring-inset ring-marca-200"
                 : "text-tinta-suave hover:bg-lienzo hover:text-tinta",

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ONCE_PER_RESERVATION_TEMPLATES,
   TEMPLATE_KEYS,
+  displayParam,
   isTemplateKey,
   renderPreview,
   renderStoredPreview,
@@ -122,8 +123,55 @@ describe("textos de las plantillas", () => {
     }
   });
 
-  it("la solicitud recibida no necesita plural para el número de pasajeros", () => {
+  it("la solicitud recibida dice cuántas personas viajan, en singular o en plural", () => {
     const uno = renderPreview("solicitud_recibida", { nombre: "Ana", pasajeros: "1", serial: "TR-1" });
-    expect(uno).toContain("Pasajeros: 1.");
+    expect(uno).toContain("Recibimos tu reserva TR-1 para 1 persona.");
+    const tres = renderPreview("solicitud_recibida", { nombre: "Ana", pasajeros: "3", serial: "TR-1" });
+    expect(tres).toContain("para 3 personas.");
+  });
+
+  it("escriben la salida con su día en palabras y la hora en 24 horas", () => {
+    const params = {
+      nombre: "Ana",
+      serial: "TR-1",
+      monto: "$ 26,00",
+      salida: "01/10/2026 06:00",
+      punto: "Terminal La Bandera",
+    };
+    const condicional = renderPreview("reserva_condicional", params);
+    expect(condicional).toContain("Tu viaje sale el jueves 1 de octubre a las 06:00.");
+    expect(condicional).toContain("Paga $ 26,00 en la taquilla");
+    const ticket = renderPreview("ticket_emitido", params);
+    expect(ticket).toContain("sale el jueves 1 de octubre a las 06:00 desde Terminal La Bandera.");
+    for (const key of TEMPLATE_KEYS) {
+      const todos = Object.fromEntries(templateParams(key).map((p) => [p, params[p as keyof typeof params] ?? "X"]));
+      const texto = renderPreview(key, todos);
+      expect(texto, key).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+      expect(texto, key).not.toMatch(/(Salida|Total|Pasajeros|Punto de encuentro): /);
+    }
+  });
+
+  it("saludan por el primer nombre, no por el nombre completo", () => {
+    const texto = renderPreview("pago_rechazado", {
+      nombre: "Yolanda Rivas Rodríguez",
+      serial: "TR-1",
+      motivo: "Monto no coincide",
+    });
+    expect(texto).toMatch(/^Hola Yolanda, /);
+  });
+
+  it("un mensaje ya guardado se lee igual que uno nuevo", () => {
+    const texto = renderStoredPreview("solicitud_recibida", {
+      nombre: "Yolanda Rivas Rodríguez",
+      pasajeros: "1",
+      serial: "TR-1",
+    });
+    expect(texto).toBe("¡Hola Yolanda! Recibimos tu reserva TR-1 para 1 persona. Cuando revisemos tu pago, te enviaremos el ticket.");
+  });
+
+  it("deja igual una fecha que no tiene el formato guardado", () => {
+    expect(displayParam("salida", "mañana a las 06:00")).toBe("mañana a las 06:00");
+    expect(displayParam("salida", "31/02/2026 06:00")).toBe("31/02/2026 06:00");
+    expect(displayParam("pasajeros", "dos")).toBe("dos");
   });
 });

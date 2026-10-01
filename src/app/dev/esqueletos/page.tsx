@@ -41,9 +41,12 @@ export const metadata: Metadata = {
  * - `publico`: pantalla con su propia cáscara (portada, ingresar, registro,
  *   lista de espera, acceso del personal), a todo el ancho.
  * - `mi`: bajo el layout de `/mi`, con la cabecera morada arriba y la
- *   columna de la app del pasajero.
- * - `panel`: dentro del contenido del panel de agencia o del terminal, al
- *   ancho de la ventana (en el teléfono se ven sus variantes móviles).
+ *   columna de la app del pasajero. Como en el layout real, el saludo solo
+ *   aparece en `/mi`; en las demás rutas la banda queda en la fila del logo.
+ * - `panel`: dentro del contenido del panel de agencia o del terminal. Desde
+ *   `lg` se reserva la barra lateral de 272 px, para que la silueta tenga el
+ *   mismo ancho útil que en la pantalla real; por debajo se ven sus variantes
+ *   móviles.
  */
 type Frame = "publico" | "mi" | "panel";
 
@@ -179,7 +182,7 @@ function anchorFor(entry: GalleryEntry): string {
 const FRAME_LABELS: Record<Frame, string> = {
   publico: "Pantalla completa",
   mi: "Bajo el layout de /mi",
-  panel: "Contenido del panel, al ancho de la ventana",
+  panel: "Contenido del panel, junto a la barra lateral desde lg",
 };
 
 /** El skeleton dentro del marco que tendría en su pantalla real. */
@@ -189,9 +192,15 @@ function FrameBody({ entry }: { entry: GalleryEntry }) {
   if (entry.frame === "mi") {
     return (
       <div className="bg-lienzo pb-8">
-        {/* Imita la cabecera del layout de /mi, que no se ve en el skeleton solo. */}
+        {/*
+          Imita la cabecera del layout de /mi, que no se ve en el skeleton solo.
+          `titleOnlyAt` con la ruta de la entrada nunca coincide con la de la
+          galería, así que el saludo queda oculto salvo en la entrada de /mi,
+          igual que en el layout real.
+        */}
         <AppHeader
           titleAs="p"
+          titleOnlyAt={entry.route === "/mi" ? undefined : entry.route}
           title="Hola, pasajero"
           subtitle="Cabecera de ejemplo del layout de /mi"
           right={
@@ -211,11 +220,17 @@ function FrameBody({ entry }: { entry: GalleryEntry }) {
 
   if (entry.frame === "panel") {
     return (
-      // Sin ancho mínimo: a 375 px se ven las variantes móviles (tarjetas
-      // `md:hidden`) y en escritorio las tablas, como en la pantalla real.
-      <div className="bg-lienzo px-4 py-6 lg:px-8 lg:py-8">
-        <div className="mx-auto max-w-7xl">
-          <Component />
+      // Mismo marco que PanelFrame (src/app/panel/layout.tsx): desde `lg`, la
+      // columna de 272 px de la barra lateral (`w-68`) y el contenido con sus
+      // márgenes; a 375 px se ven las variantes móviles (tarjetas `md:hidden`).
+      <div className="bg-lienzo lg:flex">
+        <div aria-hidden="true" className="hidden w-68 shrink-0 border-r border-borde bg-superficie lg:block">
+          <div className="h-28 bg-marca-600" />
+        </div>
+        <div className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto max-w-7xl">
+            <Component />
+          </div>
         </div>
       </div>
     );

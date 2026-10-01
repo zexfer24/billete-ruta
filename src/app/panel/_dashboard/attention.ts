@@ -27,6 +27,15 @@ export interface AttentionDeparture<T> {
 const KIND_ORDER: Record<AttentionKind, number> = { atrasada: 0, embarcando: 1, pronto: 2 };
 
 /**
+ * Una salida está atrasada si sigue programada y su hora ya pasó sin que se
+ * registrara el embarque ni la partida. La usan el aviso de atención, la
+ * tabla de "Salidas de hoy" y la cifra de salidas, para que digan lo mismo.
+ */
+export function isOverdue(departure: { departsAt: Date; status: string }, now: Date): boolean {
+  return departure.status === "PROGRAMADA" && departure.departsAt.getTime() < now.getTime();
+}
+
+/**
  * Salidas del día que el operador debe atender ya, de la más urgente a la
  * menos urgente (atrasadas, embarcando y luego las que salen pronto; a igual
  * urgencia, la que sale antes). Las salidas en ruta, finalizadas o canceladas
@@ -46,7 +55,7 @@ export function departuresNeedingAttention<T extends { departsAt: Date; status: 
     }
     if (departure.status !== "PROGRAMADA") continue;
 
-    if (departure.departsAt.getTime() < now.getTime()) {
+    if (isOverdue(departure, now)) {
       resultado.push({ departure, kind: "atrasada" });
     } else if (minutesUntil(departure.departsAt, now) <= windowMinutes) {
       resultado.push({ departure, kind: "pronto" });

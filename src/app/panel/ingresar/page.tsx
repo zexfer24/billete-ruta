@@ -1,9 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentPanelUser } from "@/modules/auth";
-import { Logo } from "@/components/logo";
 import { PanelLoginForm } from "./login-form";
-import { LoginCard } from "./login-card";
+import { LoginCard, StaffLoginFooter } from "./login-card";
 
 export const metadata = { title: "Acceso del personal" };
 
@@ -19,17 +17,8 @@ export default async function IngresarPanelPage() {
     redirect(user.role === "ADMIN" ? "/panel/admin/tablero" : "/panel");
   }
   return (
-    <LoginCard logo={<Logo tone="marca" priority className="h-24 w-auto" />}>
+    <LoginCard footer={<StaffLoginFooter />}>
       <PanelLoginForm />
-      <p className="border-t border-borde pt-4 text-[15px] leading-relaxed text-tinta-suave">
-        ¿No puedes entrar? Pide ayuda al administrador del terminal.
-      </p>
-      <p className="text-[15px] text-tinta-suave">
-        ¿Eres pasajero?{" "}
-        <Link href="/ingresar" className="foco -mx-1 inline-flex min-h-11 items-center rounded-sm px-1 font-semibold text-marca-700 underline underline-offset-2">
-          Entra por aquí
-        </Link>
-      </p>
     </LoginCard>
   );
 }

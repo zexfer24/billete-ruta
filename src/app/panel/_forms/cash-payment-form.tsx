@@ -4,6 +4,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { formatUsdString } from "@/lib/decimal";
 import { cashPaymentAction } from "@/app/panel/pasajeros/actions";
+import { CashConfirmSubmit } from "./cash-confirm";
+import { findCashReservationAction } from "./cash-lookup-action";
 import { PanelField, panelFieldAria } from "./panel-field";
 
 const CURRENCIES: readonly Currency[] = ["USD", "VES", "COP", "USDT"];
@@ -38,6 +40,8 @@ type CashPaymentFormProps =
       reservationId: string;
       balanceUsd: string;
       currency: Currency;
+      /** Titular de la reserva, para nombrarlo en la confirmación del cobro. */
+      holderName?: string;
       amountInCurrencyHint?: string;
       error?: string;
       hidden?: Record<string, string>;
@@ -56,39 +60,35 @@ function HiddenFields({ hidden }: { hidden?: Record<string, string> }) {
 }
 
 /**
- * Formulario reutilizable de cobro en efectivo. En modo "codigo" (taquilla o
- * registro rápido del tablero) pide el código del ticket; en modo "reserva"
- * la reserva ya está fija, viene del panel lateral de "Pasajeros y pagos" y
- * el monto se precarga con el saldo pendiente.
+ * Formulario reutilizable de cobro en efectivo, en dos pasos para no cobrar
+ * a ciegas:
+ * - Modo "codigo" (registro rápido del tablero o "Registrar cobro" de
+ *   Pasajeros y pagos): solo pide el código de la reserva y "Buscar reserva"
+ *   abre su detalle en Pasajeros y pagos, con el titular, la salida y lo que
+ *   falta por cobrar.
+ * - Modo "reserva" (ese detalle): la reserva ya está fija, el monto se
+ *   precarga con el saldo pendiente y "Registrar cobro" pide confirmar con
+ *   las cifras antes de guardar.
  */
 export function CashPaymentForm(props: CashPaymentFormProps) {
   // El ejemplo va en la ayuda y no como marcador: un código gris dentro del
-  // campo parece un valor ya escrito.
-  const ayudaCodigo = "Está impreso en el ticket, debajo del código QR. Por ejemplo: TR-0911-3PAX-Y962.";
+  // campo parece un valor ya escrito. Es el código de la reserva, no del
+  // ticket: quien paga en taquilla todavía no tiene ticket.
+  const ayudaCodigo =
+    "Es el código de la reserva que el pasajero ve en su teléfono, en «Mis viajes». Por ejemplo: TR-0911-3PAX-Y962.";
   const ayudaMonto = "Puedes usar coma o punto para los céntimos, por ejemplo 12,50.";
 
-  return (
-    <form action={cashPaymentAction} className="flex flex-col gap-5">
-      <PanelFeedback error={props.error} />
-      {props.mode === "codigo" && props.returnTo ? (
-        <input type="hidden" name="origen" value="tablero" />
-      ) : null}
-      <HiddenFields hidden={props.hidden} />
-
-      {props.mode === "reserva" ? (
-        <>
-          <input type="hidden" name="reservationId" value={props.reservationId} />
-          <div className="flex flex-col gap-1 rounded-control border border-borde bg-lienzo px-4 py-3">
-            <p className="text-sm font-semibold text-tinta-suave">Falta por cobrar</p>
-            <p className="tabular text-2xl font-bold text-tinta">{formatUsdString(props.balanceUsd)}</p>
-            <p className="text-sm leading-snug text-tinta-suave">{conversionHint(props.currency)}</p>
-            {props.amountInCurrencyHint ? (
-              <p className="text-sm leading-snug text-tinta-suave">{props.amountInCurrencyHint}</p>
-            ) : null}
-          </div>
-        </>
-      ) : (
-        <PanelField id="cobro-codigo" label="Código del ticket" hint={ayudaCodigo}>
+  if (props.mode === "codigo") {
+    return (
+      <form action={findCashReservationAction} className="flex flex-col gap-5">
+        <PanelFeedback error={props.error} />
+        {props.returnTo ? <input type="hidden" name="origen" value="tablero" /> : null}
+        <HiddenFields hidden={props.hidden} />
+        <p className="text-base leading-relaxed text-tinta-suave">
+          Primero busca la reserva: verás a nombre de quién está y cuánto falta por cobrar antes de registrar el
+          pago.
+        </p>
+        <PanelField id="cobro-codigo" label="Código de la reserva" hint={ayudaCodigo}>
           <input
             type="text"
             name="code"
@@ -100,7 +100,26 @@ export function CashPaymentForm(props: CashPaymentFormProps) {
             {...panelFieldAria("cobro-codigo", ayudaCodigo)}
           />
         </PanelField>
-      )}
+        <SubmitButton pendingLabel="Buscando reserva…" className={panelButtonClass("primario", "lg", "w-full sm:w-fit")}>
+          Buscar reserva
+        </SubmitButton>
+      </form>
+    );
+  }
+
+  return (
+    <form action={cashPaymentAction} className="flex flex-col gap-5">
+      <PanelFeedback error={props.error} />
+      <HiddenFields hidden={props.hidden} />
+      <input type="hidden" name="reservationId" value={props.reservationId} />
+      <div className="flex flex-col gap-1 rounded-control border border-borde bg-lienzo px-4 py-3">
+        <p className="text-sm font-semibold text-tinta-suave">Falta por cobrar</p>
+        <p className="tabular text-2xl font-bold text-tinta">{formatUsdString(props.balanceUsd)}</p>
+        <p className="text-sm leading-snug text-tinta-suave">{conversionHint(props.currency)}</p>
+        {props.amountInCurrencyHint ? (
+          <p className="text-sm leading-snug text-tinta-suave">{props.amountInCurrencyHint}</p>
+        ) : null}
+      </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <PanelField id="cobro-monto" label="Monto recibido" hint={ayudaMonto}>
@@ -110,7 +129,7 @@ export function CashPaymentForm(props: CashPaymentFormProps) {
             required
             inputMode="decimal"
             autoComplete="off"
-            defaultValue={props.mode === "reserva" ? props.balanceUsd : undefined}
+            defaultValue={props.balanceUsd}
             className={panelInputClass("tabular")}
             {...panelFieldAria("cobro-monto", ayudaMonto)}
           />
@@ -127,9 +146,7 @@ export function CashPaymentForm(props: CashPaymentFormProps) {
         </PanelField>
       </div>
 
-      <SubmitButton pendingLabel="Registrando cobro…" className={panelButtonClass("exito", "lg", "w-full sm:w-fit")}>
-        Registrar cobro
-      </SubmitButton>
+      <CashConfirmSubmit balanceUsd={props.balanceUsd} holderName={props.holderName} />
     </form>
   );
 }

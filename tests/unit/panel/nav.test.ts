@@ -4,6 +4,7 @@ import {
   isActivePanelPath,
   legacyPanelRedirect,
   OPERATOR_NAV,
+  panelHomeForPath,
   panelNavHomeHref,
   parsePanelOrigin,
 } from "@/lib/panel-nav";
@@ -171,5 +172,19 @@ describe("panelNavHomeHref", () => {
   it("cae en /panel con un menú vacío", () => {
     expect(panelNavHomeHref([])).toBe("/panel");
     expect(panelNavHomeHref([{ label: "Vacío", links: [] }])).toBe("/panel");
+  });
+});
+
+describe("panelHomeForPath", () => {
+  it("bajo /panel/admin lleva al tablero del terminal", () => {
+    expect(panelHomeForPath("/panel/admin")).toBe("/panel/admin/tablero");
+    expect(panelHomeForPath("/panel/admin/agencias/abc")).toBe("/panel/admin/tablero");
+    expect(panelHomeForPath("/panel/admin/")).toBe("/panel/admin/tablero");
+  });
+
+  it("en el resto del panel lleva al tablero de la agencia", () => {
+    expect(panelHomeForPath("/panel/salidas/abc")).toBe("/panel");
+    expect(panelHomeForPath("/panel/administracion")).toBe("/panel");
+    expect(panelHomeForPath("/panel")).toBe("/panel");
   });
 });

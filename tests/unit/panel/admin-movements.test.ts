@@ -49,11 +49,12 @@ describe("tripStatus", () => {
 });
 
 describe("hourFrom", () => {
-  it("da solo la hora el mismo día y agrega el día cuando cambia", () => {
+  it("da solo la hora el mismo día y agrega la fecha completa cuando cambia", () => {
     const departed = new Date("2026-09-29T22:07:00Z"); // 18:07 del 29/09 en Caracas
-    expect(hourFrom(new Date("2026-09-29T23:30:00Z"), departed)).toBe("19:30");
-    expect(hourFrom(new Date("2026-09-30T12:17:00Z"), departed)).toBe("30/09 08:17");
-    expect(hourFrom(null, departed)).toBe("—");
+    expect(hourFrom(new Date("2026-09-29T23:30:00Z"), departed)).toEqual({ time: "19:30" });
+    expect(hourFrom(new Date("2026-09-30T12:17:00Z"), departed)).toEqual({ time: "08:17", date: "30/09/2026" });
+    expect(hourFrom(new Date("2026-09-30T12:17:00Z"), null)).toEqual({ time: "08:17" });
+    expect(hourFrom(null, departed)).toBeNull();
   });
 });
 

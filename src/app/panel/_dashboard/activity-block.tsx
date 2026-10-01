@@ -10,6 +10,7 @@ const DOT_TONE_CLASSES: Record<StatusTone, string> = {
   alerta: "bg-alerta",
   peligro: "bg-peligro",
   marca: "bg-marca-600",
+  info: "bg-info",
   neutro: "bg-tinta-tenue",
 };
 

@@ -2,13 +2,16 @@ import type { ReactNode } from "react";
 import { IconCalendar } from "@/components/icons";
 import { PANEL_LABEL_CLASS, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { AdminTabs } from "./admin-tabs";
+import { GetForm, GetSubmitButton } from "./get-form";
 import { describeAdminRange, periodQuery, periodTabs, type AdminRange } from "./period";
 
 /**
  * Selector de periodo del administrador: pestañas (Últimas 24 horas, 7 días,
  * 30 días, Otras fechas), el formulario de fechas cuando se eligió "Otras
  * fechas" y el rango aplicado en palabras. Es un formulario GET: no escribe
- * nada, solo cambia la URL.
+ * nada, solo cambia la URL. Con `GetForm` (`next/form`) la navegación es
+ * del lado del cliente: el botón muestra "Buscando…" y la zona de datos, su
+ * silueta.
  *
  * `extraFields` agrega otros filtros al mismo formulario (por ejemplo la
  * agencia); con ellos el formulario se muestra siempre. `keep` son esos mismos
@@ -39,8 +42,7 @@ export function PeriodFilter({
       <AdminTabs label="Periodo" tabs={tabs.map(({ href, label, active }) => ({ href, label, active }))} />
 
       {showForm ? (
-        <form
-          method="get"
+        <GetForm
           action={path}
           className="flex flex-wrap items-end gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
         >
@@ -77,13 +79,13 @@ export function PeriodFilter({
             </>
           ) : null}
           {extraFields}
-          <button
-            type="submit"
+          <GetSubmitButton
+            pendingLabel="Buscando…"
             className={panelButtonClass(extraFields ? "secundario" : "primario", "md", "w-full sm:w-auto")}
           >
             {extraFields ? "Aplicar filtros" : "Ver estas fechas"}
-          </button>
-        </form>
+          </GetSubmitButton>
+        </GetForm>
       ) : null}
 
       <p className="flex items-start gap-2 text-sm leading-snug text-tinta-suave">

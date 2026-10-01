@@ -1,23 +1,46 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { PUBLIC_TEXT_LINK_CLASS } from "@/app/_publico/links";
+import { PublicCard, PublicShell } from "@/app/_publico/public-shell";
 
 /**
- * Tarjeta centrada del acceso del personal (spec 2.2 y 7): el logo morado
- * arriba, el título y para quién es, y debajo el contenido. La comparten la
+ * Estructura del acceso del personal (spec 2.2): la misma pieza que
+ * `/ingresar` y `/registro`, con "Volver al inicio" arriba, el logo morado
+ * sobre la tarjeta y el título alineado a la izquierda. La comparten la
  * página y su silueta de carga, para que nada salte al terminar de cargar.
  */
-export function LoginCard({ logo, children }: { logo: ReactNode; children: ReactNode }) {
+export function LoginCard({ children, footer }: { children: ReactNode; footer: ReactNode }) {
   return (
-    <main id="contenido" className="flex min-h-dvh items-center justify-center px-4 py-10">
-      <div className="flex w-full max-w-md flex-col gap-6 rounded-tarjeta border border-borde bg-superficie p-6 shadow-1 sm:p-8">
-        <div className="flex flex-col items-center gap-3 text-center">
-          {logo}
-          <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">Acceso del personal</h1>
-          <p className="text-base leading-relaxed text-tinta-suave">
-            Para operadores de agencia y administradores del terminal.
-          </p>
-        </div>
+    <PublicShell>
+      <PublicCard
+        title="Acceso del personal"
+        description="Para operadores de agencia y administradores del terminal."
+      >
         {children}
-      </div>
-    </main>
+      </PublicCard>
+      {footer}
+    </PublicShell>
+  );
+}
+
+/**
+ * Ayuda y enlace al acceso del pasajero, debajo de la tarjeta. Con `still`
+ * (la silueta de carga) el enlace es un texto quieto que no recibe foco.
+ */
+export function StaffLoginFooter({ still = false }: { still?: boolean }) {
+  return (
+    <div className="flex flex-col gap-1 text-center text-base text-tinta-suave">
+      <p>¿No puedes entrar? Pide ayuda al administrador del terminal.</p>
+      <p>
+        ¿Eres pasajero?{" "}
+        {still ? (
+          <span className={PUBLIC_TEXT_LINK_CLASS}>Entra por aquí</span>
+        ) : (
+          <Link href="/ingresar" className={PUBLIC_TEXT_LINK_CLASS}>
+            Entra por aquí
+          </Link>
+        )}
+      </p>
+    </div>
   );
 }

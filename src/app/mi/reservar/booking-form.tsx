@@ -292,13 +292,20 @@ export default function BookingForm({
     goTo(1);
   }
 
+  // Resumen del costo siempre visible (spec 7.1): tarifa + tasa del terminal = total, en una sola línea.
+  const tarifa = formatCents(cost.fareCents, "USD");
+  const tasa = formatCents(cost.taxCents, "USD");
+  const total = formatCents(cost.totalCents, "USD");
+  const desglose = passengerCount === 1 ? `${tarifa} + ${tasa} de tasa` : `${passengerCount} × (${tarifa} + ${tasa} de tasa)`;
   const summary = selectedDeparture ? (
     <p className="tabular flex flex-wrap items-baseline justify-between gap-x-3">
-      <span>
-        {passengersText(passengerCount)}, con la tasa del terminal
+      <span aria-hidden="true">{desglose}</span>
+      <span className="sr-only">
+        {passengersText(passengerCount)}: pasaje de {tarifa} más tasa del terminal de {tasa} por persona. Total{" "}
+        {total}.
       </span>
-      <span className="text-base text-tinta">
-        Total <strong className="font-bold">{formatCents(cost.totalCents, "USD")}</strong>
+      <span aria-hidden="true" className="text-base text-tinta">
+        Total <strong className="font-bold">{total}</strong>
       </span>
     </p>
   ) : null;
@@ -387,6 +394,8 @@ export default function BookingForm({
 
       {step === 3 && selectedDeparture ? (
         <StepPolicies
+          departure={selectedDeparture}
+          now={now}
           accepted={policiesAccepted}
           onChangeAccepted={setPoliciesAccepted}
           summary={summary}

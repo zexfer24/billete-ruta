@@ -3,9 +3,10 @@ import { formatCaracas, formatCaracasDate, formatCaracasTime24 } from "@/lib/tim
 import { caracasDayHeading } from "./day-label";
 
 /**
- * Cuántas próximas salidas trae como mucho `unitStateOf` en `upcoming`. Si la
- * lista llega a este tope y no viene el total aparte (`upcomingCount`), no se
- * sabe cuántas hay de verdad y no se da una cifra.
+ * Cuántas próximas salidas trae como mucho `unitStateOf` en `upcoming`. La
+ * flota siempre manda el total aparte (`upcomingCount`); si algún llamador no
+ * lo pasa y la lista llega a este tope, no se sabe cuántas hay de verdad y no
+ * se da una cifra.
  */
 const TOPE_PROXIMAS = 3;
 

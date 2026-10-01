@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatCaracas, formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24, formatDuration } from "@/lib/time";
+import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24, formatDuration } from "@/lib/time";
 import type { AgencyMovementRow } from "@/modules/reports";
 import { periodParamsSchema, periodQuery, withQuery, type AdminRange } from "../_shared/period";
 
@@ -50,15 +50,18 @@ export function tripStatus(trip: {
 
 /**
  * Hora de un hito del viaje para la tabla, que ya muestra la fecha una sola
- * vez: "08:17" si cae el mismo día que `reference`, y "30/09 08:17" si cae
- * otro día (una llegada de madrugada, por ejemplo). Sin hora da una raya.
+ * vez: `{ time: "19:30" }` si cae el mismo día que `reference`, y además la
+ * fecha completa, `{ time: "08:17", date: "30/09/2026" }`, si cae otro día
+ * (una llegada de madrugada, por ejemplo). Es el mismo formato de `TimeCell`:
+ * la hora arriba y, debajo, la fecha dd/MM/yyyy. Sin hora da `null`.
  */
-export function hourFrom(date: Date | null, reference: Date | null): string {
-  if (!date) return "—";
+export function hourFrom(date: Date | null, reference: Date | null): { time: string; date?: string } | null {
+  if (!date) return null;
+  const time = formatCaracasTime24(date);
   if (reference && formatCaracasDate(date) !== formatCaracasDate(reference)) {
-    return formatCaracas(date, "dd/MM HH:mm");
+    return { time, date: formatCaracasDate(date) };
   }
-  return formatCaracasTime24(date);
+  return { time };
 }
 
 /** Separador de columnas: punto y coma, el que Excel espera en español (la coma es el decimal). */

@@ -7,9 +7,13 @@ import { IconSearch } from "@/components/icons";
 import { PANEL_LABEL_CLASS, PanelPageHeader, panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { requirePanelUser } from "@/modules/auth";
 import { cleanSearch, pageFromParam } from "../_shared/format";
+import { GetForm, GetSubmitButton } from "../_shared/get-form";
+import { SearchExamples } from "./search-examples";
 import { UsersResults, UsersResultsSkeleton } from "./users-results";
 
 export const metadata: Metadata = { title: "Base de datos de usuarios" };
+
+const USERS_PATH = "/panel/admin/usuarios";
 
 /** Parámetros de la URL. Nunca lanza: una página no numérica o un valor repetido caen al valor por defecto. */
 const searchParamsSchema = z.object({
@@ -44,8 +48,10 @@ export default async function UsuariosAdminPage({
         Aquí ves la cédula completa y el teléfono de cada pasajero. Cada consulta queda registrada con tu nombre.
       </Alert>
 
-      <form
-        method="get"
+      {/* Buscar navega sin recargar el documento: el botón muestra la espera y
+          la zona de resultados, su silueta (el `<Suspense>` con clave). */}
+      <GetForm
+        action={USERS_PATH}
         role="search"
         className="flex flex-col gap-1.5 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1"
       >
@@ -63,20 +69,18 @@ export default async function UsuariosAdminPage({
             aria-describedby="q-ayuda"
             className={panelInputClass("min-w-0 flex-1 basis-60")}
           />
-          <button type="submit" className={panelButtonClass("primario", "md", "flex-1 sm:flex-none")}>
+          <GetSubmitButton pendingLabel="Buscando…" className={panelButtonClass("primario", "md", "flex-1 sm:flex-none")}>
             <IconSearch className="size-5 shrink-0" />
             Buscar
-          </button>
+          </GetSubmitButton>
           {query ? (
-            <Link href="/panel/admin/usuarios" className={panelButtonClass("fantasma", "md", "flex-1 sm:flex-none")}>
+            <Link href={USERS_PATH} className={panelButtonClass("fantasma", "md", "flex-1 sm:flex-none")}>
               Limpiar búsqueda
             </Link>
           ) : null}
         </div>
-        <p id="q-ayuda" className="text-sm text-tinta-suave">
-          Ejemplos: V12345678, María Pérez o 0412 123 4567.
-        </p>
-      </form>
+        <SearchExamples id="q-ayuda" />
+      </GetForm>
 
       <Suspense key={`${query ?? ""}|${page}`} fallback={<UsersResultsSkeleton />}>
         <UsersResults query={query} page={page} panelUserId={user.id} />

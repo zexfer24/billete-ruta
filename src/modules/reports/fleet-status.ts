@@ -15,6 +15,13 @@ export interface UnitDeparture {
   driverName: string;
   departedAt: Date | null;
   estimatedArrivalAt: Date | null;
+  /**
+   * `true` solo en el `current` que devuelve `unitStateOf` cuando es una salida
+   * PROGRAMADA cuya hora ya pasó y nadie cerró su manifiesto (el barrido
+   * `sweepAutoClose` del worker aún no la tomó). La pantalla la muestra como
+   * atrasada con texto, por ejemplo "Atrasada · debía salir 13:00".
+   */
+  overdue?: boolean;
 }
 
 /** La salida con `status` dado y `departsAt` más antigua, o `null` si no hay ninguna. */
@@ -32,40 +39,58 @@ function masAntigua(departures: UnitDeparture[], status: DepartureStatus): UnitD
 export function unitStateOf(
   input: { active: boolean; departures: UnitDeparture[] },
   now: Date,
-): { state: UnitState; current: UnitDeparture | null; upcoming: UnitDeparture[] } {
+): {
+  state: UnitState;
+  current: UnitDeparture | null;
+  upcoming: UnitDeparture[];
+  upcomingCount: number;
+} {
   // Regla 1: el viaje en curso es la salida EN_RUTA más antigua, o si no hay,
-  // la MANIFIESTO_CERRADO más antigua.
+  // la MANIFIESTO_CERRADO más antigua, o si no hay, la PROGRAMADA más antigua
+  // cuya hora ya pasó (atrasada: el worker la cerraría en su próximo barrido,
+  // así que la vista no depende de que el worker esté al día).
+  const atrasada = masAntigua(
+    input.departures.filter((d) => d.departsAt.getTime() <= now.getTime()),
+    "PROGRAMADA",
+  );
   const current =
-    masAntigua(input.departures, "EN_RUTA") ?? masAntigua(input.departures, "MANIFIESTO_CERRADO");
+    masAntigua(input.departures, "EN_RUTA") ??
+    masAntigua(input.departures, "MANIFIESTO_CERRADO") ??
+    (atrasada ? { ...atrasada, overdue: true } : null);
 
   // Regla 4: las próximas salidas se calculan siempre, sin importar el estado.
-  const upcoming = input.departures
+  // `upcoming` trae como mucho las 3 primeras; `upcomingCount` es el total real
+  // de los 7 días, para que la pantalla no dé una cifra recortada.
+  const proximas = input.departures
     .filter(
       (d) =>
         d.status === "PROGRAMADA" &&
         now.getTime() <= d.departsAt.getTime() &&
         d.departsAt.getTime() <= now.getTime() + SIETE_DIAS_MS,
     )
-    .sort((a, b) => a.departsAt.getTime() - b.departsAt.getTime())
-    .slice(0, 3);
+    .sort((a, b) => a.departsAt.getTime() - b.departsAt.getTime());
+  const upcomingCount = proximas.length;
+  const upcoming = proximas.slice(0, 3);
 
   let state: UnitState;
   if (current?.status === "EN_RUTA") {
     // Regla 2: un viaje en curso gana aunque la unidad esté inactiva.
     state = "EN_RUTA";
-  } else if (current?.status === "MANIFIESTO_CERRADO") {
+  } else if (current?.status === "MANIFIESTO_CERRADO" || current?.overdue) {
+    // Una salida atrasada tiene al bus y al chofer comprometidos igual que un
+    // manifiesto cerrado, que es el estado al que la lleva el worker.
     state = "EMBARCANDO";
   } else if (!input.active) {
     // Regla 3: sin viaje en curso, la unidad inactiva está fuera de servicio.
     state = "FUERA_DE_SERVICIO";
-  } else if (upcoming.length > 0) {
+  } else if (upcomingCount > 0) {
     // Regla 5.
     state = "ASIGNADO";
   } else {
     state = "DISPONIBLE";
   }
 
-  return { state, current, upcoming };
+  return { state, current, upcoming, upcomingCount };
 }
 
 export interface DriverStatusRow {
@@ -76,6 +101,8 @@ export interface DriverStatusRow {
   state: UnitState;
   current: UnitDeparture | null;
   upcoming: UnitDeparture[];
+  /** Total de salidas programadas en los próximos 7 días (`upcoming` trae solo 3). */
+  upcomingCount: number;
   boardingCount: number;
   arrivalCount: number;
 }
@@ -90,6 +117,8 @@ export interface VehicleStatusRow {
   state: UnitState;
   current: UnitDeparture | null;
   upcoming: UnitDeparture[];
+  /** Total de salidas programadas en los próximos 7 días (`upcoming` trae solo 3). */
+  upcomingCount: number;
 }
 
 export interface AgencyFleetStatus {
@@ -123,7 +152,8 @@ export async function agencyFleetStatus(
         route: { agencyId },
         OR: [
           { status: { in: ["EN_RUTA", "MANIFIESTO_CERRADO"] } },
-          { status: "PROGRAMADA", departsAt: { gte: now, lte: limiteProximas } },
+          // Sin cota inferior: una PROGRAMADA vencida es el viaje atrasado de la unidad.
+          { status: "PROGRAMADA", departsAt: { lte: limiteProximas } },
         ],
       },
       include: { route: true, vehicle: true, driver: true, tripLog: true },
@@ -168,7 +198,7 @@ export async function agencyFleetStatus(
   }
 
   const drivers: DriverStatusRow[] = choferes.map((chofer) => {
-    const { state, current, upcoming } = unitStateOf(
+    const { state, current, upcoming, upcomingCount } = unitStateOf(
       { active: chofer.active, departures: salidasPorChofer.get(chofer.id) ?? [] },
       now,
     );
@@ -181,13 +211,14 @@ export async function agencyFleetStatus(
       state,
       current,
       upcoming,
+      upcomingCount,
       boardingCount: conteo?.departedAt ?? 0,
       arrivalCount: conteo?.arrivedAt ?? 0,
     };
   });
 
   const vehicles: VehicleStatusRow[] = vehiculos.map((vehiculo) => {
-    const { state, current, upcoming } = unitStateOf(
+    const { state, current, upcoming, upcomingCount } = unitStateOf(
       { active: vehiculo.active, departures: salidasPorVehiculo.get(vehiculo.id) ?? [] },
       now,
     );
@@ -201,6 +232,7 @@ export async function agencyFleetStatus(
       state,
       current,
       upcoming,
+      upcomingCount,
     };
   });
 

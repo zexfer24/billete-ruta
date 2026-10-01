@@ -18,7 +18,7 @@ interface GlobalErrorProps {
  * `PublicShell` (volver arriba, logo morado sobre la tarjeta) sin depender de
  * otras pantallas, y el enlace de volver recarga la página entera.
  */
-export default function GlobalError({ error, reset }: GlobalErrorProps) {
+export default function GlobalError({ error }: GlobalErrorProps) {
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -44,7 +44,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
               <Logo tone="marca" priority className="mx-auto h-20 w-auto" />
               <div className="flex flex-col gap-5 rounded-tarjeta border border-borde bg-superficie p-5 shadow-1 sm:p-6">
                 <div className="flex flex-col gap-2">
-                  <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">
+                  <h1 className="text-balance text-2xl font-bold tracking-tight text-tinta sm:text-3xl">
                     Algo salió mal de nuestro lado
                   </h1>
                   <p className="text-base leading-relaxed text-tinta-suave">
@@ -52,7 +52,13 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                     minutos.
                   </p>
                 </div>
-                <button type="button" onClick={reset} className={buttonClass("primario", "w-full", "lg")}>
+                {/* Recarga el documento completo: `reset()` solo vuelve a pintar lo que
+                    ya falló y aquí no hay layout ni router en los que apoyarse. */}
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className={buttonClass("primario", "w-full", "lg")}
+                >
                   Intentar de nuevo
                 </button>
                 {error.digest ? (

@@ -93,6 +93,9 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
 
   const avisos: Notice[] = [];
   const href = `/mi/reservas/${reserva.code}`;
+  // Cada aviso de una reserva nombra su viaje: el pasajero puede tener varias
+  // reservas a la vez y no debe adivinar a cuál se refiere.
+  const viaje = `${reserva.origin} → ${reserva.destination}`;
 
   if (reserva.status === "PENDIENTE_PAGO" && reserva.expiresAt && reserva.expiresAt > now) {
     const restante = etiquetaMinutos(durationMinutes(now, reserva.expiresAt));
@@ -100,7 +103,7 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
       kind: "RESERVA_POR_LIBERAR",
       level: "alerta",
       title: "Paga pronto para no perder tu puesto",
-      body: `Te quedan ${restante} para pagar. Si no pagas, tu puesto queda libre para otra persona.`,
+      body: `Te quedan ${restante} para pagar tu viaje ${viaje}. Si no pagas, tu puesto queda libre para otra persona.`,
       at: reserva.expiresAt,
       href,
       reservationCode: reserva.code,
@@ -114,8 +117,8 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
       level: "alerta",
       title: "No pudimos aceptar tu pago",
       body: motivo
-        ? `Revisamos tu comprobante y no lo aceptamos. Motivo: ${motivo}. Envía otro para seguir.`
-        : "Revisamos tu comprobante y no lo aceptamos. Envía otro para seguir.",
+        ? `Revisamos tu comprobante del viaje ${viaje} y no lo aceptamos. Motivo: ${motivo}. Envía otro para seguir.`
+        : `Revisamos tu comprobante del viaje ${viaje} y no lo aceptamos. Envía otro para seguir.`,
       at: reserva.latestProof.createdAt,
       href,
       reservationCode: reserva.code,
@@ -127,7 +130,10 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
       kind: "COMPROBANTE_EN_VALIDACION",
       level: "info",
       title: "Estamos revisando tu pago",
-      body: "Ya recibimos tu comprobante. Te avisaremos cuando confirmemos el pago.",
+      body: `Ya recibimos tu comprobante del viaje ${viaje}, que sale ${cuando(
+        reserva.departsAt,
+        now,
+      )}. Te avisaremos cuando confirmemos el pago.`,
       at: reserva.latestProof?.createdAt ?? now,
       href,
       reservationCode: reserva.code,
@@ -147,7 +153,7 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
         kind: "RECONFIRMAR_PAGO_EN_SITIO",
         level: "alerta",
         title: "Paga en la taquilla para no perder tu puesto",
-        body: `Tu viaje ${reserva.origin} → ${reserva.destination} sale ${cuando(
+        body: `Tu viaje ${viaje} sale ${cuando(
           reserva.departsAt,
           now,
         )}. Tienes hasta ${cuando(limite, now)} para pagar en la taquilla; si no, tu puesto quedará libre.`,
@@ -163,7 +169,7 @@ function avisosDeReserva(reserva: NoticeReservationInput, now: Date): Notice[] {
       kind: "TICKET_LISTO",
       level: "exito",
       title: "Tu ticket está listo",
-      body: `Tu viaje ${reserva.origin} → ${reserva.destination} sale ${cuando(
+      body: `Tu viaje ${viaje} sale ${cuando(
         reserva.departsAt,
         now,
       )}. Muestra el código QR al abordar.`,

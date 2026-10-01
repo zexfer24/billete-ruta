@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { IconBus, IconRoute, IconUsers } from "@/components/icons";
+import { IconBus, IconChevronRight, IconRoute, IconUsers } from "@/components/icons";
 import {
   EmptyState,
   MobileCard,
@@ -13,14 +13,16 @@ import {
 import { Skeleton } from "@/components/skeleton";
 import { cx } from "@/components/ui-classes";
 import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
-import {
-  departureTaxByHour,
-  listNewAccounts,
-  listTerminalTrips,
-  recurringAccounts,
-} from "@/modules/reports";
+import { departureTaxByHour, listNewAccounts, listTerminalTrips } from "@/modules/reports";
 import { countLabel, formatCount } from "../_shared/format";
-import { AuditNote, MobileCardList, TimeCell } from "../_shared/lists";
+import {
+  AuditNote,
+  DISCLOSURE_SUMMARY_CLASS,
+  DisclosureChevron,
+  MobileCardList,
+  SECTION_LINK_CLASS,
+  TimeCell,
+} from "../_shared/lists";
 import {
   describeAdminRange,
   periodQuery,
@@ -29,7 +31,7 @@ import {
   type AdminRange,
 } from "../_shared/period";
 import { SectionHeadingSkeleton, StatCardSkeleton, TableSkeleton } from "../_shared/skeletons";
-import { TaxByHourChart } from "./tax-by-hour-chart";
+import { CHART_CAPTION, CHART_DETAIL_LABEL, TaxByHourChart, chartDescription } from "./tax-by-hour-chart";
 
 /** Cuántas filas trae cada lista del tablero. Las cifras usan el total real. */
 const LIST_LIMIT = 100;
@@ -60,12 +62,15 @@ function ScrollArea({ label, long, children }: { label: string; long: boolean; c
 const MOBILE_INITIAL = 5;
 
 /** Cabeceras de las dos tablas, compartidas con su silueta de carga. */
-const TRIP_COLUMNS = ["Salida", "Ruta", "Agencia"] as const;
+const TRIP_COLUMNS = ["Salió", "Ruta", "Agencia"] as const;
 const NEW_ACCOUNT_COLUMNS = ["Registro", "Cédula", "Primer nombre", "Primer apellido"] as const;
 
 /** Títulos y frases fijas de las secciones, compartidos con su silueta de carga. */
-const TRIPS_TITLE = "Últimos viajes que llegaron";
-const TRIPS_DESCRIPTION = "Cada viaje con su ruta y su punto de encuentro, del más reciente al más antiguo.";
+const TRIPS_TITLE = "Últimos viajes completados";
+const TRIPS_DESCRIPTION =
+  "Viajes que ya llegaron a su destino, con su ruta y su punto de encuentro. Primero el que salió más recientemente.";
+const MOVEMENTS_LINK_LABEL = "Ver todos los movimientos";
+const AUDIT_TEXT = "Esta lista muestra datos personales: cada vez que se abre queda registrada con tu nombre.";
 const NEW_ACCOUNTS_TITLE = "Usuarios nuevos";
 const NEW_ACCOUNTS_DESCRIPTION =
   "Pasajeros que crearon su cuenta, o a quienes se la crearon en taquilla, en este periodo.";
@@ -77,13 +82,14 @@ const STICKY_TH = cx(PANEL_TH_CLASS, "sticky top-0 z-10 bg-superficie shadow-1")
 /**
  * Cifras, listas y gráfico del periodo elegido en el tablero. Va dentro de un
  * `<Suspense>` con la clave del periodo, así el cambio de pestaña muestra su
- * silueta enseguida. `listNewAccounts` deja registro de auditoría, como antes.
+ * silueta enseguida. Todo lo de aquí cambia con el periodo; los usuarios
+ * recurrentes, que no, van arriba. `listNewAccounts` deja registro de
+ * auditoría, como antes.
  */
 export async function PeriodData({ range, panelUserId }: { range: AdminRange; panelUserId: string }) {
-  const [trips, newAccounts, returningAccounts, byHour] = await Promise.all([
+  const [trips, newAccounts, byHour] = await Promise.all([
     listTerminalTrips(range.from, range.to, { limit: LIST_LIMIT }),
     listNewAccounts(range.from, range.to, panelUserId, { limit: LIST_LIMIT }),
-    recurringAccounts(),
     departureTaxByHour(range.from, range.to),
   ]);
 
@@ -93,14 +99,15 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/* Sin enlace en la cifra: "Ver todos los movimientos" ya está en la
+          cabecera de la sección de abajo, con el mismo destino. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard
           label="Recorridos completados"
           value={formatCount(trips.total)}
           detail="Viajes que llegaron a su destino."
           icon={<IconBus />}
           tone="marca"
-          href={movementsHref}
         />
         <StatCard
           label="Usuarios nuevos"
@@ -109,16 +116,10 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
           icon={<IconUsers />}
           tone="marca"
         />
-        <StatCard
-          label="Usuarios recurrentes"
-          value={formatCount(returningAccounts)}
-          detail="Pasajeros con dos o más viajes pagados, desde el inicio. No depende del periodo."
-          icon={<IconUsers />}
-        />
       </div>
 
       <section aria-labelledby="recorridos-titulo" className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
           <div className="min-w-0">
             <h2 id="recorridos-titulo" className="text-lg font-semibold text-tinta">
               {TRIPS_TITLE}
@@ -126,8 +127,9 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
             <p className="text-sm leading-snug text-tinta-suave">{TRIPS_DESCRIPTION}</p>
           </div>
           {trips.total > 0 ? (
-            <Link href={movementsHref} className={panelButtonClass("fantasma", "md", "-mr-2")}>
-              Ver todos los movimientos
+            <Link href={movementsHref} className={SECTION_LINK_CLASS}>
+              {MOVEMENTS_LINK_LABEL}
+              <IconChevronRight className="size-4 shrink-0" />
             </Link>
           ) : null}
         </div>
@@ -159,7 +161,7 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
                     subtitle={t.agencyName}
                     details={[
                       {
-                        label: "Salida",
+                        label: "Salió",
                         value: t.departedAt ? formatCaracasDateTime24(t.departedAt) : "Sin registrar",
                       },
                       { label: "Punto de encuentro", value: t.meetingPoint },
@@ -169,7 +171,7 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
               />
             }
           >
-            <ScrollArea label="Lista de viajes que llegaron" long={trips.rows.length > SCROLL_AFTER_ROWS}>
+            <ScrollArea label="Lista de viajes completados" long={trips.rows.length > SCROLL_AFTER_ROWS}>
               <table className="w-full text-left">
                 <caption className="sr-only">
                   {TRIPS_TITLE}. {rangeText}.
@@ -288,7 +290,7 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
             {countLabel(newAccounts.total, "usuario nuevo", "usuarios nuevos")}.
           </p>
         ) : null}
-        <AuditNote>Esta lista muestra datos personales: cada vez que se abre queda registrada con tu nombre.</AuditNote>
+        <AuditNote>{AUDIT_TEXT}</AuditNote>
       </section>
 
       <TaxByHourChart title={CHART_TITLE} hours={byHour} severalDays={range.period !== "24h" && spansSeveralDays(range)} />
@@ -296,35 +298,72 @@ export async function PeriodData({ range, panelUserId }: { range: AdminRange; pa
   );
 }
 
-/** Silueta de `PeriodData`: tres cifras, dos listas y el gráfico, con sus textos fijos reales. */
-export function PeriodDataSkeleton() {
+/**
+ * Silueta de `PeriodData`: dos cifras, dos listas y el gráfico. Los títulos,
+ * las frases fijas, el enlace a movimientos, la nota de privacidad y los
+ * textos fijos del gráfico se pintan reales; el cuerpo del gráfico reserva su
+ * altura real (frase de resumen, 176 px de barras, fila de horas, leyenda y
+ * desplegable).
+ */
+export function PeriodDataSkeleton({ severalDays = false }: { severalDays?: boolean }) {
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCardSkeleton label="Recorridos completados" link />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <StatCardSkeleton label="Recorridos completados" />
         <StatCardSkeleton label="Usuarios nuevos" />
-        <StatCardSkeleton label="Usuarios recurrentes" />
       </div>
       <div className="flex flex-col gap-3">
-        <SectionHeadingSkeleton title={TRIPS_TITLE} description={TRIPS_DESCRIPTION} />
+        <SectionHeadingSkeleton
+          title={TRIPS_TITLE}
+          description={TRIPS_DESCRIPTION}
+          action={
+            <span className={SECTION_LINK_CLASS}>
+              {MOVEMENTS_LINK_LABEL}
+              <IconChevronRight className="size-4 shrink-0" />
+            </span>
+          }
+        />
         <TableSkeleton columns={TRIP_COLUMNS} rows={5} mobileDetails={2} />
       </div>
       <div className="flex flex-col gap-3">
         <SectionHeadingSkeleton title={NEW_ACCOUNTS_TITLE} description={NEW_ACCOUNTS_DESCRIPTION} />
         <TableSkeleton columns={NEW_ACCOUNT_COLUMNS} rows={4} mobileCards={2} mobileDetails={1} />
+        <div aria-hidden="true">
+          <AuditNote>{AUDIT_TEXT}</AuditNote>
+        </div>
       </div>
       <div aria-hidden="true" className="rounded-tarjeta border border-borde bg-superficie shadow-1">
         <div className="border-b border-borde px-5 py-4">
-          {/* La frase de ayuda depende del periodo (un día o varios): va en barra. */}
-          <SectionHeadingSkeleton title={CHART_TITLE} />
+          <p className="text-lg font-semibold text-tinta">{CHART_TITLE}</p>
+          <p className="mt-1 text-sm leading-snug text-tinta-suave">{chartDescription(severalDays)}</p>
         </div>
-        <div className="flex h-56 items-end gap-1 p-5">
-          {Array.from({ length: 24 }, (_, index) => (
-            <Skeleton
-              key={index}
-              className={`min-w-0 flex-1 rounded-b-none ${["h-1/4", "h-1/2", "h-2/3", "h-1/3", "h-3/4"][index % 5]}`}
-            />
-          ))}
+        <div className="flex flex-col gap-5 p-5">
+          <Skeleton className="h-6 w-full max-w-lg rounded-pastilla" />
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2 sm:gap-3">
+              <div className="flex h-44 w-14 shrink-0 flex-col justify-between">
+                <Skeleton className="h-4 w-full rounded-pastilla" />
+                <Skeleton className="h-4 w-full rounded-pastilla" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex h-44 items-end gap-px border-b border-borde-control sm:gap-1">
+                  {Array.from({ length: 24 }, (_, index) => (
+                    <Skeleton
+                      key={index}
+                      className={`min-w-0 flex-1 rounded-b-none ${["h-1/4", "h-1/2", "h-2/3", "h-1/3", "h-3/4"][index % 5]}`}
+                    />
+                  ))}
+                </div>
+                {/* Hueco de la fila de horas (00 a 23). */}
+                <div className="mt-1.5 h-5" />
+              </div>
+            </div>
+            <p className="text-sm text-tinta-suave">{CHART_CAPTION}</p>
+          </div>
+          <span className={DISCLOSURE_SUMMARY_CLASS}>
+            {CHART_DETAIL_LABEL}
+            <DisclosureChevron />
+          </span>
         </div>
       </div>
     </div>

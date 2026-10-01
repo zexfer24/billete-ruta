@@ -3,7 +3,8 @@ import type { AgencyFleetStatus } from "@/modules/reports";
 import { UNIT_STATE_LABELS, unitStateTone, type UnitState } from "@/lib/labels";
 import { countLabel } from "./text";
 import { FLEET_SECTION } from "./section-texts";
-import { EmptyState, SectionCard, StatusBadge, panelButtonClass } from "@/components/panel-ui";
+import { EmptyState, StatusBadge, panelButtonClass } from "@/components/panel-ui";
+import { DashboardSection } from "./section-card";
 import { IconChevronRight, IconUsers } from "@/components/icons";
 import { describeUnitTrip } from "../_shared/unit-trip";
 
@@ -64,7 +65,7 @@ export async function FleetBlock({
   const resumen = ORDEN_RESUMEN.filter((estado) => flota.vehicleSummary[estado] > 0);
 
   return (
-    <SectionCard
+    <DashboardSection
       title={FLEET_SECTION.title}
       description={FLEET_SECTION.description}
       action={
@@ -135,6 +136,6 @@ export async function FleetBlock({
           ) : null}
         </div>
       )}
-    </SectionCard>
+    </DashboardSection>
   );
 }

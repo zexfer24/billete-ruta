@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes } from "react";
-import { FieldError, FieldHint } from "@/components/ui";
+import { FieldErrorSlot, FieldHint } from "@/components/ui";
 import { panelInputClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 
@@ -46,13 +46,9 @@ export function CounterField({
         {...inputProps}
       />
       {hintId ? <FieldHint id={hintId}>{hint}</FieldHint> : null}
-      <div aria-live="polite">
-        {errorId ? (
-          <FieldError id={errorId} afterSubmit={errorAfterSubmit}>
-            {error}
-          </FieldError>
-        ) : null}
-      </div>
+      {/* Mismo contrato que `Field`: el error tras una acción va con `role="alert"`
+          fuera de la región viva, así el lector no lo anuncia dos veces. */}
+      <FieldErrorSlot id={`${id}-error`} error={error} afterSubmit={errorAfterSubmit} />
     </div>
   );
 }

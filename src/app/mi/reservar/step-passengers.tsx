@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { Alert } from "@/components/alert";
 import { DepartureRow } from "@/components/departure-row";
 import { IconCheckCircle, IconPlus, IconUser } from "@/components/icons";
@@ -17,6 +17,7 @@ import {
   type CompanionForm,
   type DepartureVM,
 } from "./booking-form";
+import { revealAndFocus } from "./reveal";
 
 const initialWaitlistState: WaitlistState = { error: null, success: false };
 
@@ -64,6 +65,8 @@ export function StepPassengers({
 }: StepPassengersProps) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showAllErrors, setShowAllErrors] = useState(false);
+  // Contador de toques de "Continuar" con datos pendientes: cada uno vuelve a llevar al primer campo.
+  const [intentos, setIntentos] = useState(0);
 
   const errores = companions.map(companionErrors);
   const pendientes = errores.flatMap((campos, indice) =>
@@ -98,9 +101,20 @@ export function StepPassengers({
       return;
     }
     setShowAllErrors(true);
-    const primero = pendientes[0]!;
-    document.getElementById(`companion-${primero.indice}-${primero.campo}`)?.focus();
+    setIntentos((n) => n + 1);
   }
+
+  // Después del render que muestra los errores: el primer campo pendiente y su
+  // mensaje quedan en el centro de la zona visible, por encima de las barras fijas.
+  useEffect(() => {
+    if (intentos === 0) return;
+    const primero = pendientes[0];
+    if (!primero) return;
+    const campo = document.getElementById(`companion-${primero.indice}-${primero.campo}`);
+    revealAndFocus(campo?.parentElement ?? campo, campo);
+    // Solo cuando la persona vuelve a tocar "Continuar".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intentos]);
 
   function errorDe(indice: number, campo: keyof CompanionForm): string | undefined {
     const visible = showAllErrors || touched[fieldKey(indice, campo)];

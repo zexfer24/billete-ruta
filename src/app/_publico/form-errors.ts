@@ -51,21 +51,42 @@ export type RegisterField = (typeof REGISTER_FIELDS)[number];
 
 /**
  * Errores que `registerAccount` lanza sobre un dato concreto, con el campo al
- * que pertenecen. Los demás (cuenta existente, datos de taquilla que no
- * coinciden, demasiados intentos) se muestran arriba del formulario.
+ * que pertenecen y el texto que se muestra junto a él. Los demás (cuenta
+ * existente, datos de taquilla que no coinciden, demasiados intentos) se
+ * muestran arriba del formulario. Cuando un campo tiene error, el error
+ * reemplaza a su ayuda, así que el texto mostrado repite el ejemplo que la
+ * ayuda daba.
  */
-const REGISTER_DOMAIN_FIELDS: ReadonlyArray<readonly [string, RegisterField]> = [
-  ["La cédula no tiene un formato válido.", "idNumber"],
-  ["Escribe tus nombres.", "givenNames"],
-  ["Escribe tus apellidos.", "surnames"],
-  ["El número de teléfono no es válido.", "phone"],
-  ["El año de nacimiento no es válido.", "birthYear"],
-  ["La contraseña debe tener al menos 8 caracteres.", "password"],
+const REGISTER_DOMAIN_FIELDS: ReadonlyArray<readonly [string, RegisterField, string]> = [
+  [
+    "La cédula no tiene un formato válido.",
+    "idNumber",
+    "La cédula no es válida. Escribe la letra y el número, por ejemplo V12345678.",
+  ],
+  ["Escribe tus nombres.", "givenNames", "Escribe tus nombres como aparecen en tu cédula."],
+  ["Escribe tus apellidos.", "surnames", "Escribe tus apellidos."],
+  [
+    "El número de teléfono no es válido.",
+    "phone",
+    "El teléfono no es válido. Escríbelo con el código de área, por ejemplo 0412‑1234567.",
+  ],
+  [
+    "El año de nacimiento no es válido.",
+    "birthYear",
+    "El año de nacimiento no es válido. Escríbelo con cuatro números, por ejemplo 1990.",
+  ],
+  ["La contraseña debe tener al menos 8 caracteres.", "password", "La contraseña debe tener al menos 8 caracteres."],
 ];
 
 /** Campo al que pertenece un error de dominio del registro, o `null` si es general. */
 export function registerDomainErrorField(message: string): RegisterField | null {
-  return REGISTER_DOMAIN_FIELDS.find(([texto]) => texto === message)?.[1] ?? null;
+  return registerDomainFieldError(message)?.field ?? null;
+}
+
+/** Campo y texto a mostrar de un error de dominio del registro, o `null` si es general. */
+export function registerDomainFieldError(message: string): { field: RegisterField; text: string } | null {
+  const fila = REGISTER_DOMAIN_FIELDS.find(([texto]) => texto === message);
+  return fila ? { field: fila[1], text: fila[2] } : null;
 }
 
 /** El error de dominio avisa que la cédula ya tiene una cuenta con contraseña. */

@@ -112,6 +112,17 @@ export function paymentPhrase(status: string, balance: string): string {
   }
 }
 
+/**
+ * Estado de un comprobante en palabras del pasajero (spec 7.1: el pasajero
+ * tiene su propio lenguaje, separado del panel). `PROOF_STATUS_LABELS` de
+ * `lib/labels.ts` sigue siendo la etiqueta del panel.
+ */
+export const PASSENGER_PROOF_STATUS_LABELS: Record<string, string> = {
+  PENDIENTE: "En revisión",
+  APROBADO: "Aprobado",
+  RECHAZADO: "Rechazado",
+};
+
 // ---------------------------------------------------------------------------
 // Horas con contexto.
 // ---------------------------------------------------------------------------
@@ -143,12 +154,22 @@ export function whenPhrase(date: Date, now: Date = new Date()): string {
   return /^(hoy|mañana|ayer) /.test(phrase) ? phrase : `el ${phrase}`;
 }
 
-/** Encabezado de un grupo de mensajes por día: "Hoy", "Ayer" o la fecha. */
+/**
+ * Encabezado de un grupo de mensajes por día: "Hoy", "Ayer" o el día en
+ * palabras, como en el ticket ("Domingo 27 de septiembre"), con el año solo
+ * si no es el actual. Nunca "27/09/2026": una misma lista no mezcla formatos.
+ */
 export function dayGroupLabel(date: Date, now: Date = new Date()): string {
   const day = formatCaracasDate(date);
   if (day === formatCaracasDate(now)) return "Hoy";
   if (day === formatCaracasDate(new Date(now.getTime() - DAY_MS))) return "Ayer";
-  return day;
+  const mismoAno =
+    formatInTimeZone(date, BUSINESS_TZ, "yyyy") === formatInTimeZone(now, BUSINESS_TZ, "yyyy");
+  return capitalize(
+    formatInTimeZone(date, BUSINESS_TZ, mismoAno ? "EEEE d 'de' MMMM" : "EEEE d 'de' MMMM 'de' yyyy", {
+      locale: es,
+    }),
+  );
 }
 
 /** Primera letra en mayúscula, para empezar una frase con `whenPhrase`. */

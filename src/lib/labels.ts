@@ -1,5 +1,9 @@
-/** Tono visual asociado a un estado, para colorear pastillas (`Pill`). */
-export type StatusTone = "marca" | "exito" | "alerta" | "peligro" | "neutro";
+/**
+ * Tono visual asociado a un estado, para colorear pastillas (`Pill`). Son los
+ * semánticos de la spec 3.4 (`exito`, `alerta`, `peligro`, `info`) más `marca`
+ * y `neutro`.
+ */
+export type StatusTone = "marca" | "exito" | "alerta" | "peligro" | "info" | "neutro";
 
 /** Los nueve estados de reserva en español, iguales a los usados en las páginas del pasajero. */
 export const RESERVATION_STATUS_LABELS: Record<string, string> = {
@@ -19,12 +23,23 @@ export function reservationStatusLabel(status: string): string {
   return RESERVATION_STATUS_LABELS[status] ?? status;
 }
 
+/**
+ * Tonos de los estados de reserva en el panel. Cada estado de pago activo tiene
+ * su color: en validación va en `info` (spec 3.4); abonada, en `marca`, igual
+ * que la barra de progreso del pago parcial; pago en sitio, en `alerta`, porque
+ * es deuda con plazo (el puesto se libera 12 horas antes de la salida) y el
+ * neutro lo confundiría con las reservas liberadas o canceladas del manifiesto.
+ *
+ * Difiere a propósito de `PASSENGER_STATUS_TONES` (src/components/passenger-copy.ts):
+ * al pasajero se le dice si le toca actuar a él (ámbar) o esperar a otro (azul);
+ * al operador, en qué punto del cobro está cada reserva.
+ */
 const RESERVATION_STATUS_TONES: Record<string, StatusTone> = {
   PAGADA: "exito",
   ABORDADA: "exito",
-  EN_VALIDACION: "marca",
+  EN_VALIDACION: "info",
   ABONADA: "marca",
-  PAGO_EN_SITIO: "marca",
+  PAGO_EN_SITIO: "alerta",
   PENDIENTE_PAGO: "alerta",
   LIBERADA: "neutro",
   CANCELADA: "neutro",

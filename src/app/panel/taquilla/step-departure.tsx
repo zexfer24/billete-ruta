@@ -130,8 +130,13 @@ export function StepDeparture({
       ) : null}
 
       {conFichas && !termino ? (
-        <div role="group" aria-label="Día de la salida" className="-m-1 overflow-x-auto p-1">
-          <div className="flex w-max gap-2">
+        // Las fichas bajan de fila en vez de desplazarse de lado: así se ven
+        // todos los días sin adivinar que la tira se desliza. `relative` en el
+        // grupo y en cada ficha contiene el texto `sr-only` (posición
+        // absoluta), que de otro modo ensanchaba la página en el teléfono y
+        // dejaba la barra de «Continuar» fuera de la pantalla.
+        <div role="group" aria-label="Día de la salida" className="relative">
+          <div className="flex flex-wrap gap-2">
             {todos.map((grupo) => {
               const elegido = grupo.key === dia;
               return (
@@ -141,7 +146,7 @@ export function StepDeparture({
                   aria-pressed={elegido}
                   onClick={() => setDia(grupo.key)}
                   className={cx(
-                    "foco inline-flex min-h-11 shrink-0 items-center gap-2 rounded-pastilla border px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none",
+                    "foco relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-pastilla border px-4 text-[15px] font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none",
                     elegido
                       ? "border-marca-600 bg-marca-600 text-white"
                       : "border-borde-control bg-superficie text-tinta hover:bg-marca-50",

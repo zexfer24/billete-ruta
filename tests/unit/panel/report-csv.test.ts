@@ -69,10 +69,10 @@ describe("describeReportRange", () => {
       "Hoy, de 00:00 a 14:32",
     );
     expect(describeReportRange({ from: new Date("2026-09-24T04:00:00Z"), to, preset: "7d" })).toBe(
-      "Últimos 7 días: del 24/09/2026 00:00 al 30/09/2026 14:32",
+      "Últimos 7 días, del 24/09/2026 00:00 al 30/09/2026 14:32",
     );
     expect(describeReportRange({ from: new Date("2026-09-29T18:32:00Z"), to, preset: "24h" })).toBe(
-      "Últimas 24 horas: del 29/09/2026 14:32 al 30/09/2026 14:32",
+      "Últimas 24 horas, del 29/09/2026 14:32 al 30/09/2026 14:32",
     );
     expect(describeReportRange({ from: new Date("2026-09-10T12:00:00Z"), to, preset: "personalizado" })).toBe(
       "Del 10/09/2026 08:00 al 30/09/2026 14:32",

@@ -45,6 +45,9 @@ export const HERO_ACTION_CLASS =
 /** Título del buscador de la portada. */
 export const PORTADA_SEARCH_TITLE = "¿A dónde viajas?";
 
+/** Frase bajo "Próximas salidas", compartida con el skeleton. Vale para toque y para ratón. */
+export const PORTADA_UPCOMING_HINT = "Salen en las próximas 6 horas y todavía tienen puestos. Elige una para reservar.";
+
 const PASOS = [
   { titulo: "Busca", texto: "Elige a dónde y a qué hora viajas.", icono: <IconSearch /> },
   { titulo: "Paga", texto: "Desde tu teléfono o en la taquilla.", icono: <IconCash /> },
@@ -82,15 +85,16 @@ export function HowItWorks() {
 }
 
 /**
- * Pie de la portada: logo del terminal, una nota llana de que las horas son
- * las de Venezuela (sin jerga de formatos, spec 6.4) y el acceso del personal.
+ * Pie de la portada: logo del terminal, una nota llana de que las horas se
+ * muestran en hora de Venezuela (sin jerga de formatos, spec 6.4) y el acceso
+ * del personal.
  */
 export function PortadaFooter() {
   return (
     <footer className={`${PORTADA_COLUMN} pb-[max(2rem,env(safe-area-inset-bottom))]`}>
       <div className="flex flex-col items-center gap-3 border-t border-borde pt-6 text-center">
         <LogoLockup tone="marca" label="Terminal de pasajeros" />
-        <p className="text-sm text-tinta-suave">Todas las horas son de Venezuela.</p>
+        <p className="text-sm text-tinta-suave">Las horas se muestran en hora de Venezuela.</p>
         <Link
           href="/panel/ingresar"
           className="foco inline-flex min-h-11 items-center gap-2 rounded-pastilla px-4 text-sm font-semibold text-tinta-suave transition-colors duration-150 ease-out hover:bg-marca-50 hover:text-marca-700 motion-reduce:transition-none"

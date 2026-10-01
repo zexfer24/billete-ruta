@@ -6,10 +6,10 @@ import type { Currency, Prisma } from "@prisma/client";
 import { RESERVATION_CODE_PATTERN } from "@/modules/booking";
 import { balanceUsd, getCurrentExchangeRate, listActivePaymentMethods } from "@/modules/catalog";
 import { requirePassenger } from "@/modules/auth";
+import { dueForRelease12h } from "@/modules/scheduler";
 import { renderQrDataUrl } from "@/modules/tickets";
 import { formatMoney, round2, ZERO } from "@/lib/decimal";
 import { prisma } from "@/lib/prisma";
-import { PROOF_STATUS_LABELS } from "@/lib/labels";
 import { Alert } from "@/components/alert";
 import { ClearFeedbackParams } from "@/components/clear-feedback-params";
 import { buttonClass, Card, Pill, SectionTitle, type PillTone } from "@/components/ui";
@@ -20,6 +20,7 @@ import {
   currencyName,
   dayTimePhrase,
   isInactiveReservation,
+  PASSENGER_PROOF_STATUS_LABELS,
   whenPhrase,
 } from "@/components/passenger-copy";
 import { ClearBookingDraft } from "../../_components/clear-booking-draft";
@@ -38,9 +39,6 @@ export const metadata: Metadata = {
  * operador si el servidor también debe rechazarlo).
  */
 const ESTADOS_CON_COMPROBANTE = new Set(["PENDIENTE_PAGO", "ABONADA", "EN_VALIDACION", "PAGO_EN_SITIO"]);
-
-/** Una reserva de pago en taquilla se libera si no se paga 12 horas antes de salir. */
-const HORAS_LIMITE_TAQUILLA = 12;
 
 const PROOF_TONES: Record<string, PillTone> = {
   APROBADO: "exito",
@@ -123,7 +121,9 @@ export default async function DetalleReservaPage({
   const puedeEnviarComprobante =
     saldo.greaterThan(0) && ESTADOS_CON_COMPROBANTE.has(reserva.status) && !yaSalio;
   const recienCreada = ok === "reserva-creada";
-  const limiteTaquilla = new Date(salida.getTime() - HORAS_LIMITE_TAQUILLA * 3_600_000);
+  // Misma ventana con la que el barrido libera el puesto y con la que avisa `notices` (`dueForRelease12h`).
+  const plazoTaquillaMs = dueForRelease12h(now).getTime() - now.getTime();
+  const limiteTaquilla = new Date(salida.getTime() - plazoTaquillaMs);
 
   const [metodosDigitales, qrDataUrl] = await Promise.all([
     puedeEnviarComprobante ? metodosConSaldo(agencia.id, saldo, reserva) : Promise.resolve([] as MetodoVM[]),
@@ -158,7 +158,7 @@ export default async function DetalleReservaPage({
         </>
       ),
       status: {
-        label: PROOF_STATUS_LABELS[proof.status] ?? proof.status,
+        label: PASSENGER_PROOF_STATUS_LABELS[proof.status] ?? proof.status,
         tone: PROOF_TONES[proof.status] ?? "neutro",
       },
       note: proof.status === "RECHAZADO" && proof.rejectionReason ? `Motivo: ${proof.rejectionReason}` : null,
@@ -173,9 +173,6 @@ export default async function DetalleReservaPage({
     })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 
-  // Con el ticket listo, lo que importa en el andén es el QR: el título visible repetiría
-  // la ruta y la hora que ya dice el ticket, y lo empujaría fuera de la primera pantalla.
-  const tituloSoloLector = Boolean(reserva.ticket) || reserva.status === "PAGADA";
   const inactiva = isInactiveReservation(reserva.status);
   // La frase de pago del ticket se calla cuando debajo hay una tarjeta que ya lo explica.
   const ocultarFraseDePago = puedeEnviarComprobante || inactiva;
@@ -187,20 +184,15 @@ export default async function DetalleReservaPage({
           <IconArrowLeft aria-hidden="true" className="size-5" />
           Mis viajes
         </Link>
-        <h1
-          className={
-            tituloSoloLector
-              ? "sr-only"
-              : "break-words text-2xl font-bold tracking-tight text-tinta sm:text-3xl"
-          }
-        >
-          Viaje a {ruta.destination}
+        {/*
+          Título solo para lectores de pantalla: el ticket de abajo ya dice la
+          ruta, el día y la hora en grande. Repetirlos empujaría hacia abajo
+          el QR o lo que falta hacer con el pago.
+        */}
+        <h1 className="sr-only">
+          Viaje a {ruta.destination}, {`${yaSalio ? "salió" : "sale"} ${whenPhrase(salida, now)}`} desde{" "}
+          {ruta.origin}
         </h1>
-        {tituloSoloLector ? null : (
-          <p className="leading-relaxed text-tinta-suave">
-            {capitalize(`${yaSalio ? "salió" : "sale"} ${whenPhrase(salida, now)}`)} desde {ruta.origin}
-          </p>
-        )}
       </div>
 
       {recienCreada ? (
@@ -217,7 +209,13 @@ export default async function DetalleReservaPage({
         </>
       ) : null}
 
-      <TicketCard data={ticketData} size="grande" qrDataUrl={qrDataUrl} hidePaymentPhrase={ocultarFraseDePago}>
+      <TicketCard
+        data={ticketData}
+        size="grande"
+        qrDataUrl={qrDataUrl}
+        hidePaymentPhrase={ocultarFraseDePago}
+        reviewUsd={enRevisionUsd.toString()}
+      >
         {!inactiva && !yaSalio ? (
           <div className="flex items-start gap-3 rounded-control border border-marca-200 bg-marca-50 px-4 py-3">
             <IconMapPin aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-marca-600" />
@@ -265,7 +263,7 @@ export default async function DetalleReservaPage({
               reserva.status === "EN_VALIDACION"
                 ? faltaria.greaterThan(0)
                   ? `Enviar un comprobante por ${formatMoney(faltaria, "USD")}`
-                  : "¿Te equivocaste de comprobante? Envía otro"
+                  : "Enviar otro comprobante"
                 : reserva.status === "PAGO_EN_SITIO"
                   ? "Prefiero pagar en línea"
                   : undefined
@@ -292,7 +290,7 @@ export default async function DetalleReservaPage({
                 <IconUser className="size-5" />
               </span>
               <span className="min-w-0 flex-1 break-words font-medium text-tinta">{p.fullName}</span>
-              {p.isHolder ? <Pill tone="marca">Tú</Pill> : null}
+              {p.isHolder ? <span className="shrink-0 text-sm text-tinta-suave">Tú</span> : null}
             </li>
           ))}
         </ul>
@@ -460,8 +458,11 @@ function AccionDePago({
       <Card className="flex flex-col gap-4">
         <SectionTitle id="accion-pago">{enRevision ? "Tu pago está en revisión" : "Paga lo que falta"}</SectionTitle>
         <div>
+          {/* En revisión, la cifra grande es lo enviado; lo que faltaría lo dice la frase de abajo. */}
           <p className="text-sm text-tinta-suave">{enRevision ? "Por confirmar" : "Te faltan"}</p>
-          <p className="tabular text-3xl font-bold text-tinta">{saldoTexto}</p>
+          <p className="tabular text-3xl font-bold text-tinta">
+            {enRevision ? (enRevisionTexto ?? saldoTexto) : saldoTexto}
+          </p>
         </div>
         {enRevision ? (
           <p className="leading-relaxed text-tinta">

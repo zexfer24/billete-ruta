@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchCard } from "@/components/search-card";
 import {
   departureWhenLabel,
@@ -52,7 +52,10 @@ const SEATS_TONE_CLASSES = {
  * con los días que tienen salidas (se ve un día a la vez) y la lista de ese
  * día, con "Salen pronto" arriba si es hoy y las salidas llenas al final con
  * su lista de espera. Cada salida es una tarjeta entera que se toca para
- * elegirla. El precio es por persona; la tasa del terminal se avisa arriba.
+ * elegirla. El precio es por persona; la tasa del terminal se avisa en una
+ * línea bajo el título del día. En el teléfono las pastillas de días van en
+ * una sola fila que se desliza de lado, para que la primera salida quepa en
+ * la primera pantalla.
  */
 export function StepDepartures({
   departures,
@@ -70,6 +73,7 @@ export function StepDepartures({
 }: StepDeparturesProps) {
   // Clave de la lista que la persona pidió ver completa; cambiar de día o de búsqueda la recorta otra vez.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const diasRef = useRef<HTMLDivElement>(null);
 
   const filtradas = useMemo(
     () =>
@@ -103,6 +107,20 @@ export function StepDepartures({
   const ocultas = ordenadas.length - visibles.size;
 
   const tasa = formatCents(parseCents(taxPerPassengerUsd) ?? BigInt(0), "USD");
+
+  // En la fila deslizable, la pastilla del día elegido siempre queda a la vista
+  // (por ejemplo, al volver del paso 2 con un día lejano). Solo se mueve la
+  // fila, nunca la página.
+  useEffect(() => {
+    const fila = diasRef.current;
+    const activa = fila?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!fila || !activa) return;
+    const inicio = activa.offsetLeft;
+    const fin = inicio + activa.offsetWidth;
+    if (inicio < fila.scrollLeft || fin > fila.scrollLeft + fila.clientWidth) {
+      fila.scrollLeft = Math.max(0, inicio - 16);
+    }
+  }, [diaActivo]);
 
   const grupos = [
     { id: "pronto", titulo: "Salen pronto", lista: pronto.filter((d) => visibles.has(d.id)) },
@@ -141,7 +159,12 @@ export function StepDepartures({
             <p id="dias-titulo" className="font-semibold text-tinta">
               ¿Qué día sales?
             </p>
-            <div role="group" aria-labelledby="dias-titulo" className="flex flex-wrap gap-2">
+            <div
+              ref={diasRef}
+              role="group"
+              aria-labelledby="dias-titulo"
+              className="relative -mx-4 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 py-1.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+            >
               {dias.map((d) => {
                 const activo = d.key === diaActivo;
                 return (
@@ -151,21 +174,22 @@ export function StepDepartures({
                     aria-pressed={activo}
                     onClick={() => onChangeDay(d.key)}
                     className={cx(
-                      "foco inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-pastilla border px-4 text-base transition-colors duration-150 ease-out motion-reduce:transition-none",
+                      "foco inline-flex min-h-14 shrink-0 cursor-pointer snap-start flex-col items-center justify-center rounded-pastilla border px-4 py-1 leading-tight transition-colors duration-150 ease-out motion-reduce:transition-none",
                       activo
-                        ? "border-marca-600 bg-marca-600 font-semibold text-white"
-                        : "border-borde-control bg-superficie font-medium text-tinta hover:border-marca-600 hover:bg-marca-50",
+                        ? "border-marca-600 bg-marca-600 text-white"
+                        : "border-borde-control bg-superficie text-tinta hover:border-marca-600 hover:bg-marca-50",
                     )}
                   >
-                    {d.label}
+                    <span className={cx("whitespace-nowrap text-base", activo ? "font-bold" : "font-semibold")}>
+                      {d.label}
+                    </span>
                     <span
                       className={cx(
-                        "tabular rounded-pastilla px-2 text-sm font-semibold",
-                        activo ? "bg-white/20 text-white" : "bg-marca-50 text-marca-700",
+                        "tabular whitespace-nowrap text-sm",
+                        activo ? "text-white" : "text-tinta-suave",
                       )}
                     >
-                      {d.count}
-                      <span className="sr-only">{d.count === 1 ? " salida" : " salidas"}</span>
+                      {d.count === 1 ? "1 salida" : `${d.count} salidas`}
                     </span>
                   </button>
                 );
@@ -173,23 +197,16 @@ export function StepDepartures({
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            {!destination ? (
-              <p className="text-sm leading-relaxed text-tinta-suave">
-                Elige arriba a dónde vas para ver menos opciones.
-              </p>
-            ) : null}
-            <p className="text-sm leading-relaxed text-tinta-suave">
-              Los precios son por persona. A cada pasajero se le suma la tasa del terminal de{" "}
-              <span className="tabular whitespace-nowrap">{tasa}</span>.
-            </p>
-          </div>
-
           {infoDia ? (
             <section aria-labelledby="dia-elegido" className="flex flex-col gap-4">
-              <h3 id="dia-elegido" className="text-lg font-semibold text-tinta">
-                {infoDia.heading}
-              </h3>
+              <div className="flex flex-col gap-0.5">
+                <h3 id="dia-elegido" className="text-lg font-semibold text-tinta">
+                  {infoDia.heading}
+                </h3>
+                <p className="text-sm text-tinta-suave">
+                  Precio por persona + tasa del terminal de <span className="tabular whitespace-nowrap">{tasa}</span>
+                </p>
+              </div>
               {grupos.map((grupo) => (
                 <div key={grupo.id} className="flex flex-col gap-3">
                   {grupo.titulo ? (
@@ -228,7 +245,7 @@ export function StepDepartures({
 
 /**
  * Una salida como tarjeta que se toca entera para elegirla: destino, origen
- * y agencia a la izquierda, precio y puestos a la derecha, y abajo la hora
+ * y, en su propia línea, la agencia a la izquierda, precio y puestos a la derecha, y abajo la hora
  * (el día ya lo dice el título de la lista) con la acción visible: "Elegir"
  * o, si no quedan puestos, "Lista de espera".
  */
@@ -264,20 +281,17 @@ function DepartureOption({
             <span className="sr-only">Hacia </span>
             {d.destination}
           </span>
-          <span className="block break-words text-sm text-tinta-suave">
-            Desde {d.origin}
-            {agencia ? (
-              <>
-                {" · "}
-                <span
-                  aria-hidden="true"
-                  className="mr-1 inline-block size-2.5 rounded-full align-middle"
-                  style={{ backgroundColor: agencyColor(d.agencyId).bg }}
-                />
-                {agencia}
-              </>
-            ) : null}
-          </span>
+          <span className="block break-words text-sm text-tinta-suave">Desde {d.origin}</span>
+          {agencia ? (
+            <span className="mt-0.5 flex items-center gap-1.5 text-sm text-tinta-suave">
+              <span
+                aria-hidden="true"
+                className="inline-block size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: agencyColor(d.agencyId).bg }}
+              />
+              <span className="min-w-0 break-words">{agencia}</span>
+            </span>
+          ) : null}
         </span>
         <span className="shrink-0 text-right">
           <span className="tabular block text-lg font-bold leading-snug text-tinta">
@@ -288,8 +302,9 @@ function DepartureOption({
         </span>
       </span>
 
-      <span className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+      {/* "Elegir" queda siempre en la esquina de abajo a la derecha: si la hora y la duración no caben, la duración baja dentro de su columna. */}
+      <span className="mt-2 flex items-end justify-between gap-3">
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
           <span
             className={cx(
               "tabular flex items-center gap-1.5 text-base",
@@ -301,7 +316,7 @@ function DepartureOption({
           </span>
           <span className="tabular text-sm text-tinta-suave">{tripDurationLabel(d.estimatedMinutes)}</span>
         </span>
-        <span className="ml-auto inline-flex items-center gap-1 font-semibold text-marca-700">
+        <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-marca-700">
           {selected ? <span className="sr-only">Elegida. </span> : null}
           {llena ? "Lista de espera" : "Elegir"}
           <IconChevronRight aria-hidden="true" className="size-5 shrink-0" />

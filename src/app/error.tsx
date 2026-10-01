@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { PublicCard, PublicShell } from "@/app/_publico/public-shell";
 import { buttonClass } from "@/components/ui-classes";
 
@@ -16,6 +17,19 @@ interface ErrorPageProps {
  * reintenta.
  */
 export default function ErrorPage({ error, reset }: ErrorPageProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  // `reset()` solo vuelve a pintar lo que ya estaba en el cliente, con la carga
+  // de servidor que falló; `router.refresh()` la pide de nuevo. Juntos dentro
+  // de una transición, el reintento de verdad vuelve a consultar los datos.
+  function retry() {
+    startTransition(() => {
+      router.refresh();
+      reset();
+    });
+  }
+
   useEffect(() => {
     // Deja rastro en la consola del navegador para poder diagnosticar la falla.
     console.error(error);
@@ -28,8 +42,14 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
         title="Algo salió mal de nuestro lado"
         description="No es tu culpa. Intenta de nuevo; si el problema sigue, vuelve al inicio y prueba otra vez en unos minutos."
       >
-        <button type="button" onClick={reset} className={buttonClass("primario", "w-full", "lg")}>
-          Intentar de nuevo
+        <button
+          type="button"
+          onClick={retry}
+          disabled={isPending}
+          aria-busy={isPending}
+          className={buttonClass("primario", "w-full", "lg")}
+        >
+          {isPending ? "Intentando…" : "Intentar de nuevo"}
         </button>
         {error.digest ? (
           <p className="text-sm text-tinta-tenue">

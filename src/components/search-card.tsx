@@ -25,7 +25,8 @@ export interface SearchCardProps {
 /**
  * Buscador de origen y destino: dos listas grandes con su etiqueta visible
  * siempre ("¿De dónde sales?", "¿A dónde vas?"), que arrancan en "Cualquier
- * origen" y "Cualquier destino", y un botón con texto para invertirlas. Las
+ * origen" y "Cualquier destino", y un botón "Cambiar" que los intercambia
+ * ("invertir" se entiende primero como invertir dinero). Las
  * acciones van en `children`, sobre el fondo morado.
  */
 export function SearchCard({
@@ -67,7 +68,7 @@ export function SearchCard({
           className={`foco-sobre-marca cursor-pointer transition-colors duration-150 ease-out hover:bg-white/20 motion-reduce:transition-none ${SWAP_CLASS}`}
         >
           <IconSwap aria-hidden="true" className="size-5" />
-          Invertir
+          Cambiar
           <span className="sr-only"> origen y destino</span>
         </button>
       </div>
@@ -79,7 +80,7 @@ export function SearchCard({
 /**
  * La misma tarjeta, quieta y sin controles, para los skeletons (spec 6.5):
  * etiquetas, valores iniciales ("Cualquier origen", "Cualquier destino") y
- * el botón "Invertir" se pintan reales para que la silueta coincida con el
+ * el botón "Cambiar" se pintan reales para que la silueta coincida con el
  * buscador que llega después. Va dentro de una zona `aria-hidden`.
  */
 export function SearchCardPreview({ title, children }: { title?: ReactNode; children?: ReactNode }) {
@@ -93,7 +94,7 @@ export function SearchCardPreview({ title, children }: { title?: ReactNode; chil
         </div>
         <div className={SWAP_CLASS}>
           <IconSwap aria-hidden="true" className="size-5" />
-          Invertir
+          Cambiar
         </div>
       </div>
       {children ? <div className={ACTIONS_CLASS}>{children}</div> : null}

@@ -4,8 +4,8 @@ import { buttonClass } from "@/components/ui-classes";
 import { SkeletonCard, SkeletonSectionTitle, SkeletonTicketLarge } from "../../_components/skeletons";
 
 /**
- * Silueta del detalle de un viaje: el enlace real de volver, título y
- * subtítulo, ticket grande, tarjeta de pago con la cifra y los campos, y
+ * Silueta del detalle de un viaje: el enlace real de volver (el título es
+ * solo para lectores de pantalla), ticket grande, tarjeta de pago con la cifra y los campos, y
  * quiénes viajan.
  */
 export default function DetalleReservaLoading() {
@@ -16,8 +16,6 @@ export default function DetalleReservaLoading() {
           <IconArrowLeft aria-hidden="true" className="size-5" />
           Mis viajes
         </span>
-        <Skeleton className="h-8 w-3/5 rounded-pastilla" />
-        <Skeleton className="h-5 w-4/5 rounded-pastilla" />
       </div>
       <SkeletonTicketLarge />
       <SkeletonCard className="flex flex-col gap-4">

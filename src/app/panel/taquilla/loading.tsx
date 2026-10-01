@@ -32,12 +32,14 @@ export default function TaquillaLoading() {
               className="flex items-center gap-3 rounded-tarjeta border-2 border-borde bg-superficie px-4 py-4 sm:gap-4"
             >
               <SkeletonCircle className="size-5" />
-              <Skeleton className="h-7 w-14 sm:w-16" />
-              <div className="flex flex-1 flex-col gap-2">
+              {/* `shrink-0` y `min-w-0`: en el teléfono la hora conserva su ancho y
+                  las barras se ajustan a la columna en vez de salirse de la tarjeta. */}
+              <Skeleton className="h-7 w-14 shrink-0 sm:w-16" />
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <Skeleton className="h-5 w-1/2 rounded-pastilla" />
-                <div className="flex gap-2">
-                  <Skeleton className="h-6 w-28 rounded-pastilla" />
-                  <Skeleton className="h-5 w-40 rounded-pastilla" />
+                <div className="flex min-w-0 gap-2">
+                  <Skeleton className="h-6 w-2/5 max-w-28 rounded-pastilla" />
+                  <Skeleton className="h-5 w-1/2 max-w-40 rounded-pastilla" />
                 </div>
               </div>
             </div>

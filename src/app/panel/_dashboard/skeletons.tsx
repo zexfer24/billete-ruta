@@ -1,7 +1,13 @@
 import { Skeleton, SkeletonCircle } from "@/components/skeleton";
 import { PANEL_TH_CLASS, panelButtonClass } from "@/components/panel-ui";
-import { IconChevronDown, IconChevronRight } from "@/components/icons";
-import { TRIPS_TODAY_SECTION, type SectionTexts } from "./section-texts";
+import type { ReactNode } from "react";
+import { IconBus, IconCash, IconChevronDown, IconChevronRight, IconClock, IconTicket } from "@/components/icons";
+import { FIGURE_LABELS, TRIPS_TODAY_SECTION, type SectionTexts } from "./section-texts";
+import {
+  DASHBOARD_SECTION_ACTION_CLASS,
+  DASHBOARD_SECTION_HEADER_CLASS,
+  DASHBOARD_SECTION_TEXT_CLASS,
+} from "./section-card";
 
 /**
  * Siluetas de carga de los bloques del tablero (spec 6.5). Las comparten
@@ -37,27 +43,45 @@ export function AttentionSkeleton() {
   );
 }
 
-/** Silueta de una tarjeta de cifra (`StatCard` con icono y "Ver detalle"). */
-function StatCardSkeleton() {
+/**
+ * Silueta de una tarjeta de cifra (`StatCard` con icono y "Ver detalle"). La
+ * etiqueta, el icono y "Ver detalle" son fijos y se pintan reales, como en el
+ * kit del terminal; solo la cifra y su frase van en barra.
+ */
+function StatCardSkeleton({ label, icon }: { label: string; icon: ReactNode }) {
   return (
-    <div className="flex flex-col rounded-tarjeta border border-borde bg-superficie p-5 shadow-1">
+    <div className="relative flex flex-col overflow-hidden rounded-tarjeta border border-borde bg-superficie p-5 shadow-1">
+      <span className="absolute inset-x-0 top-0 h-1 bg-borde" />
       <div className="flex items-start justify-between gap-3">
-        <Skeleton className="h-4 w-28 rounded-pastilla" />
-        <SkeletonCircle className="size-10" />
+        <p className="text-sm font-semibold text-tinta-suave">{label}</p>
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600 [&>svg]:size-5">
+          {icon}
+        </span>
       </div>
       <Skeleton className="mt-1 h-9 w-24" />
       <Skeleton className="mt-2 h-4 w-3/4 rounded-pastilla" />
-      <Skeleton className="mt-4 h-4 w-20 rounded-pastilla" />
+      <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-marca-700">
+        Ver detalle
+        <IconChevronRight className="size-4" />
+      </span>
     </div>
   );
 }
+
+/** Las cuatro cifras en el orden de `FiguresBlock`, con su icono. */
+const FIGURE_CARDS: ReadonlyArray<{ label: string; icon: ReactNode }> = [
+  { label: FIGURE_LABELS.porCobrar, icon: <IconClock /> },
+  { label: FIGURE_LABELS.salidas, icon: <IconBus /> },
+  { label: FIGURE_LABELS.recaudado, icon: <IconCash /> },
+  { label: FIGURE_LABELS.tickets, icon: <IconTicket /> },
+];
 
 /** Silueta de las cuatro cifras del periodo. */
 export function FiguresSkeleton() {
   return (
     <div aria-hidden="true" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {[0, 1, 2, 3].map((i) => (
-        <StatCardSkeleton key={i} />
+      {FIGURE_CARDS.map((card) => (
+        <StatCardSkeleton key={card.label} label={card.label} icon={card.icon} />
       ))}
     </div>
   );
@@ -81,30 +105,33 @@ export function ListRowsSkeleton({ rows }: { rows: number }) {
 }
 
 /**
- * Cabecera de una tarjeta de sección (`SectionCard`) en la silueta: con los
- * textos de `texts` pinta el título, la descripción y el botón reales (el
- * botón como `span`, sin foco); sin ellos, barras.
+ * Cabecera de una tarjeta de sección (`DashboardSection`) en la silueta, con
+ * las mismas clases que la real: con los textos de `texts` pinta el título,
+ * la descripción y el botón reales (el botón como `span`, sin foco); sin
+ * ellos, barras.
  */
 function SectionHeaderSkeleton({ texts }: { texts?: Partial<SectionTexts> }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-borde px-5 py-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
+    <div className={DASHBOARD_SECTION_HEADER_CLASS}>
+      <div className={DASHBOARD_SECTION_TEXT_CLASS}>
         {texts?.title ? (
           <p className="text-lg font-semibold text-tinta">{texts.title}</p>
         ) : (
           <Skeleton className="h-6 w-48 rounded-pastilla" />
         )}
         {texts?.description ? (
-          <p className="text-sm leading-snug text-tinta-suave">{texts.description}</p>
+          <p className="mt-1 text-sm leading-snug text-tinta-suave">{texts.description}</p>
         ) : (
           <Skeleton className="mt-1 h-4 w-64 max-w-full rounded-pastilla" />
         )}
       </div>
-      {texts?.actionLabel ? (
-        <span className={panelButtonClass("secundario")}>{texts.actionLabel}</span>
-      ) : (
-        <Skeleton className="h-11 w-28" />
-      )}
+      <div className={DASHBOARD_SECTION_ACTION_CLASS}>
+        {texts?.actionLabel ? (
+          <span className={panelButtonClass("secundario")}>{texts.actionLabel}</span>
+        ) : (
+          <Skeleton className="h-11 w-28" />
+        )}
+      </div>
     </div>
   );
 }

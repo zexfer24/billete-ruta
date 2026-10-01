@@ -44,6 +44,12 @@ interface TicketCardProps {
    * decir lo mismo dos veces. La barra de pago se sigue mostrando.
    */
   hidePaymentPhrase?: boolean;
+  /**
+   * Solo en la tarjeta grande: suma de los comprobantes que la agencia aún no
+   * revisa, en dólares ("26.00"). La barra dice cuánto está en revisión en vez
+   * de un "Pagaste $ 0,00" que asusta a quien acaba de pagar.
+   */
+  reviewUsd?: string;
   children?: ReactNode;
 }
 
@@ -93,7 +99,15 @@ function Perforation({ inactive }: { inactive: boolean }) {
  * presentarse) se muestra apagada para no confundirla con un ticket válido.
  * La versión compacta, con `href`, es un enlace entero que dice qué hacer.
  */
-export function TicketCard({ data, size, qrDataUrl, href, hidePaymentPhrase = false, children }: TicketCardProps) {
+export function TicketCard({
+  data,
+  size,
+  qrDataUrl,
+  href,
+  hidePaymentPhrase = false,
+  reviewUsd,
+  children,
+}: TicketCardProps) {
   const inactive = isInactiveReservation(data.status);
   const balance = formatUsdString(data.balanceUsd);
   // La flecha es visual; el lector de pantalla oye "Caracas a Valencia".
@@ -117,6 +131,9 @@ export function TicketCard({ data, size, qrDataUrl, href, hidePaymentPhrase = fa
     const total = Number(data.totalUsd);
     const paid = Number(data.paidUsd);
     const showQr = Boolean(qrDataUrl) && !inactive;
+    const review = reviewUsd !== undefined && Number(reviewUsd) > 0 ? formatUsdString(reviewUsd) : null;
+    // Todo lo enviado está en revisión y aún no hay nada aprobado: la barra vacía no aporta nada.
+    const onlyInReview = review !== null && paid <= 0;
 
     return (
       <article
@@ -144,7 +161,8 @@ export function TicketCard({ data, size, qrDataUrl, href, hidePaymentPhrase = fa
 
         <div className="flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-center gap-3">
-            <AgencyBadge agencyId={data.agencyId} name={data.agencyName} size="sm" />
+            {/* El nombre ya va al lado: el bloque es decorativo para no leerlo dos veces. */}
+            <AgencyBadge agencyId={data.agencyId} name={data.agencyName} size="sm" decorative />
             <p className="min-w-0 flex-1 font-semibold text-tinta">{data.agencyName}</p>
             {statusPill}
           </div>
@@ -169,14 +187,19 @@ export function TicketCard({ data, size, qrDataUrl, href, hidePaymentPhrase = fa
             </div>
           ) : !inactive || !hidePaymentPhrase ? (
             <div className="flex flex-col gap-2">
-              {!inactive ? (
+              {inactive ? null : onlyInReview ? (
+                <p className="tabular text-sm font-medium text-tinta">
+                  Enviaste {review}: lo estamos revisando
+                </p>
+              ) : (
                 <ProgressBar
                   value={paid}
                   max={total}
                   tone={data.status === "PAGADA" ? "exito" : "marca"}
                   label={`Pagaste ${formatUsdString(data.paidUsd)} de ${formatUsdString(data.totalUsd)}`}
+                  detail={review ? `${review} en revisión` : undefined}
                 />
-              ) : null}
+              )}
               {hidePaymentPhrase ? null : (
                 <p className="text-base text-tinta">{paymentPhrase(data.status, balance)}</p>
               )}
@@ -210,8 +233,12 @@ export function TicketCard({ data, size, qrDataUrl, href, hidePaymentPhrase = fa
 
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-center gap-3">
-          <AgencyBadge agencyId={data.agencyId} name={data.agencyName} size="sm" />
-          <p className="min-w-0 flex-1 break-words font-bold leading-snug text-tinta">{route}</p>
+          {/* El nombre de la agencia va visible debajo de la ruta: el bloque es decorativo. */}
+          <AgencyBadge agencyId={data.agencyId} name={data.agencyName} size="sm" decorative />
+          <div className="min-w-0 flex-1">
+            <p className="break-words font-bold leading-snug text-tinta">{route}</p>
+            <p className="break-words text-sm text-tinta-suave">{data.agencyName}</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           {statusPill}

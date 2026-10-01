@@ -89,6 +89,18 @@ export function panelNavHomeHref(groups: readonly PanelNavGroup[]): string {
 }
 
 /**
+ * Inicio del panel que corresponde a una ruta: el tablero del terminal bajo
+ * `/panel/admin` y el de la agencia en el resto. Lo usan las pantallas de
+ * error del panel, que son de cliente y no pueden leer la sesión.
+ */
+export function panelHomeForPath(pathname: string): string {
+  const normalized = stripTrailingSlash(pathname);
+  return matchesPath(normalized, "/panel/admin")
+    ? panelNavHomeHref(ADMIN_NAV)
+    : panelNavHomeHref(OPERATOR_NAV);
+}
+
+/**
  * Alias de ruta: el abordaje es parte del flujo de una salida, así que activa
  * el mismo enlace del menú aunque viva bajo otra ruta.
  */

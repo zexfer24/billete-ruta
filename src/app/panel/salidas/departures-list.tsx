@@ -1,8 +1,9 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { listAgencyDepartures, listRoutes } from "@/modules/catalog";
 import type { AgencyDepartureRow } from "@/modules/catalog";
 import { listDrivers, listVehicles } from "@/modules/agencies";
-import { formatCaracasTime24, formatRelativeDeparture, minutesUntil } from "@/lib/time";
+import { formatCaracasTime24 } from "@/lib/time";
 import { departureStatusLabel, departureStatusTone } from "@/lib/labels";
 import { SidePanel } from "@/components/side-panel";
 import { IconBus, IconCalendar, IconChevronRight } from "@/components/icons";
@@ -18,9 +19,11 @@ import {
 import type { ProgressTone } from "@/components/ui-classes";
 import { cx } from "@/components/ui-classes";
 import { DepartureForm } from "../_forms/departure-form";
-import { caracasDayKey, groupByCaracasDay, plural } from "../_shared/day-label";
+import { groupByCaracasDay, plural } from "../_shared/day-label";
+import { departureNotice } from "../_shared/departure-notice";
+import { DepartureNoticeText } from "../_shared/departure-notice-text";
 import { routeSubtitle } from "../_shared/route-text";
-import { proximasHref } from "./links";
+import { inTodayOrTomorrow, proximasHref } from "./links";
 
 const HORA_MS = 3_600_000;
 const DIA_MS = 24 * HORA_MS;
@@ -36,19 +39,40 @@ function ocupacion(s: AgencyDepartureRow): { label: string; detail: string; tone
   return { label, detail: plural(s.available, "libre", "libres"), tone: "marca" };
 }
 
-/** "Sale en 15 min" o "Sale ahora", solo si falta menos de una hora y la salida no ha partido. */
-function avisoCercano(s: AgencyDepartureRow, ahora: Date): string | null {
-  if (s.status !== "PROGRAMADA" && s.status !== "MANIFIESTO_CERRADO") return null;
-  const minutos = minutesUntil(s.departsAt, ahora);
-  if (minutos < 0 || minutos >= 60) return null;
-  return formatRelativeDeparture(s.departsAt, ahora);
+/**
+ * Nombre de la ruta sin cortes feos: cada ciudad queda entera en su renglón
+ * y el guion va pegado a la ciudad anterior, así nunca queda "–" solo en una
+ * línea ni "San / Cristóbal".
+ */
+function RouteName({ name }: { name: string }) {
+  const partes = name.split(/ ([–-]) /);
+  const ciudades = partes.filter((_, i) => i % 2 === 0);
+  const guiones = partes.filter((_, i) => i % 2 === 1);
+  return (
+    <>
+      {ciudades.map((ciudad, i) => (
+        <Fragment key={`${i}-${ciudad}`}>
+          {i > 0 ? " " : null}
+          <span className="whitespace-nowrap">
+            {ciudad}
+            {guiones[i] ? `\u00A0${guiones[i]}` : null}
+          </span>
+        </Fragment>
+      ))}
+    </>
+  );
 }
 
-/** Tarjeta de una salida en el teléfono: toda la tarjeta abre la hoja de la salida. */
+/**
+ * Tarjeta de una salida en el teléfono: toda la tarjeta abre la hoja de la
+ * salida. Forma fija para todas las tarjetas de la lista: la hora y la
+ * pastilla de estado en la primera fila, el aviso de tiempo (si hay) y la
+ * ruta debajo, sin importar lo largo que sea el nombre de la ruta.
+ */
 function DepartureCard({ s, ahora }: { s: AgencyDepartureRow; ahora: Date }) {
   const hora = formatCaracasTime24(s.departsAt);
   const puestos = ocupacion(s);
-  const cercano = avisoCercano(s, ahora);
+  const aviso = departureNotice(s, ahora);
   const subtitulo = routeSubtitle(s.routeName, s.origin, s.destination);
   return (
     <li>
@@ -56,15 +80,16 @@ function DepartureCard({ s, ahora }: { s: AgencyDepartureRow; ahora: Date }) {
         href={`/panel/salidas/${s.id}`}
         className="foco flex flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4 shadow-1 transition-colors duration-150 ease-out hover:bg-marca-50 motion-reduce:transition-none"
       >
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-base font-semibold text-tinta">
-              <span className="tabular">{hora}</span> · {s.routeName}
-            </p>
-            {cercano ? <p className="text-sm font-semibold text-alerta">{cercano}</p> : null}
-            {subtitulo ? <p className="text-sm text-tinta-suave">{subtitulo}</p> : null}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-start justify-between gap-3">
+            <p className="tabular text-lg font-bold text-tinta">{hora}</p>
+            <StatusBadge label={departureStatusLabel(s.status)} tone={departureStatusTone(s.status)} />
           </div>
-          <StatusBadge label={departureStatusLabel(s.status)} tone={departureStatusTone(s.status)} />
+          {aviso ? <DepartureNoticeText aviso={aviso} /> : null}
+          <p className="text-base font-semibold text-tinta">
+            <RouteName name={s.routeName} />
+          </p>
+          {subtitulo ? <p className="text-sm text-tinta-suave">{subtitulo}</p> : null}
         </div>
         <p className="text-sm text-tinta-suave">
           <span className="tabular font-semibold text-tinta">{s.vehiclePlate}</span> · {s.driverName}
@@ -108,10 +133,8 @@ export async function DeparturesList({
   );
   const recortada = consultadas.length >= TOPE_CONSULTA;
 
-  // Caracas no cambia de hora, así que "ahora + 24 h" siempre cae en mañana.
-  const manana = caracasDayKey(new Date(ahora.getTime() + DIA_MS));
   const salidas =
-    historial || todosLosDias ? consultadas : consultadas.filter((s) => caracasDayKey(s.departsAt) <= manana);
+    historial || todosLosDias ? consultadas : consultadas.filter((s) => inTodayOrTomorrow(s.departsAt, ahora));
   const siguientes = consultadas.length - salidas.length;
 
   const verSiguientes =
@@ -201,10 +224,10 @@ export async function DeparturesList({
               <table className="w-full min-w-[760px]">
                 <thead className="border-b border-borde bg-lienzo">
                   <tr>
-                    <th scope="col" className={cx(PANEL_TH_CLASS, "w-32")}>Hora</th>
+                    <th scope="col" className={cx(PANEL_TH_CLASS, "w-24")}>Hora</th>
                     <th scope="col" className={PANEL_TH_CLASS}>Ruta</th>
-                    <th scope="col" className={PANEL_TH_CLASS}>Vehículo y chofer</th>
-                    <th scope="col" className={cx(PANEL_TH_CLASS, "w-52")}>Puestos</th>
+                    <th scope="col" className={cx(PANEL_TH_CLASS, "min-w-40")}>Vehículo y chofer</th>
+                    <th scope="col" className={cx(PANEL_TH_CLASS, "w-44")}>Puestos</th>
                     <th scope="col" className={PANEL_TH_CLASS}>Estado</th>
                     <th scope="col" className={PANEL_TH_CLASS}>
                       <span className="sr-only">Acción</span>
@@ -215,16 +238,17 @@ export async function DeparturesList({
                   {grupo.items.map((s) => {
                     const hora = formatCaracasTime24(s.departsAt);
                     const puestos = ocupacion(s);
-                    const cercano = avisoCercano(s, ahora);
+                    const aviso = departureNotice(s, ahora);
                     const subtitulo = routeSubtitle(s.routeName, s.origin, s.destination);
                     return (
                       <tr key={s.id} className="border-b border-borde last:border-0">
                         <td className={PANEL_TD_CLASS}>
                           <p className="tabular text-lg font-bold">{hora}</p>
-                          {cercano ? <p className="whitespace-nowrap text-sm font-semibold text-alerta">{cercano}</p> : null}
                         </td>
                         <td className={PANEL_TD_CLASS}>
-                          <p className="font-semibold">{s.routeName}</p>
+                          <p className="font-semibold">
+                            <RouteName name={s.routeName} />
+                          </p>
                           {subtitulo ? <p className="text-sm text-tinta-suave">{subtitulo}</p> : null}
                         </td>
                         <td className={PANEL_TD_CLASS}>
@@ -237,10 +261,16 @@ export async function DeparturesList({
                           <p className="tabular mt-1 text-sm text-tinta-suave">{puestos.detail}</p>
                         </td>
                         <td className={PANEL_TD_CLASS}>
-                          <StatusBadge label={departureStatusLabel(s.status)} tone={departureStatusTone(s.status)} />
+                          <div className="flex flex-col items-start gap-1">
+                            <StatusBadge label={departureStatusLabel(s.status)} tone={departureStatusTone(s.status)} />
+                            {aviso ? <DepartureNoticeText aviso={aviso} /> : null}
+                          </div>
                         </td>
                         <td className={cx(PANEL_TD_CLASS, "text-right")}>
-                          <Link href={`/panel/salidas/${s.id}`} className={panelButtonClass("secundario", "sm")}>
+                          <Link
+                            href={`/panel/salidas/${s.id}`}
+                            className={panelButtonClass("secundario", "sm", "whitespace-nowrap")}
+                          >
                             Ver detalle
                             <span className="sr-only">
                               {" "}

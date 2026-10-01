@@ -11,7 +11,10 @@ import { IconInfo, IconSpinner } from "@/components/icons";
  * formulario, que lleva las fotos elegidas en los pasos anteriores (un
  * formulario no puede ir dentro de otro). Tampoco sirve `SubmitButton`: el
  * asistente envía con su propio `FormData` para que React no vacíe los
- * archivos, así que la espera la marca `submitting`.
+ * archivos, así que la espera la marca `submitting`. Como `SubmitButton`, el
+ * botón de cobrar no usa `disabled` nativo durante la espera: el foco sigue
+ * en él (un botón deshabilitado lo pierde y el foco caería al cuerpo del
+ * diálogo) y el reenvío se bloquea cancelando el clic.
  */
 export function ChargeDialog({
   open,
@@ -116,8 +119,11 @@ export function ChargeDialog({
           </button>
           <button
             type="submit"
-            disabled={submitting}
             aria-disabled={submitting ? true : undefined}
+            onClick={(event) => {
+              // El cobro ya está en camino: un segundo clic o Enter no lo reenvía.
+              if (submitting) event.preventDefault();
+            }}
             className={panelButtonClass("primario", "lg", "w-full sm:w-auto")}
           >
             {submitting ? (

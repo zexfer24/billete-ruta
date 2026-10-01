@@ -133,8 +133,8 @@ export const PANEL_LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-semibold te
 // Tonos de estado (Pill, StatusBadge, Alert, ProgressBar).
 // ---------------------------------------------------------------------------
 
-/** Tonos de una pastilla de estado: los de `labels.ts` más `info`. */
-export type PillTone = StatusTone | "info";
+/** Tonos de una pastilla de estado: los mismos de `labels.ts`, que ya incluyen `info`. */
+export type PillTone = StatusTone;
 
 export const PILL_TONE_CLASSES: Record<PillTone, string> = {
   marca: "bg-marca-100 text-marca-800",

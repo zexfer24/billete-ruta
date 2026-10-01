@@ -48,13 +48,14 @@ export default function TableroLoading() {
       <div className="flex flex-col gap-4">
         <div aria-hidden="true" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <p className="text-lg font-semibold text-tinta">Lo que necesita tu atención</p>
-          <p className="flex flex-wrap items-center gap-x-2 text-sm text-tinta-suave">
+          {/* `div` y no `p`: `Skeleton` es un `div`, que no puede ir dentro de un párrafo. */}
+          <div className="flex flex-wrap items-center gap-x-2 text-sm text-tinta-suave">
             <Skeleton className="h-4 w-28 rounded-pastilla" />
             <span className="inline-flex min-h-11 items-center gap-1.5 px-2 font-semibold text-marca-700">
               <IconRefresh className="size-4" />
               Actualizar
             </span>
-          </p>
+          </div>
         </div>
         <AttentionSkeleton />
       </div>

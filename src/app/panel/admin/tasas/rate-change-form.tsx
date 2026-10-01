@@ -14,7 +14,11 @@ export interface RateChangeFormProps {
   /** Campos ocultos adicionales, como la moneda. */
   hiddenFields?: Record<string, string>;
   label: string;
-  hint: string;
+  /**
+   * `id` del texto que explica el formato del monto. La regla se escribe una
+   * sola vez en la pantalla y cada campo la enlaza con `aria-describedby`.
+   */
+  hintId: string;
   /** Prefijo de la moneda del monto: "$", "Bs.", "COP". */
   prefix: string;
   /** Qué se cambia, para la pregunta: "la tasa de salida". */
@@ -35,19 +39,20 @@ const EMPTY_AMOUNT_MESSAGE = "Escribe el monto nuevo para poder guardarlo.";
  * guardar pide confirmación con el valor anterior y el nuevo, porque el
  * cambio afecta a todas las reservas que se hagan desde ese momento. El campo
  * no lleva ejemplo dentro: se confundía con un valor ya escrito, y el formato
- * ya lo explica la ayuda.
+ * ya lo explica la ayuda de la pantalla (`hintId`).
  *
- * El botón nunca queda deshabilitado, para que se alcance con el teclado y el
- * lector de pantalla lea por qué todavía no guarda: sin un monto válido (con
- * la misma regla que aplica el servidor), pulsarlo marca el campo con su
- * error y lo enfoca; con un monto válido abre la confirmación.
+ * El botón nunca queda deshabilitado, para que se alcance con el teclado:
+ * sin un monto válido (con la misma regla que aplica el servidor), pulsarlo
+ * muestra el error bajo el campo y lo enfoca; con un monto válido abre la
+ * confirmación. El error solo aparece tras pulsar, o al salir del campo con
+ * algo que no es un monto, y siempre en el mismo lugar.
  */
 export function RateChangeForm({
   action,
   fieldName,
   hiddenFields,
   label,
-  hint,
+  hintId,
   prefix,
   subject,
   unit,
@@ -59,9 +64,7 @@ export function RateChangeForm({
   const [attempted, setAttempted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
-  const hintId = `${inputId}-ayuda`;
   const errorId = `${inputId}-error`;
-  const pendingId = `${inputId}-pendiente`;
 
   const parsed = parseAmount(value);
   const isEmpty = value.trim() === "";
@@ -97,9 +100,6 @@ export function RateChangeForm({
             className={panelInputClass(prefix.length >= 3 ? "pl-14" : "pl-9")}
           />
         </div>
-        <p id={hintId} className="text-sm leading-snug text-tinta-suave">
-          {hint}
-        </p>
         <div aria-live="polite">
           {showError ? (
             <p id={errorId} className="flex items-start gap-1.5 text-sm font-semibold leading-snug text-peligro">
@@ -118,7 +118,7 @@ export function RateChangeForm({
               setAttempted(true);
               inputRef.current?.focus();
             }}
-            aria-describedby={showError ? errorId : pendingId}
+            aria-describedby={showError ? errorId : undefined}
             className={triggerClassName}
           >
             Guardar nueva tasa
@@ -156,11 +156,6 @@ export function RateChangeForm({
             fields={{ ...hiddenFields, [fieldName]: parsed }}
           />
         )}
-        {parsed === null && !showError ? (
-          <p id={pendingId} className="mt-2 text-sm text-tinta-suave">
-            {isEmpty ? EMPTY_AMOUNT_MESSAGE : INVALID_AMOUNT_MESSAGE}
-          </p>
-        ) : null}
       </div>
     </div>
   );

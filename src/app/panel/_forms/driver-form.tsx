@@ -4,7 +4,8 @@ import { Alert } from "@/components/alert";
 import { panelButtonClass, panelInputClass } from "@/components/panel-ui";
 import { createDriverAction, updateDriverAction } from "@/app/panel/flota/actions";
 import { PanelField, PanelFixedValue, errorFieldFor, panelFieldAria } from "./panel-field";
-import { UnitStatusChoice, upcomingTitle } from "./unit-status-choice";
+import { upcomingTitle } from "./upcoming-title";
+import { UnitStatusChoice } from "./unit-status-choice";
 
 /** Campos del formulario, para ubicar el error de `?campo=`. */
 const CAMPOS = ["fullName", "idNumber", "phone", "active"] as const;
@@ -68,7 +69,6 @@ export function DriverForm(props: DriverFormProps) {
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
-            placeholder="V12345678"
             className={panelInputClass("tabular uppercase")}
             {...panelFieldAria("chofer-cedula", ayudaCedula, errorDe("idNumber"))}
           />
@@ -82,7 +82,6 @@ export function DriverForm(props: DriverFormProps) {
           inputMode="tel"
           required
           autoComplete="off"
-          placeholder="0414 1234567"
           defaultValue={isEdit ? props.driver.phone : undefined}
           className={panelInputClass("tabular")}
           {...panelFieldAria("chofer-telefono", ayudaTelefono, errorDe("phone"))}

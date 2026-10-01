@@ -45,6 +45,7 @@ describe("buildNotices", () => {
     expect(avisos[0]?.kind).toBe("RESERVA_POR_LIBERAR");
     expect(avisos[0]?.level).toBe("alerta");
     expect(avisos[0]?.body).toContain("40 min");
+    expect(avisos[0]?.body).toContain("tu viaje Caracas → Maracaibo");
     expect(avisos[0]?.at).toEqual(expiresAt);
     expect(avisos[0]?.href).toBe("/mi/reservas/TR-0913-1PAX-AAAA");
   });
@@ -67,6 +68,7 @@ describe("buildNotices", () => {
     expect(aviso).toBeDefined();
     expect(aviso?.level).toBe("alerta");
     expect(aviso?.body).toContain("Monto no coincide");
+    expect(aviso?.body).toContain("del viaje Caracas → Maracaibo");
     expect(aviso?.at).toEqual(createdAt);
   });
 
@@ -105,6 +107,8 @@ describe("buildNotices", () => {
     );
     expect(avisos).toHaveLength(1);
     expect(avisos[0]).toMatchObject({ kind: "COMPROBANTE_EN_VALIDACION", level: "info", at: createdAt });
+    // Nombra el viaje y su salida, para no confundirlo con otra reserva.
+    expect(avisos[0]?.body).toContain("del viaje Caracas → Maracaibo, que sale el mar 15 sep a las 08:00");
   });
 
   it("pago en sitio a veinte horas de la salida sin reconfirmar avisa", () => {

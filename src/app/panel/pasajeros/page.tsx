@@ -25,6 +25,7 @@ import { ListSkeleton, PanelBodySkeleton } from "./skeletons";
 import { parsePasajerosFilters, uuidParam } from "./filters";
 import { pasajerosUrl } from "./urls";
 import { ViewTabs } from "./view-tabs";
+import { LinkPendingIcon } from "./link-pending";
 
 export const metadata = { title: "Pasajeros y pagos" };
 
@@ -190,7 +191,8 @@ async function ProofPanelContent({
  * filtros con la lista y el panel lateral cargan dentro de su propio
  * `<Suspense>`. Como un cambio de pestaña, filtro o página solo cambia los
  * `searchParams`, la pantalla anterior sigue visible hasta que llega la
- * nueva: la pestaña pulsada lo indica al instante (`ViewTabs`).
+ * nueva: la pestaña pulsada lo indica al instante (`ViewTabs`), y lo mismo
+ * el enlace o la fila que abre un panel lateral (`LinkPendingIcon`).
  */
 export default async function PasajerosPage({
   searchParams,
@@ -248,9 +250,9 @@ export default async function PasajerosPage({
             <Link
               href={pasajerosUrl({ vista, salida, buscar, pagina, registrar: "cobro" })}
               scroll={false}
-              className={panelButtonClass("secundario")}
+              className={panelButtonClass("secundario", "md", "relative")}
             >
-              <IconCash className="size-5" />
+              <LinkPendingIcon icon={<IconCash className="size-5" />} />
               Registrar un cobro
             </Link>
             {/* Enlace normal (no `Link`): es una descarga y no debe precargarse. */}
@@ -278,7 +280,7 @@ export default async function PasajerosPage({
         <p className="text-[15px] text-tinta-suave">{VIEW_DESCRIPTIONS[vista]}</p>
       </div>
 
-      <Suspense key={listKey} fallback={<ListSkeleton filters={!esPorRevisar} />}>
+      <Suspense key={listKey} fallback={<ListSkeleton filters={!esPorRevisar} variant={esPorRevisar ? "comprobantes" : "reservas"} />}>
         {esPorRevisar || !salidasP ? (
           <ProofQueueList agencyId={agencyId} page={pagina} selectedProofId={comprobanteId} okCode={okCode} />
         ) : (

@@ -10,6 +10,7 @@ import {
   isInactiveReservation,
   noticeActionLabel,
   noticeTimeLabel,
+  PASSENGER_PROOF_STATUS_LABELS,
   passengerStatusTone,
   paymentPhrase,
   reservationActionLabel,
@@ -78,7 +79,14 @@ describe("horas con contexto", () => {
   it("agrupa por día con Hoy y Ayer", () => {
     expect(dayGroupLabel(new Date("2026-10-12T13:00:00.000Z"), AHORA)).toBe("Hoy");
     expect(dayGroupLabel(new Date("2026-10-11T13:00:00.000Z"), AHORA)).toBe("Ayer");
-    expect(dayGroupLabel(new Date("2026-10-01T13:00:00.000Z"), AHORA)).toBe("01/10/2026");
+    expect(dayGroupLabel(new Date("2026-10-01T13:00:00.000Z"), AHORA)).toBe("Jueves 1 de octubre");
+    expect(dayGroupLabel(new Date("2025-12-31T13:00:00.000Z"), AHORA)).toBe("Miércoles 31 de diciembre de 2025");
+  });
+
+  it("los comprobantes tienen etiquetas propias del pasajero", () => {
+    expect(PASSENGER_PROOF_STATUS_LABELS.PENDIENTE).toBe("En revisión");
+    expect(PASSENGER_PROOF_STATUS_LABELS.APROBADO).toBe("Aprobado");
+    expect(PASSENGER_PROOF_STATUS_LABELS.RECHAZADO).toBe("Rechazado");
   });
 
   it("capitalize pone la primera letra en mayúscula", () => {

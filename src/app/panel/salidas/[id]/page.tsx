@@ -18,12 +18,14 @@ import {
   SectionCard,
   StatCard,
   StatusBadge,
-  TableShell,
   panelButtonClass,
 } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
 import { errorMessage, okMessage } from "../../_dashboard/search-params";
+import { CompactFigures } from "../../_shared/compact-figures";
 import { departureWhenText, plural } from "../../_shared/day-label";
+import { departureNotice } from "../../_shared/departure-notice";
+import { DepartureNoticeText } from "../../_shared/departure-notice-text";
 import { loadManifestOrNotFound } from "../../_shared/load-manifest";
 import { manifestSummary, passengerBoardingState, type ManifestSummary, type PassengerBoardingState } from "../../_shared/manifest-summary";
 import { registerArrivalAction, registerDepartureAction, startBoardingAction } from "../actions";
@@ -51,6 +53,45 @@ const BOARDING_BADGE: Record<PassengerBoardingState, { label: string; tone: Stat
 function boardingBadge(estado: PassengerBoardingState, embarqueIniciado: boolean): { label: string; tone: StatusTone } {
   const badge = BOARDING_BADGE[estado];
   return estado === "por-abordar" && !embarqueIniciado ? { ...badge, tone: "neutro" } : badge;
+}
+
+/**
+ * Por qué no viaja un pasajero, en una sola pastilla (sin repetir "No viaja"
+ * y "Liberada" en dos pastillas grises). `ABORDADA` sin hora de abordaje es
+ * un acompañante que no subió con su grupo.
+ */
+const NO_VIAJA_LABELS: Readonly<Record<string, string>> = {
+  LIBERADA: "No viaja: puesto liberado",
+  CANCELADA: "No viaja: reserva cancelada",
+  NO_SHOW: "No viaja: no se presentó",
+  ABORDADA: "No viaja: no subió con su grupo",
+};
+
+function noViajaLabel(reservationStatus: string): string {
+  return NO_VIAJA_LABELS[reservationStatus] ?? "No viaja";
+}
+
+/**
+ * Frase que resume la lista de pasajeros. Cuenta solo a los que viajan (a
+ * bordo o por abordar), para que coincida con "pasajeros esperados" de las
+ * cifras; los que no viajan se nombran aparte porque van al final.
+ */
+function pasajerosDescripcion(pasajeros: ReadonlyArray<{ estado: PassengerBoardingState; code: string }>): string {
+  const viajan = pasajeros.filter((p) => p.estado !== "no-viaja");
+  const noViajan = pasajeros.length - viajan.length;
+  const extra =
+    noViajan === 0
+      ? ""
+      : noViajan === 1
+        ? " 1 pasajero no viaja y aparece al final."
+        : ` ${noViajan} pasajeros no viajan y aparecen al final.`;
+  if (viajan.length === 0) {
+    return noViajan === 1
+      ? "Nadie viaja por ahora: el pasajero de la lista no viaja."
+      : `Nadie viaja por ahora: los ${noViajan} pasajeros de la lista no viajan.`;
+  }
+  const reservas = new Set(viajan.map((p) => p.code)).size;
+  return `${plural(viajan.length, "pasajero", "pasajeros")} en ${plural(reservas, "reserva", "reservas")}. Primero los que faltan por subir.${extra}`;
 }
 
 /** Orden de la lista de pasajeros: primero quienes faltan por subir, al final quienes no viajan. */
@@ -138,6 +179,7 @@ export default async function SalidaDetallePage({
     .sort((a, b) => BOARDING_ORDER[a.estado] - BOARDING_ORDER[b.estado]);
 
   const cuando = capitalizar(departureWhenText(salida.departsAt, ahora));
+  const aviso = departureNotice(salida, ahora);
   const abordajeHref = `/panel/abordaje/${salida.id}`;
   const campos = { departureId: salida.id };
 
@@ -152,7 +194,12 @@ export default async function SalidaDetallePage({
             · Chofer {salida.driver.fullName}
           </>
         }
-        actions={<StatusBadge label={departureStatusLabel(salida.status)} tone={departureStatusTone(salida.status)} />}
+        actions={
+          <>
+            <StatusBadge label={departureStatusLabel(salida.status)} tone={departureStatusTone(salida.status)} />
+            {aviso ? <DepartureNoticeText aviso={aviso} /> : null}
+          </>
+        }
       />
 
       <PanelFeedback error={error} ok={ok} />
@@ -274,7 +321,15 @@ export default async function SalidaDetallePage({
         ) : null}
       </SectionCard>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/* En el teléfono, las tres cifras en una sola tarjeta; desde `sm`, tres tarjetas. */}
+      <CompactFigures
+        figures={[
+          { label: "A bordo", value: resumen.boarded, detail: `de ${resumen.expected}` },
+          { label: "Por abordar", value: resumen.pending },
+          { label: "Puestos libres", value: resumen.free, detail: `de ${salida.capacity}` },
+        ]}
+      />
+      <div className="hidden grid-cols-1 gap-4 sm:grid sm:grid-cols-3">
         <StatCard
           label="A bordo"
           value={resumen.boarded}
@@ -305,11 +360,7 @@ export default async function SalidaDetallePage({
 
       <SectionCard
         title="Pasajeros"
-        description={
-          pasajeros.length > 0
-            ? `${plural(pasajeros.length, "pasajero", "pasajeros")} en ${plural(salida.reservations.length, "reserva", "reservas")}. Primero los que faltan por subir.`
-            : undefined
-        }
+        description={pasajeros.length > 0 ? pasajerosDescripcion(pasajeros) : undefined}
       >
         {pasajeros.length === 0 ? (
           <EmptyState
@@ -325,10 +376,10 @@ export default async function SalidaDetallePage({
             }
           />
         ) : (
-          <TableShell
-            mobile={
-              // Filas separadas por líneas, sin tarjeta dentro de la tarjeta de
-              // sección: el código ocupa todo el ancho y nunca se corta.
+          <>
+            {/* Teléfono: filas separadas por líneas, sin tarjeta dentro de la
+                tarjeta de sección; el código ocupa todo el ancho y nunca se corta. */}
+            <div className="md:hidden">
               <ul className="flex flex-col divide-y divide-borde">
                 {pasajeros.map((p) => (
                   <li key={p.id} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">
@@ -336,12 +387,25 @@ export default async function SalidaDetallePage({
                       <p className="text-base font-semibold text-tinta">{p.fullName}</p>
                       {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
                     </div>
+                    {/* Mismo orden que la tabla: primero el pago, luego el abordaje.
+                        Quien no viaja lleva una sola pastilla con el motivo. */}
                     <div className="flex flex-wrap gap-2">
-                      <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
-                      <StatusBadge
-                        label={reservationStatusLabel(p.reservationStatus)}
-                        tone={reservationStatusTone(p.reservationStatus)}
-                      />
+                      {p.estado === "no-viaja" ? (
+                        <StatusBadge label={noViajaLabel(p.reservationStatus)} tone="neutro" />
+                      ) : (
+                        <>
+                          <StatusBadge
+                            label={reservationStatusLabel(p.reservationStatus)}
+                            tone={reservationStatusTone(p.reservationStatus)}
+                          />
+                          <AbordajeBadge
+                            estado={p.estado}
+                            boardedAt={p.boardedAt}
+                            ahora={ahora}
+                            embarqueIniciado={embarqueIniciado}
+                          />
+                        </>
+                      )}
                     </div>
                     <dl className="flex flex-col gap-1">
                       <div className="flex flex-wrap items-baseline gap-x-2">
@@ -356,41 +420,46 @@ export default async function SalidaDetallePage({
                   </li>
                 ))}
               </ul>
-            }
-          >
-            <table className="w-full min-w-[720px]">
-              <thead className="border-b border-borde bg-lienzo">
-                <tr>
-                  <th scope="col" className={PANEL_TH_CLASS}>Pasajero</th>
-                  <th scope="col" className={PANEL_TH_CLASS}>Cédula</th>
-                  <th scope="col" className={PANEL_TH_CLASS}>Código de reserva</th>
-                  <th scope="col" className={PANEL_TH_CLASS}>Pago</th>
-                  <th scope="col" className={PANEL_TH_CLASS}>Abordaje</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pasajeros.map((p) => (
-                  <tr key={p.id} className="border-b border-borde last:border-0">
-                    <td className={PANEL_TD_CLASS}>
-                      <p className="font-semibold">{p.fullName}</p>
-                      {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
-                    </td>
-                    <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.idNumber}</td>
-                    <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{p.code}</td>
-                    <td className={PANEL_TD_CLASS}>
-                      <StatusBadge
-                        label={reservationStatusLabel(p.reservationStatus)}
-                        tone={reservationStatusTone(p.reservationStatus)}
-                      />
-                    </td>
-                    <td className={PANEL_TD_CLASS}>
-                      <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
-                    </td>
+            </div>
+            {/* Escritorio y tableta: la tabla va de borde a borde de la tarjeta
+                (sin el marco propio de TableShell, que dejaba un doble borde y
+                robaba el relleno de la tarjeta). */}
+            <div className="-m-5 hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[720px]">
+                <thead className="border-b border-borde bg-lienzo">
+                  <tr>
+                    <th scope="col" className={PANEL_TH_CLASS}>Pasajero</th>
+                    <th scope="col" className={PANEL_TH_CLASS}>Cédula</th>
+                    <th scope="col" className={PANEL_TH_CLASS}>Código de reserva</th>
+                    <th scope="col" className={PANEL_TH_CLASS}>Pago</th>
+                    <th scope="col" className={PANEL_TH_CLASS}>Abordaje</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableShell>
+                </thead>
+                <tbody>
+                  {pasajeros.map((p) => (
+                    <tr key={p.id} className="border-b border-borde last:border-0">
+                      <td className={PANEL_TD_CLASS}>
+                        <p className="font-semibold">{p.fullName}</p>
+                        {p.isHolder ? <p className="text-sm text-tinta-suave">Titular de la reserva</p> : null}
+                      </td>
+                      <td className={cx(PANEL_TD_CLASS, "tabular")}>{p.idNumber}</td>
+                      <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{p.code}</td>
+                      {/* La pastilla no se parte en dos renglones dentro de la tabla. */}
+                      <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                        <StatusBadge
+                          label={reservationStatusLabel(p.reservationStatus)}
+                          tone={reservationStatusTone(p.reservationStatus)}
+                        />
+                      </td>
+                      <td className={cx(PANEL_TD_CLASS, "[&>span]:whitespace-nowrap!")}>
+                        <AbordajeBadge estado={p.estado} boardedAt={p.boardedAt} ahora={ahora} embarqueIniciado={embarqueIniciado} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </SectionCard>
     </div>

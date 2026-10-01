@@ -16,8 +16,8 @@ const initialState: RegistroFormState = { error: null };
 /**
  * Formulario de registro (o de activación de una cuenta creada en taquilla),
  * en tres grupos con título: tus datos, cómo te avisamos y tu acceso. Cada
- * error aparece junto a su campo y el foco va al primero; lo escrito se
- * conserva tras un error, salvo las contraseñas.
+ * error aparece junto a su campo, en lugar de su ayuda, y el foco va al
+ * primero; lo escrito se conserva tras un error, salvo las contraseñas.
  */
 export function RegisterForm({ next }: { next?: string }) {
   const [state, formAction] = useActionState(registrarAction, initialState);
@@ -26,6 +26,9 @@ export function RegisterForm({ next }: { next?: string }) {
 
   const errores = state.fieldErrors ?? {};
   const valores = state.values ?? {};
+  // Con error, el error reemplaza a la ayuda: cada mensaje ya dice qué
+  // escribir, y ayuda más error juntos repetían lo mismo con otras palabras.
+  const hintFor = (campo: keyof typeof REGISTER_HINTS) => (errores[campo] ? undefined : REGISTER_HINTS[campo]);
 
   return (
     <form ref={formRef} action={formAction} noValidate className="flex flex-col gap-6">
@@ -55,7 +58,7 @@ export function RegisterForm({ next }: { next?: string }) {
           inputMode="text"
           autoComplete="username"
           autoCapitalize="characters"
-          hint={REGISTER_HINTS.idNumber}
+          hint={hintFor("idNumber")}
           defaultValue={valores.idNumber ?? ""}
           error={errores.idNumber}
           errorAfterSubmit
@@ -66,7 +69,7 @@ export function RegisterForm({ next }: { next?: string }) {
           name="givenNames"
           autoComplete="given-name"
           autoCapitalize="words"
-          hint={REGISTER_HINTS.givenNames}
+          hint={hintFor("givenNames")}
           defaultValue={valores.givenNames ?? ""}
           error={errores.givenNames}
           errorAfterSubmit
@@ -89,7 +92,7 @@ export function RegisterForm({ next }: { next?: string }) {
           autoComplete="bday-year"
           pattern="[0-9]{4}"
           maxLength={4}
-          hint={REGISTER_HINTS.birthYear}
+          hint={hintFor("birthYear")}
           defaultValue={valores.birthYear ?? ""}
           error={errores.birthYear}
           errorAfterSubmit
@@ -104,7 +107,7 @@ export function RegisterForm({ next }: { next?: string }) {
           type="tel"
           inputMode="tel"
           autoComplete="tel"
-          hint={REGISTER_HINTS.phone}
+          hint={hintFor("phone")}
           defaultValue={valores.phone ?? ""}
           error={errores.phone}
           errorAfterSubmit
@@ -117,7 +120,7 @@ export function RegisterForm({ next }: { next?: string }) {
           label="Contraseña"
           name="password"
           autoComplete="new-password"
-          hint={REGISTER_HINTS.password}
+          hint={hintFor("password")}
           error={errores.password}
           errorAfterSubmit
           required
@@ -127,7 +130,7 @@ export function RegisterForm({ next }: { next?: string }) {
           label="Repite la contraseña"
           name="confirmPassword"
           autoComplete="new-password"
-          hint={REGISTER_HINTS.confirmPassword}
+          hint={hintFor("confirmPassword")}
           error={errores.confirmPassword}
           errorAfterSubmit
           required

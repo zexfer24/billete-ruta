@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { listAgencyPassengers, listPendingProofQueue } from "@/modules/reports";
@@ -7,7 +8,6 @@ import { formatMoney, toDecimal } from "@/lib/decimal";
 import { maskIdNumber } from "@/lib/identity";
 import { formatCaracas, formatCaracasDateTime24 } from "@/lib/time";
 import { departureStatusLabel, reservationStatusLabel, reservationStatusTone, type StatusTone } from "@/lib/labels";
-import { ClickableRow } from "@/components/clickable-row";
 import {
   EmptyState,
   MobileCard,
@@ -21,10 +21,15 @@ import { IconCheckCircle, IconChevronLeft, IconChevronRight, IconList, IconSearc
 import { countLabel } from "../_dashboard/text";
 import { coverageBadge } from "./proof-review";
 import { lastValidPage, pasajerosUrl } from "./urls";
+import { showsUsdEquivalent } from "./money";
+import { LinkPendingIcon, LinkRow } from "./link-pending";
 import { ResponsiveTable } from "../_dashboard/responsive-table";
 
-/** Filas por página de cada vista. */
-export const RESERVATIONS_PAGE_SIZE = 50;
+/**
+ * Filas por página: el mismo tamaño en todas las vistas, para que al cambiar
+ * de pestaña la lista no cambie de largo sin razón visible.
+ */
+export const RESERVATIONS_PAGE_SIZE = 25;
 export const PROOFS_PAGE_SIZE = 25;
 
 /** Estado vacío de cada vista cuando no hay filtros activos. */
@@ -66,6 +71,75 @@ function afterApproval(coverage: ProofCoverage): string {
 
 function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/**
+ * Cédula enmascarada y código de la reserva, cada uno en su línea y sin
+ * partirse: es el dato que el taquillero lee en voz alta o compara, y un
+ * corte en el guion ("TR-1001-1PAX-" / "BYJA") lo hacía ilegible.
+ */
+function HolderIdAndCode({ idNumber, code }: { idNumber: string; code: string }) {
+  return (
+    <>
+      <span className="tabular block text-tinta-suave">{idNumber}</span>
+      <span className="tabular block whitespace-nowrap text-tinta-suave">{code}</span>
+    </>
+  );
+}
+
+/**
+ * Subtítulo de la tarjeta del teléfono: la pastilla de estado en su propia
+ * fila bajo el nombre (al lado del título le quitaba ancho y partía el nombre
+ * y el código), luego la cédula, el código y el viaje en una sola línea. Así
+ * la cuadrícula queda con los dos montos que se comparan.
+ */
+function CardSubtitle({
+  badge,
+  idNumber,
+  code,
+  trip,
+}: {
+  badge: ReactNode;
+  idNumber: string;
+  code: string;
+  trip: string;
+}) {
+  return (
+    <>
+      <span className="my-1.5 block">{badge}</span>
+      <HolderIdAndCode idNumber={idNumber} code={code} />
+      <span className="tabular block">{trip}</span>
+    </>
+  );
+}
+
+/**
+ * Monto enviado sin separarse de su símbolo y, si la moneda no va 1:1 con el
+ * dólar, su equivalente debajo con la misma frase del panel lateral.
+ */
+function SentAmount({
+  amount,
+  currency,
+  amountUsd,
+  strong = false,
+}: {
+  amount: Parameters<typeof formatMoney>[0];
+  currency: Parameters<typeof formatMoney>[1];
+  amountUsd: Parameters<typeof formatMoney>[0];
+  strong?: boolean;
+}) {
+  return (
+    <>
+      <span className={`tabular block whitespace-nowrap${strong ? " font-semibold" : ""}`}>
+        {formatMoney(amount, currency)}
+      </span>
+      {showsUsdEquivalent(currency) ? (
+        <span className="tabular block text-sm font-normal text-tinta-suave">
+          Equivale a <span className="whitespace-nowrap">{formatMoney(amountUsd, "USD")}</span>
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 /** Barra de lo pagado sobre el total, con lo que falta. */
@@ -207,22 +281,24 @@ export async function ProofQueueList({
               <MobileCard
                 key={row.proofId}
                 title={row.holderName}
-                subtitle={`${row.maskedHolderIdNumber} · ${row.code}`}
-                status={<StatusBadge label={badge.label} tone={badge.tone} />}
+                subtitle={
+                  <CardSubtitle
+                    badge={<StatusBadge label={badge.label} tone={badge.tone} />}
+                    idNumber={row.maskedHolderIdNumber}
+                    code={row.code}
+                    trip={`${row.routeName} · ${formatCaracasDateTime24(row.departsAt)}`}
+                  />
+                }
                 details={[
                   {
                     label: "Monto enviado",
-                    value:
-                      row.currency === "USD"
-                        ? formatMoney(row.amount, row.currency)
-                        : `${formatMoney(row.amount, row.currency)} (≈ ${formatMoney(row.amountUsd, "USD")})`,
+                    value: <SentAmount amount={row.amount} currency={row.currency} amountUsd={row.amountUsd} />,
                   },
                   { label: "Si lo apruebas", value: afterApproval(row.coverage) },
-                  { label: "Viaje", value: row.routeName },
-                  { label: "Salida", value: formatCaracasDateTime24(row.departsAt) },
                 ]}
                 action={
-                  <Link href={href} scroll={false} className={panelButtonClass("secundario", "md", "w-full")}>
+                  <Link href={href} scroll={false} className={panelButtonClass("secundario", "md", "relative w-full")}>
+                    <LinkPendingIcon />
                     Revisar comprobante
                   </Link>
                 }
@@ -253,17 +329,14 @@ export async function ProofQueueList({
             </thead>
             <tbody>
               {filas.map(({ row, href, badge }) => (
-                <ClickableRow
+                <LinkRow
                   key={row.proofId}
-                  href={href}
                   selected={row.proofId === selectedProofId}
                   className="border-b border-borde last:border-b-0"
                 >
                   <td className={PANEL_TD_CLASS}>
                     <span className="block font-semibold">{row.holderName}</span>
-                    <span className="tabular block text-tinta-suave">
-                      {row.maskedHolderIdNumber} · {row.code}
-                    </span>
+                    <HolderIdAndCode idNumber={row.maskedHolderIdNumber} code={row.code} />
                   </td>
                   <td className={PANEL_TD_CLASS}>
                     <span className="block">{row.routeName}</span>
@@ -273,11 +346,10 @@ export async function ProofQueueList({
                     ) : null}
                   </td>
                   <td className={PANEL_TD_CLASS}>
-                    <span className="tabular block font-semibold">{formatMoney(row.amount, row.currency)}</span>
-                    {row.currency !== "USD" ? (
-                      <span className="tabular block text-tinta-suave">{formatMoney(row.amountUsd, "USD")}</span>
-                    ) : null}
-                    <span className="tabular block text-tinta-suave">Referencia {row.reference}</span>
+                    <SentAmount amount={row.amount} currency={row.currency} amountUsd={row.amountUsd} strong />
+                    <span className="block text-tinta-suave">
+                      Referencia <span className="tabular whitespace-nowrap">{row.reference}</span>
+                    </span>
                   </td>
                   <td className={PANEL_TD_CLASS}>
                     <StatusBadge label={badge.label} tone={badge.tone} />
@@ -286,12 +358,18 @@ export async function ProofQueueList({
                     </span>
                   </td>
                   <td className={`${PANEL_TD_CLASS} text-right`}>
-                    <Link href={href} scroll={false} className={panelButtonClass("secundario")}>
+                    <Link
+                      href={href}
+                      scroll={false}
+                      data-row-link
+                      className={panelButtonClass("secundario", "md", "relative")}
+                    >
+                      <LinkPendingIcon />
                       Revisar
                       <span className="sr-only"> el comprobante de {row.holderName}</span>
                     </Link>
                   </td>
-                </ClickableRow>
+                </LinkRow>
               ))}
             </tbody>
           </table>
@@ -395,16 +473,21 @@ export async function ReservationList({
               <MobileCard
                 key={row.reservationId}
                 title={row.holderName}
-                subtitle={`${maskIdNumber(row.holderIdNumber)} · ${row.code}`}
-                status={<StatusBadge label={situacion.label} tone={situacion.tone} />}
+                subtitle={
+                  <CardSubtitle
+                    badge={<StatusBadge label={situacion.label} tone={situacion.tone} />}
+                    idNumber={maskIdNumber(row.holderIdNumber)}
+                    code={row.code}
+                    trip={`${row.routeName} · ${formatCaracasDateTime24(row.departsAt)}`}
+                  />
+                }
                 details={[
-                  { label: "Viaje", value: row.routeName },
-                  { label: "Salida", value: formatCaracasDateTime24(row.departsAt) },
                   { label: "Pagado", value: formatMoney(toDecimal(row.paidUsd), "USD") },
                   { label: "Falta", value: formatMoney(toDecimal(row.balanceUsd), "USD") },
                 ]}
                 action={
-                  <Link href={href} scroll={false} className={panelButtonClass("secundario", "md", "w-full")}>
+                  <Link href={href} scroll={false} className={panelButtonClass("secundario", "md", "relative w-full")}>
+                    <LinkPendingIcon />
                     Ver detalle
                   </Link>
                 }
@@ -435,17 +518,14 @@ export async function ReservationList({
             </thead>
             <tbody>
               {filas.map(({ row, href, situacion }) => (
-                <ClickableRow
+                <LinkRow
                   key={row.reservationId}
-                  href={href}
                   selected={row.reservationId === selectedReservationId}
                   className="border-b border-borde last:border-b-0"
                 >
                   <td className={PANEL_TD_CLASS}>
                     <span className="block font-semibold">{row.holderName}</span>
-                    <span className="tabular block text-tinta-suave">
-                      {maskIdNumber(row.holderIdNumber)} · {row.code}
-                    </span>
+                    <HolderIdAndCode idNumber={maskIdNumber(row.holderIdNumber)} code={row.code} />
                     {row.salesChannel === "TAQUILLA" ? (
                       <span className="block text-tinta-suave">Vendida en taquilla</span>
                     ) : null}
@@ -469,12 +549,18 @@ export async function ReservationList({
                     ) : null}
                   </td>
                   <td className={`${PANEL_TD_CLASS} text-right`}>
-                    <Link href={href} scroll={false} className={panelButtonClass("secundario")}>
+                    <Link
+                      href={href}
+                      scroll={false}
+                      data-row-link
+                      className={panelButtonClass("secundario", "md", "relative")}
+                    >
+                      <LinkPendingIcon />
                       Ver detalle
                       <span className="sr-only"> de la reserva de {row.holderName}</span>
                     </Link>
                   </td>
-                </ClickableRow>
+                </LinkRow>
               ))}
             </tbody>
           </table>

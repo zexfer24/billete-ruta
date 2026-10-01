@@ -11,10 +11,7 @@ import { describeReportRange, type ReportRange } from "./range";
 export function ReportRangeLine({ range, downloadHref }: { range: ReportRange; downloadHref?: string }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-      <p className="text-sm text-tinta-suave">
-        <span className="font-semibold text-tinta">Mostrando:</span>{" "}
-        <span className="tabular">{describeReportRange(range)}</span>
-      </p>
+      <p className="tabular text-sm font-semibold text-tinta">{describeReportRange(range)}</p>
       {downloadHref ? (
         <a href={downloadHref} download className={panelButtonClass("fantasma", "md", "-mx-2 sm:mx-0")}>
           <IconDownload className="size-5 shrink-0" />

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { listBookableDepartures, listOriginsAndDestinations } from "@/modules/catalog";
 import { currentPassenger } from "@/modules/auth";
 import { buttonClass, Card, SectionTitle } from "@/components/ui";
-import { IconChevronRight, IconUser } from "@/components/icons";
+import { IconUser } from "@/components/icons";
 import { DepartureBoard } from "@/components/departure-board";
 import type { DepartureRowData } from "@/components/departure-row";
 import { passengerHref } from "../_publico/links";
@@ -12,6 +12,7 @@ import {
   HowItWorks,
   PORTADA_COLUMN,
   PORTADA_SEARCH_TITLE,
+  PORTADA_UPCOMING_HINT,
   PortadaFooter,
   PortadaHero,
 } from "./portada-sections";
@@ -30,7 +31,6 @@ export default async function PortadaPage() {
 
   const loggedIn = pasajero !== null;
   const todasLasSalidas = passengerHref("/mi/reservar", loggedIn);
-  const hayMasSalidas = salidas.length > SALIDAS_EN_PORTADA;
 
   const salidasVM: DepartureRowData[] = salidas.map((salida) => ({
     id: salida.id,
@@ -76,25 +76,8 @@ export default async function PortadaPage() {
 
           <section aria-labelledby="proximas-salidas" className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <SectionTitle
-                id="proximas-salidas"
-                action={
-                  hayMasSalidas ? (
-                    <Link
-                      href={todasLasSalidas}
-                      className="foco -mr-2 inline-flex min-h-11 items-center gap-0.5 rounded-pastilla px-3 text-marca-700 transition-colors duration-150 ease-out hover:bg-marca-50 motion-reduce:transition-none"
-                    >
-                      Ver todas las salidas
-                      <IconChevronRight aria-hidden="true" className="size-4" />
-                    </Link>
-                  ) : null
-                }
-              >
-                Próximas salidas
-              </SectionTitle>
-              <p className="text-sm text-tinta-suave">
-                Salen en las próximas 6 horas y todavía tienen puestos. Toca una para reservar.
-              </p>
+              <SectionTitle id="proximas-salidas">Próximas salidas</SectionTitle>
+              <p className="text-sm text-tinta-suave">{PORTADA_UPCOMING_HINT}</p>
             </div>
             <DepartureBoard
               departures={salidasVM}
@@ -109,6 +92,16 @@ export default async function PortadaPage() {
                 </Link>
               }
             />
+            {/*
+              Siempre hay un camino a las salidas de más tarde y de otros días,
+              al pie de la lista, donde lo busca quien no encontró su destino.
+              Con la lista vacía ya lo ofrece el estado vacío.
+            */}
+            {salidasVM.length > 0 ? (
+              <Link href={todasLasSalidas} className={buttonClass("secundario", "w-full sm:w-auto sm:self-start")}>
+                Ver todas las salidas
+              </Link>
+            ) : null}
           </section>
 
           {loggedIn ? null : (

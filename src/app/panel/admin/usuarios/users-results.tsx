@@ -1,27 +1,23 @@
 import Link from "next/link";
 import { IconSearch, IconUsers } from "@/components/icons";
-import {
-  EmptyState,
-  MobileCard,
-  PANEL_TD_CLASS,
-  PANEL_TH_CLASS,
-  TableShell,
-  panelButtonClass,
-} from "@/components/panel-ui";
+import { EmptyState, MobileCard, TableShell, panelButtonClass } from "@/components/panel-ui";
 import { cx } from "@/components/ui-classes";
-import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
+import { formatCaracasDate, formatCaracasDateTime24, formatCaracasTime24 } from "@/lib/time";
 import { listAccounts } from "@/modules/reports";
 import { accountSearchTerm, countLabel, formatCount, formatPhone } from "../_shared/format";
-import { Pagination, TimeCell } from "../_shared/lists";
+import { ADMIN_TD_CLASS, ADMIN_TH_CLASS, Pagination, TimeCell } from "../_shared/lists";
 import { withQuery } from "../_shared/period";
 import { LineSkeleton, TableSkeleton } from "../_shared/skeletons";
 
 const PAGE_SIZE = 25;
 
-/** Cabeceras de la tabla, compartidas con su silueta de carga. */
+/**
+ * Cabeceras de la tabla, compartidas con su silueta de carga. El nombre y la
+ * cédula van juntos en "Pasajero", como en las tarjetas del teléfono: así la
+ * tabla cabe entera desde 768 px, sin columnas escondidas a la derecha.
+ */
 const USER_COLUMNS = [
-  "Cédula",
-  "Nombre",
+  "Pasajero",
   "Teléfono",
   "Año de nacimiento",
   "Viajes pagados",
@@ -110,14 +106,20 @@ export async function UsersResults({
               <MobileCard
                 key={r.id}
                 title={r.fullName}
-                subtitle={`Cédula ${r.idNumber}`}
+                subtitle={
+                  <>
+                    <span className="tabular">Cédula {r.idNumber}</span> · Nació en{" "}
+                    <span className="tabular">{r.birthYear}</span>
+                  </>
+                }
                 details={[
-                  { label: "Teléfono", value: formatPhone(r.phone) },
-                  { label: "Año de nacimiento", value: r.birthYear },
+                  { label: "Teléfono", value: <span className="whitespace-nowrap">{formatPhone(r.phone)}</span> },
                   { label: "Viajes pagados", value: formatCount(r.paidTrips) },
+                  // El registro es el orden de la lista: se ve en cada tarjeta.
+                  { label: "Registro", value: formatCaracasDateTime24(r.createdAt) },
                   {
                     label: "Último ingreso",
-                    value: r.lastLoginAt ? formatCaracasDate(r.lastLoginAt) : "Nunca",
+                    value: r.lastLoginAt ? formatCaracasDateTime24(r.lastLoginAt) : "Nunca",
                   },
                 ]}
               />
@@ -125,7 +127,7 @@ export async function UsersResults({
           </ul>
         }
       >
-        <table className="w-full min-w-[52rem] text-left">
+        <table className="w-full text-left">
           <caption className="sr-only">Cuentas de pasajero</caption>
           <thead>
             <tr className="border-b border-borde">
@@ -133,7 +135,7 @@ export async function UsersResults({
                 <th
                   key={column}
                   scope="col"
-                  className={cx(PANEL_TH_CLASS, column === "Viajes pagados" && "text-right")}
+                  className={cx(ADMIN_TH_CLASS, column === "Viajes pagados" && "text-right")}
                 >
                   {column}
                 </th>
@@ -143,15 +145,17 @@ export async function UsersResults({
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-borde last:border-0">
-                <td className={cx(PANEL_TD_CLASS, "tabular font-semibold")}>{r.idNumber}</td>
-                <td className={PANEL_TD_CLASS}>{r.fullName}</td>
-                <td className={cx(PANEL_TD_CLASS, "tabular whitespace-nowrap")}>{formatPhone(r.phone)}</td>
-                <td className={cx(PANEL_TD_CLASS, "tabular")}>{r.birthYear}</td>
-                <td className={cx(PANEL_TD_CLASS, "tabular text-right")}>{formatCount(r.paidTrips)}</td>
-                <td className={PANEL_TD_CLASS}>
+                <td className={ADMIN_TD_CLASS}>
+                  <span className="block font-semibold">{r.fullName}</span>
+                  <span className="tabular block text-sm text-tinta-suave">{r.idNumber}</span>
+                </td>
+                <td className={cx(ADMIN_TD_CLASS, "tabular whitespace-nowrap")}>{formatPhone(r.phone)}</td>
+                <td className={cx(ADMIN_TD_CLASS, "tabular")}>{r.birthYear}</td>
+                <td className={cx(ADMIN_TD_CLASS, "tabular text-right")}>{formatCount(r.paidTrips)}</td>
+                <td className={ADMIN_TD_CLASS}>
                   <TimeCell time={formatCaracasTime24(r.createdAt)} date={formatCaracasDate(r.createdAt)} />
                 </td>
-                <td className={PANEL_TD_CLASS}>
+                <td className={ADMIN_TD_CLASS}>
                   {r.lastLoginAt ? (
                     <TimeCell time={formatCaracasTime24(r.lastLoginAt)} date={formatCaracasDate(r.lastLoginAt)} />
                   ) : (

@@ -39,7 +39,8 @@ const ENLACE_SECCION =
 /**
  * Inicio del pasajero (spec 7.1): arriba la acción que toca ahora, en grande
  * (pagar, ver el ticket, subir la cédula o reservar); debajo, como mucho un
- * aviso con el enlace al resto, y las salidas de las próximas horas.
+ * aviso con el enlace al resto y, solo si no hay un viaje próximo, las
+ * salidas de las próximas horas.
  *
  * El héroe es la reserva de la salida más cercana. Si en esa misma salida hay
  * varias reservas, va la más urgente (primero lo que se pierde si no se
@@ -57,7 +58,7 @@ export default async function MiInicioPage() {
     departure: { departsAt: { gt: now } },
   };
 
-  const [avisos, proximas, totalProximas, salidas] = await Promise.all([
+  const [avisos, proximas, totalProximas, salidasDeViajes, salidas] = await Promise.all([
     listNoticesForAccount(pasajero.id),
     prisma.reservation.findMany({
       where: dondeProximas,
@@ -66,6 +67,8 @@ export default async function MiInicioPage() {
       include: { departure: { include: { route: { include: { agency: true } } } } },
     }),
     prisma.reservation.count({ where: dondeProximas }),
+    // Un viaje es una salida: dos reservas de la misma salida son un solo viaje.
+    prisma.reservation.findMany({ where: dondeProximas, distinct: ["departureId"], select: { departureId: true } }),
     listBookableDepartures({ to: new Date(now.getTime() + SEIS_HORAS_MS), onlyWithSeats: true }, now),
   ]);
 
@@ -77,6 +80,7 @@ export default async function MiInicioPage() {
         (a, b) => reservationUrgency(a.status) - reservationUrgency(b.status) || a.code.localeCompare(b.code),
       )[0] ?? null;
 
+  const totalViajes = salidasDeViajes.length;
   const faltaCedula = avisos.some((aviso) => aviso.kind === "DOCUMENTO_FALTANTE");
 
   const ticketData: TicketCardData | null = proximaReserva
@@ -132,7 +136,9 @@ export default async function MiInicioPage() {
             </Link>
             {totalProximas > 1 ? (
               <Link href="/mi/reservas" className={`${ENLACE_SECCION} self-center`}>
-                Tienes {totalProximas} viajes próximos · Ver todos
+                {totalViajes > 1
+                  ? `Tienes ${totalViajes} viajes próximos · Ver todos`
+                  : `Tienes ${totalProximas} reservas en este viaje · Ver todas`}
                 <IconChevronRight aria-hidden="true" className="size-4" />
               </Link>
             ) : null}
@@ -203,33 +209,40 @@ export default async function MiInicioPage() {
         </section>
       ) : null}
 
-      <section aria-labelledby="salidas-inicio" className="flex flex-col gap-3">
-        <SectionTitle
-          id="salidas-inicio"
-          action={
-            <Link href="/mi/reservar" className={ENLACE_SECCION}>
-              Ver todas las salidas
-              <IconChevronRight aria-hidden="true" className="size-4" />
-            </Link>
-          }
-        >
-          Salen pronto
-        </SectionTitle>
-        <DepartureBoard
-          departures={salidasVM}
-          now={now}
-          limit={4}
-          label="Salidas de las próximas horas"
-          hrefFor={(id) => `/mi/reservar?departureId=${id}`}
-          emptyTitle="No hay salidas en las próximas horas"
-          emptyDescription="Puede haber puestos en salidas de otros días."
-          emptyAction={
-            <Link href="/mi/reservar" className={buttonClass("secundario")}>
-              Ver otros días
-            </Link>
-          }
-        />
-      </section>
+      {/*
+        "Salen pronto" solo cuando no hay un viaje próximo: con uno, la acción
+        principal es la de ese viaje y otra lista de salidas le quitaría peso
+        (la pestaña Reservar sigue a un toque en la barra de abajo).
+      */}
+      {ticketData ? null : (
+        <section aria-labelledby="salidas-inicio" className="flex flex-col gap-3">
+          <SectionTitle
+            id="salidas-inicio"
+            action={
+              <Link href="/mi/reservar" className={ENLACE_SECCION}>
+                Ver todas las salidas
+                <IconChevronRight aria-hidden="true" className="size-4" />
+              </Link>
+            }
+          >
+            Salen pronto
+          </SectionTitle>
+          <DepartureBoard
+            departures={salidasVM}
+            now={now}
+            limit={4}
+            label="Salidas de las próximas horas"
+            hrefFor={(id) => `/mi/reservar?departureId=${id}`}
+            emptyTitle="No hay salidas en las próximas horas"
+            emptyDescription="Puede haber puestos en salidas de otros días."
+            emptyAction={
+              <Link href="/mi/reservar" className={buttonClass("secundario")}>
+                Ver otros días
+              </Link>
+            }
+          />
+        </section>
+      )}
     </div>
   );
 }

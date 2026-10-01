@@ -30,12 +30,17 @@ const BOARDABLE = ["PAGADA", "PAGO_EN_SITIO"] as const;
 /**
  * Busca una reserva por serial escrito o por el contenido de un QR. Un QR con
  * firma inválida se descarta antes de consultar la base de datos.
+ *
+ * Si la reserva es de la misma agencia pero no puede abordar (otra salida o un
+ * estado que no aborda), el error trae `holderName` para que el escáner muestre
+ * de quién es el ticket. Nunca lo trae para otra agencia, un QR alterado ni un
+ * código inexistente.
  */
 export async function findForBoarding(
   departureId: string,
   codeOrQr: string,
   agencyId: string,
-): Promise<{ reservation: BoardingView } | { error: string }> {
+): Promise<{ reservation: BoardingView } | { error: string; holderName?: string }> {
   const entrada = codeOrQr.trim().toUpperCase();
   let code = entrada;
 
@@ -61,11 +66,12 @@ export async function findForBoarding(
     return { error: "Esa reserva pertenece a otra agencia." };
   }
   if (reserva.departureId !== departureId) {
-    return { error: "Esa reserva es de otra salida." };
+    return { error: "Esa reserva es de otra salida.", holderName: reserva.account.fullName };
   }
   if (!(BOARDABLE as readonly string[]).includes(reserva.status)) {
     return {
       error: `La reserva está en estado ${reserva.status} y no puede abordar.`,
+      holderName: reserva.account.fullName,
     };
   }
 

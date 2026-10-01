@@ -11,6 +11,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { Card } from "@/components/ui";
 import { buttonClass, cx } from "@/components/ui-classes";
 import { formatCaracasDate, formatCaracasTime24 } from "@/lib/time";
+import { dueForRelease12h } from "@/modules/scheduler";
 import { crearReservaAction, type CrearReservaState } from "./actions";
 import {
   DOCUMENTS_RETURN_HREF,
@@ -20,11 +21,9 @@ import {
   type PaymentMethodVM,
 } from "./booking-form";
 import { convertCents, formatCents, type BookingCost } from "./money";
+import { revealAndFocus } from "./reveal";
 
 const initialCrearState: CrearReservaState = { error: null };
-
-/** Una reserva para pagar en taquilla debe pagarse 12 horas antes de salir. */
-const HORAS_LIMITE_TAQUILLA = 12;
 
 interface StepPaymentProps {
   departure: DepartureVM;
@@ -100,7 +99,9 @@ export function StepPayment({
 
   const enLinea = availableMethods.filter((m) => m.kind === "DIGITAL");
   const enTaquilla = availableMethods.filter((m) => m.kind === "FISICO");
-  const limiteTaquilla = new Date(new Date(departure.departsAtIso).getTime() - HORAS_LIMITE_TAQUILLA * 3_600_000);
+  // Misma ventana con la que el barrido libera el puesto (`dueForRelease12h`), igual que el aviso.
+  const plazoTaquillaMs = dueForRelease12h(now).getTime() - now.getTime();
+  const limiteTaquilla = new Date(new Date(departure.departsAtIso).getTime() - plazoTaquillaMs);
   const total = formatCents(cost.totalCents, "USD");
   const totalEnMoneda = selectedMethod ? equivalente(cost.totalCents, selectedMethod, exchangeRates) : null;
 
@@ -135,7 +136,8 @@ export function StepPayment({
   function validarAntesDeEnviar(event: FormEvent<HTMLFormElement>) {
     if (!selectedMethod) {
       event.preventDefault();
-      methodsRef.current?.querySelector<HTMLInputElement>("input[type=radio]")?.focus();
+      // La nota "Elige una forma de pago" ya está en pantalla: basta con llevar las opciones a la vista.
+      revealAndFocus(methodsRef.current, methodsRef.current?.querySelector<HTMLInputElement>("input[type=radio]") ?? null);
     }
   }
 

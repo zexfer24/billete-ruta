@@ -208,10 +208,15 @@ export function PanelTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) 
  * Envoltorio de tabla con desplazamiento horizontal para que nada desborde la
  * página. Con `mobile`, la tabla solo se ve desde `md` y por debajo se muestra
  * ese contenido (normalmente una lista de `MobileCard`).
+ *
+ * `relative` hace del envoltorio el bloque contenedor de los textos `sr-only`
+ * de la tabla (cabeceras sin título visible, captions, "Editar <el vehículo>"):
+ * son `position: absolute` y, sin él, se escapan del desplazamiento interno y
+ * ensanchan la página entera.
  */
 export function TableShell({ children, mobile }: { children: ReactNode; mobile?: ReactNode }) {
   const table = (
-    <div className="overflow-x-auto rounded-tarjeta border border-borde bg-superficie shadow-1">{children}</div>
+    <div className="relative overflow-x-auto rounded-tarjeta border border-borde bg-superficie shadow-1">{children}</div>
   );
 
   if (!mobile) return table;
