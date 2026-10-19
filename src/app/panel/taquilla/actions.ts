@@ -185,6 +185,7 @@ export async function sellAtCounterAction(
 
   try {
     const cedula = await readOptionalUpload(formData, "cedula");
+    const profilePhoto = await readOptionalUpload(formData, "profilePhoto");
     const travelPermit = await readOptionalUpload(formData, "travelPermit");
 
     const resultado = await sellAtCounter({
@@ -200,7 +201,7 @@ export async function sellAtCounterAction(
         birthYear: parsed.data.holderBirthYear,
       },
       companions: parsed.data.companions,
-      documents: { cedula, travelPermit },
+      documents: { cedula, profilePhoto, travelPermit },
       policiesAccepted: true,
     });
 

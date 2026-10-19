@@ -10,7 +10,7 @@ import { whenPhrase } from "@/components/passenger-copy";
 import { Alert } from "@/components/alert";
 import { ClearFeedbackParams } from "@/components/clear-feedback-params";
 import { FileField } from "@/components/file-field";
-import { IconCheckCircle, IconChevronDown, IconDocument, IconShield } from "@/components/icons";
+import { IconCheckCircle, IconChevronDown, IconDocument, IconShield, IconUser } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonClass, Card, Pill, type PillTone } from "@/components/ui";
 import { subirDocumentoAction } from "./actions";
@@ -31,6 +31,7 @@ export const metadata: Metadata = {
 const ETIQUETAS: Record<string, string> = {
   CEDULA: "Foto de cédula",
   PERMISO_VIAJE: "Permiso de viaje",
+  FOTO_PERFIL: "Foto de perfil",
 };
 
 /** Solo códigos conocidos: un valor inventado se ignora en vez de mostrarse o tumbar la pantalla. */
@@ -80,7 +81,10 @@ export default async function DocumentosPage({
   // listDocuments viene del más reciente al más antiguo: el primero de cada tipo es el vigente.
   const cedula = documentos.find((doc) => doc.type === "CEDULA") ?? null;
   const permiso = documentos.find((doc) => doc.type === "PERMISO_VIAJE") ?? null;
-  const anteriores = documentos.filter((doc) => doc.id !== cedula?.id && doc.id !== permiso?.id);
+  const perfil = documentos.find((doc) => doc.type === "FOTO_PERFIL") ?? null;
+  const anteriores = documentos.filter(
+    (doc) => doc.id !== cedula?.id && doc.id !== permiso?.id && doc.id !== perfil?.id,
+  );
   const okMessage = params.ok ? DOCUMENT_OK_MESSAGES[params.ok] : undefined;
   const errorMessage = params.error ? DOCUMENT_ERROR_MESSAGES[params.error] : undefined;
   // Tras guardar viniendo de la reserva, el aviso ya trae "Volver a mi reserva": la tarjeta no lo repite.
@@ -92,7 +96,7 @@ export default async function DocumentosPage({
         <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">Mis documentos</h1>
         <p className="leading-relaxed text-tinta-suave">
           Para reservar necesitas la foto de tu cédula. Si viaja un menor de edad, también su
-          permiso de viaje.
+          permiso de viaje. La foto de perfil es opcional.
         </p>
       </div>
 
@@ -110,7 +114,9 @@ export default async function DocumentosPage({
         >
           {params.volver === "reservar"
             ? "Tu reserva en curso sigue guardada: puedes seguir donde la dejaste."
-            : "Ya puedes usarla para reservar."}
+            : params.ok === DOCUMENT_OK_CODES.FOTO_PERFIL
+              ? "Ayuda al personal a reconocerte al abordar."
+              : "Ya puedes usarla para reservar."}
         </Alert>
       ) : null}
       {errorMessage ? (
@@ -131,6 +137,20 @@ export default async function DocumentosPage({
         principal={!cedula}
         abierto={Boolean(errorMessage) && params.doc === DOCUMENT_OK_CODES.CEDULA}
         listo={cedula && !avisoLlevaAReserva ? { volver: params.volver } : null}
+      />
+      <DocumentoCard
+        tipo="FOTO_PERFIL"
+        titulo="Foto de perfil"
+        descripcion="Una foto de tu rostro, de frente y sin lentes oscuros. Ayuda al personal a reconocerte al abordar."
+        vacio="Todavía no subiste una foto de perfil."
+        consejoFoto="De frente y con buena luz."
+        obligatorio={false}
+        documento={perfil}
+        volver={params.volver}
+        principal={false}
+        abierto={Boolean(errorMessage) && params.doc === DOCUMENT_OK_CODES.FOTO_PERFIL}
+        listo={null}
+        capture="user"
       />
       <DocumentoCard
         tipo="PERMISO_VIAJE"
@@ -187,9 +207,13 @@ function FotoDocumento({ documento }: { documento: Documento }) {
 }
 
 interface DocumentoCardProps {
-  tipo: "CEDULA" | "PERMISO_VIAJE";
+  tipo: "CEDULA" | "PERMISO_VIAJE" | "FOTO_PERFIL";
   titulo: string;
   descripcion: string;
+  /** Texto que se ve mientras el documento no está guardado (opcional). */
+  vacio?: string;
+  /** Cámara preferida del teléfono al tomar la foto: `user` es la frontal. */
+  capture?: "environment" | "user";
   /** Cómo tomar la foto: va con el campo de subida, no a la vista cuando el documento ya está guardado. */
   consejoFoto: string;
   obligatorio: boolean;
@@ -214,6 +238,8 @@ function DocumentoCard({
   tipo,
   titulo,
   descripcion,
+  vacio,
+  capture,
   consejoFoto,
   obligatorio,
   documento,
@@ -227,7 +253,8 @@ function DocumentoCard({
   const estado = cargado ? "Guardada" : obligatorio ? "Falta" : "Opcional";
   const headingId = `doc-${tipo.toLowerCase()}`;
   const fileId = `archivo-${tipo.toLowerCase()}`;
-  const nombreCorto = tipo === "CEDULA" ? "de la cédula" : "del permiso";
+  const nombreCorto = tipo === "CEDULA" ? "de la cédula" : tipo === "FOTO_PERFIL" ? "de perfil" : "del permiso";
+  const perfil = tipo === "FOTO_PERFIL";
   const plegado = cargado || !obligatorio;
   // Con la cédula guardada, "Obligatoria para…" ya no dice nada: la tarjeta dice que está lista.
   const muestraDescripcion = !cargado || !obligatorio;
@@ -240,7 +267,10 @@ function DocumentoCard({
         id={fileId}
         name="file"
         label={cargado ? `Nueva foto ${nombreCorto}` : `Foto ${nombreCorto}`}
-        buttonLabel={cargado ? "Tomar o elegir otra foto" : "Tomar o elegir la foto"}
+        buttonLabel={
+          cargado ? "Tomar o elegir otra foto" : perfil ? "Tomar o elegir foto" : "Tomar o elegir la foto"
+        }
+        capture={capture}
         maxSizeMb={5}
         accept="image/jpeg,image/png,image/webp"
         hint={`${consejoFoto} JPG, PNG o WebP de hasta 5 MB.`}
@@ -263,7 +293,7 @@ function DocumentoCard({
             aria-hidden="true"
             className="grid size-10 shrink-0 place-items-center rounded-full bg-marca-50 text-marca-600"
           >
-            <IconDocument className="size-5" />
+            {perfil ? <IconUser className="size-5" /> : <IconDocument className="size-5" />}
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -273,6 +303,7 @@ function DocumentoCard({
               <Pill tone={tono}>{estado}</Pill>
             </div>
             {muestraDescripcion ? <p className="leading-relaxed text-tinta-suave">{descripcion}</p> : null}
+            {!cargado && vacio ? <p className="leading-relaxed text-tinta-suave">{vacio}</p> : null}
           </div>
         </div>
 
@@ -305,7 +336,7 @@ function DocumentoCard({
                   : "w-full list-none [&::-webkit-details-marker]:hidden",
               )}
             >
-              {cargado ? "Cambiar la foto" : `Subir el ${titulo.toLowerCase()}`}
+              {cargado ? "Cambiar la foto" : perfil ? "Subir la foto de perfil" : `Subir el ${titulo.toLowerCase()}`}
               <IconChevronDown
                 aria-hidden="true"
                 className="size-5 shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none"

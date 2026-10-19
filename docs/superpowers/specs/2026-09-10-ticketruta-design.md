@@ -111,7 +111,7 @@ Enumeraciones:
 - `PaymentKind`: `DIGITAL`, `FISICO`
 - `Currency`: `USD`, `VES`, `COP`, `USDT`
 - `ProofStatus`: `PENDIENTE`, `APROBADO`, `RECHAZADO`
-- `DocumentType`: `CEDULA`, `PERMISO_VIAJE`
+- `DocumentType`: `CEDULA`, `PERMISO_VIAJE`, `FOTO_PERFIL` (opcional; 2026-10-19)
 - `MessageStatus`: `ENCOLADO`, `ENVIADO`, `ENTREGADO`, `LEIDO`, `FALLIDO`
 - `WaitlistStatus`: `EN_ESPERA`, `NOTIFICADO`, `CONVERTIDO`, `EXPIRADO`
 - `PanelRole`: `ADMIN`, `OPERADOR`
@@ -162,6 +162,15 @@ Entidades. Todas con `id` UUID, `createdAt` y `updatedAt`.
 - `AuditLog`: `actorType`, `actorPanelUserId`, `actorAccountId`, `entityType`, `entityId`, `action`, `before` JSON, `after` JSON, `ipAddress`. Solo inserción, garantizado por un disparador de base de datos.
 
 Regla de borrado: reservas, pasajeros, comprobantes, mensajes y auditoría nunca se borran físicamente.
+
+**Perfil interno del pasajero** (2026-10-19)
+
+Vista del admin sobre una cuenta de pasajero, en `/panel/admin/usuarios/[accountId]`, con permiso `terminal.users`. Es de solo lectura y no crea entidades: se arma con `PassengerAccount`, `PassengerDocument`, `Reservation`, `Passenger`, `PaymentProof` y `CashPayment`.
+
+- Muestra datos personales con la cédula completa, como el resto del módulo de usuarios del admin, y los documentos: foto de perfil, cédula y permisos de viaje, cada uno con su vigente y sus anteriores.
+- Muestra el resumen de viajes y pagos, los destinos y agencias más frecuentes, el historial como titular, los viajes como acompañante y los pagos.
+- La foto de perfil es opcional. La sube el pasajero en `/mi/documentos` o la toma la taquilla al vender, como `PassengerDocument` de tipo `FOTO_PERFIL`. Ni el registro ni la venta la exigen.
+- `listTravelHistoryByIdNumber` busca el historial por cédula como titular, acompañante o chofer. No audita esa consulta.
 
 ## 8. Máquina de estados de la reserva
 
@@ -308,6 +317,8 @@ La base de datos de usuarios es información sensible. Reglas:
 - La bitácora de actividad que ve el operador en el tablero nunca muestra cédulas ni teléfonos de sus pasajeros, solo el serial y el nombre. (ronda 4, 2026-09-13)
 - Las cédulas se muestran enmascaradas fuera del manifiesto y del módulo de usuarios del admin. Excepción: la cédula de un chofer se muestra completa a su propia agencia, porque es personal que esa agencia registró.
 - Los archivos subidos se sirven solo por rutas autenticadas que verifican la propiedad o el rol.
+- Cada consulta del perfil interno del pasajero escribe `CONSULTA_PERFIL_PASAJERO` con el admin que la hizo y la cuenta consultada. Solo lo ve el admin. (2026-10-19)
+- La foto de perfil es opcional, nunca se exige para reservar ni para vender, y se sirve por la misma ruta autenticada que el resto de los documentos. (2026-10-19)
 - Los reportes son agregados por defecto.
 - La retención con seudonimización queda documentada como trabajo posterior al MVP.
 

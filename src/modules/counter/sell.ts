@@ -13,9 +13,14 @@ import { issueTicket } from "@/modules/tickets";
 /** Intentos ante un choque de serial al crear la reserva dentro de la venta. */
 const SALE_ATTEMPTS = 5;
 
-const DOCUMENT_LABELS = { cedula: "cédula", travelPermit: "permiso de viaje" } as const;
+const DOCUMENT_LABELS = {
+  cedula: "cédula",
+  profilePhoto: "foto de perfil",
+  travelPermit: "permiso de viaje",
+} as const;
 const DOCUMENT_TYPES: Record<keyof typeof DOCUMENT_LABELS, DocumentType> = {
   cedula: "CEDULA",
+  profilePhoto: "FOTO_PERFIL",
   travelPermit: "PERMISO_VIAJE",
 };
 
@@ -37,7 +42,8 @@ export interface CounterSaleInput {
     birthYear?: number;
   };
   companions: CompanionInput[];
-  documents: { cedula?: CounterUpload; travelPermit?: CounterUpload };
+  /** `profilePhoto` es opcional siempre: nunca bloquea la venta. */
+  documents: { cedula?: CounterUpload; profilePhoto?: CounterUpload; travelPermit?: CounterUpload };
   policiesAccepted: boolean;
   now?: Date;
 }

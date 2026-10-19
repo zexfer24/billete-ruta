@@ -57,6 +57,21 @@ function MessagesLink({ phone, name }: { phone: string; name: string }) {
   );
 }
 
+/**
+ * Nombre de la persona como enlace a su perfil interno. En la tabla y en la
+ * tarjeta del teléfono: es la forma más natural de abrir una ficha.
+ */
+function ProfileLink({ id, name }: { id: string; name: string }) {
+  return (
+    <Link
+      href={`${USERS_PATH}/${id}`}
+      className="foco rounded-control font-semibold text-marca-700 underline-offset-2 hover:underline"
+    >
+      {name}
+    </Link>
+  );
+}
+
 function pageHref(query: string | undefined, page: number): string {
   return withQuery(USERS_PATH, { q: query, page: page > 1 ? String(page) : undefined });
 }
@@ -146,7 +161,7 @@ export async function UsersResults({
             {rows.map((r) => (
               <MobileCard
                 key={r.id}
-                title={r.fullName}
+                title={<ProfileLink id={r.id} name={r.fullName} />}
                 subtitle={
                   <>
                     {/* Cada dato entero (`DotParts`): si la línea no cabe, se parte
@@ -191,7 +206,9 @@ export async function UsersResults({
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-borde last:border-0">
                 <td className={ADMIN_TD_CLASS}>
-                  <span className="block font-semibold">{r.fullName}</span>
+                  <span className="block">
+                    <ProfileLink id={r.id} name={r.fullName} />
+                  </span>
                   <span className="tabular block text-sm text-tinta-suave">{r.idNumber}</span>
                 </td>
                 <td className={cx(ADMIN_TD_CLASS, "whitespace-nowrap")}>

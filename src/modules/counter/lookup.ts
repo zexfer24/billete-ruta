@@ -14,6 +14,7 @@ export type CounterHolderLookup =
       holderIsMinor: boolean;
       missingDocuments: DocumentType[];
       hasCedula: boolean;
+      hasProfilePhoto: boolean;
       hasTravelPermit: boolean;
       activated: boolean;
     };
@@ -55,6 +56,7 @@ export async function lookupCounterHolder(
 
     const tipos = new Set(cuenta.documents.map((d) => d.type));
     const hasCedula = tipos.has("CEDULA");
+    const hasProfilePhoto = tipos.has("FOTO_PERFIL");
     const hasTravelPermit = tipos.has("PERMISO_VIAJE");
     // Solo se evalúa al titular: los acompañantes se validan al vender.
     const holderIsMinor = isMinor(cuenta.birthYear, now);
@@ -70,6 +72,7 @@ export async function lookupCounterHolder(
       holderIsMinor,
       missingDocuments,
       hasCedula,
+      hasProfilePhoto,
       hasTravelPermit,
       activated: cuenta.passwordHash !== null,
     };

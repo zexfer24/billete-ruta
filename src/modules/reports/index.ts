@@ -40,6 +40,23 @@ export type { PendingProofRow } from "./proof-queue";
 export { getAgencyReservationDetail } from "./reservation-detail";
 export type { AgencyReservationDetail } from "./reservation-detail";
 export {
+  getPassengerProfile,
+  listTravelHistoryByIdNumber,
+  summarizeTravel,
+} from "./passenger-profile";
+export type {
+  PassengerProfile,
+  ProfileCompanionTripRow,
+  ProfileDocument,
+  ProfileDocumentGroup,
+  ProfilePaymentRow,
+  ProfileTripRow,
+  SummaryTripInput,
+  TravelHistoryRow,
+  TravelRole,
+  TravelSummary,
+} from "./passenger-profile";
+export {
   agencyMovements,
   departureTaxByHour,
   departureTaxRevenue,

@@ -8,11 +8,11 @@ import { ValidationError } from "@/modules/booking/errors";
 import { InvalidImageError, MAX_IMAGE_BYTES } from "@/lib/storage";
 import { documentosUrl, DOCUMENT_OK_CODES, volverSchema, type DocumentErrorCode } from "./shared";
 
-const tipoSchema = z.enum(["CEDULA", "PERMISO_VIAJE"]);
+const tipoSchema = z.enum(["CEDULA", "PERMISO_VIAJE", "FOTO_PERFIL"]);
 
 /**
  * Guarda la foto de un documento del pasajero. Vuelve a Documentos con
- * `?ok=cedula|permiso` o `?error=<código>&doc=<documento>` (la página
+ * `?ok=cedula|permiso|perfil` o `?error=<código>&doc=<documento>` (la página
  * traduce el código a un mensaje), y conserva `volver=reservar` para ofrecer
  * el regreso al asistente de reserva. La redirección va fuera del `try` para
  * no confundirla con un error.

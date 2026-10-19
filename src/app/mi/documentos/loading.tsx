@@ -31,14 +31,15 @@ function DocumentoCardSkeleton({ titulo, plegado = false }: { titulo: string; pl
   );
 }
 
-/** Silueta de Mis documentos: título, las dos tarjetas de documento y la nota de privacidad. */
+/** Silueta de Mis documentos: título, las tres tarjetas de documento y la nota de privacidad. */
 export default function DocumentosLoading() {
   return (
     <SkeletonScreen label="Cargando tus documentos…" className="flex flex-col gap-6">
-      <SkeletonPageTitle subtitle="Para reservar necesitas la foto de tu cédula. Si viaja un menor de edad, también su permiso de viaje.">
+      <SkeletonPageTitle subtitle="Para reservar necesitas la foto de tu cédula. Si viaja un menor de edad, también su permiso de viaje. La foto de perfil es opcional.">
         Mis documentos
       </SkeletonPageTitle>
       <DocumentoCardSkeleton titulo="Foto de tu cédula" />
+      <DocumentoCardSkeleton titulo="Foto de perfil" />
       <DocumentoCardSkeleton titulo="Permiso de viaje" plegado />
       <Skeleton className="h-4 w-4/5 rounded-pastilla" />
     </SkeletonScreen>

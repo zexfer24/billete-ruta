@@ -1,4 +1,4 @@
-import { promises as fsp } from "node:fs";
+import { promises as fsp, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { getEnv } from "@/lib/env";
@@ -36,6 +36,10 @@ function pngBuffer(): Buffer {
     0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
     0x89,
   ]);
+}
+
+function fixtureImage(name: string): Buffer {
+  return readFileSync(path.resolve(__dirname, "../../fixtures", name));
 }
 
 async function countUploadedFiles(): Promise<number> {
@@ -189,6 +193,76 @@ describe("sellAtCounter", () => {
       policiesAccepted: true,
     });
     expect(resultado.reservationId).toBeDefined();
+  });
+
+  it("con foto del pasajero: crea el documento FOTO_PERFIL, guarda el archivo y audita con actor PANEL", async () => {
+    const { agencia, operador, salida, metodo } = await escenario();
+    const cuenta = await createAccountFixture();
+
+    const resultado = await sellAtCounter({
+      panelUserId: operador.id,
+      agencyId: agencia.id,
+      departureId: salida.id,
+      paymentMethodId: metodo.id,
+      holder: { idNumber: cuenta.idNumber },
+      companions: [],
+      documents: { profilePhoto: { originalName: "perfil.png", data: fixtureImage("cedula.png") } },
+      policiesAccepted: true,
+    });
+
+    const documento = await prisma.passengerDocument.findFirstOrThrow({
+      where: { accountId: resultado.accountId, type: "FOTO_PERFIL" },
+    });
+    await expect(fsp.access(path.resolve(getEnv().UPLOADS_DIR, documento.filePath))).resolves.toBeUndefined();
+
+    const auditoria = await prisma.auditLog.findFirstOrThrow({
+      where: { entityId: documento.id, action: "DOCUMENTO_CARGADO" },
+    });
+    expect(auditoria.actorType).toBe("PANEL");
+    expect(auditoria.actorPanelUserId).toBe(operador.id);
+  });
+
+  it("sin foto del pasajero: no crea ningún documento FOTO_PERFIL", async () => {
+    const { agencia, operador, salida, metodo } = await escenario();
+    const cuenta = await createAccountFixture();
+
+    const resultado = await sellAtCounter({
+      panelUserId: operador.id,
+      agencyId: agencia.id,
+      departureId: salida.id,
+      paymentMethodId: metodo.id,
+      holder: { idNumber: cuenta.idNumber },
+      companions: [],
+      documents: {},
+      policiesAccepted: true,
+    });
+
+    expect(resultado.reservationId).toBeDefined();
+    expect(await prisma.passengerDocument.count({ where: { type: "FOTO_PERFIL" } })).toBe(0);
+  });
+
+  it("foto del pasajero que no es imagen: rechaza la venta y no deja archivos guardados", async () => {
+    const { agencia, operador, salida, metodo } = await escenario();
+    const cuenta = await createAccountFixture();
+    const antes = await countUploadedFiles();
+
+    await expect(
+      sellAtCounter({
+        panelUserId: operador.id,
+        agencyId: agencia.id,
+        departureId: salida.id,
+        paymentMethodId: metodo.id,
+        holder: { idNumber: cuenta.idNumber },
+        companions: [],
+        documents: { profilePhoto: { originalName: "perfil.png", data: fixtureImage("no-es-imagen.png") } },
+        policiesAccepted: true,
+      }),
+    ).rejects.toThrow(ValidationError);
+
+    expect(await countUploadedFiles()).toBe(antes);
+    expect(await prisma.passengerDocument.count({ where: { type: "FOTO_PERFIL" } })).toBe(0);
+    expect(await prisma.reservation.count({ where: { departureId: salida.id } })).toBe(0);
+    expect(await prisma.cashPayment.count()).toBe(0);
   });
 
   it("salida de otra agencia: rechaza, no crea la cuenta y borra el archivo guardado", async () => {

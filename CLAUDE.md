@@ -72,6 +72,7 @@ Contexto geográfico: Venezuela y corredor hacia Colombia. Monedas: USD, VES, CO
 - `src/app/mi/*` — app del pasajero (con `_components/`); `src/app/panel/*` — agencia, con `_dashboard/`, `_forms/` y `_shared/`; `src/app/panel/admin/*` — terminal, con `admin/_shared/`.
 - Cada ruta con datos tiene su `loading.tsx` que reproduce la silueta real con las piezas de `skeleton.tsx` y los kits `mi/_components/skeletons.tsx`, `panel/_shared/skeletons.tsx`, `panel/_dashboard/skeletons.tsx` y `panel/admin/_shared/skeletons.tsx`. Los layouts ponen sus consultas lentas en `<Suspense>`.
 - Errores y 404: `src/app/error.tsx`, `global-error.tsx` y `not-found.tsx`, más versiones propias en `mi/error.tsx`, `panel/error.tsx`, `panel/not-found.tsx`, `lista-espera/not-found.tsx` y `mi/reservas/[code]/not-found.tsx`.
+- `src/app/panel/admin/usuarios/[accountId]/` — perfil interno del pasajero (`terminal.users`), enlazado desde el nombre en la lista de usuarios; con `loading.tsx` y `not-found.tsx`.
 - `src/app/dev/esqueletos/` — galería de skeletons, **solo en desarrollo** (`notFound()` fuera de `NODE_ENV=development`).
 - Descargas CSV: `panel/pasajeros/exportar`, `panel/reportes/descargar` y `panel/admin/movimientos/descargar` (rutas `route.ts`).
 - Las rutas viejas `/panel/pagos`, `/panel/vehiculos`, `/panel/choferes`, `/panel/recaudacion` y `/panel/movimientos` redirigen a sus páginas nuevas con `legacyPanelRedirect`.
@@ -90,7 +91,8 @@ pnpm typecheck / pnpm lint
 pnpm test                        unitarios
 pnpm test:integration            requiere la base de test levantada
 pnpm test:e2e                    script definido, sin playwright.config ni pruebas e2e en el repo
-pnpm test -- tests/unit/booking/state-machine.test.ts    un solo archivo
+pnpm exec vitest run tests/unit/booking/state-machine.test.ts    un solo archivo unitario (`pnpm test -- <archivo>` no filtra)
+pnpm test:integration tests/integration/counter/sell-at-counter.test.ts    un solo archivo de integración, sin `--`
 ```
 
 ## Glosario de módulos
@@ -99,17 +101,17 @@ Cada carpeta de `src/modules/` expone su API pública en `index.ts`. Nadie impor
 
 | Módulo | Responsabilidad | API principal |
 |---|---|---|
-| `accounts` | Cuentas de pasajero y sus documentos | `registerAccount` (`givenNames` y `surnames`; también activa una cuenta de taquilla), `loginAccount`, `uploadDocument`, `missingDocuments`, `createCounterAccount`, `createDocumentInTx` |
+| `accounts` | Cuentas de pasajero y sus documentos (`CEDULA`, `PERMISO_VIAJE` y `FOTO_PERFIL`, esta última opcional y nunca exigida por `missingDocuments`) | `registerAccount` (`givenNames` y `surnames`; también activa una cuenta de taquilla), `loginAccount`, `uploadDocument`, `missingDocuments`, `createCounterAccount`, `createDocumentInTx` |
 | `agencies` | Agencias, vehículos y choferes | `createAgencyWithOperator`, `listAgencies`, `createVehicle`, `listDrivers` (trae embarques y desembarques) |
 | `audit` | Bitácora de solo inserción | `writeAudit` |
 | `auth` | Dos ámbitos de sesión y matriz de permisos | `requirePanelUser`, `requirePassenger`, `requireAgencyScope`, `requireAgencyUser`, `panelHomeFor`, `can` (incluye `sales.counter`), `hashPassword`, `createPanelSession`/`createPassengerSession` (cookies `tr_panel`/`tr_pax`); la sesión se resuelve una vez por render con `cache` |
 | `booking` | Reservas, cupos, estados y lista de espera | `createReservation`, `createReservationInTx`, `transitionReservation`, `getAvailability`, `processWaitlist`, `canTransition` |
 | `catalog` | Rutas, salidas, tasas y precios | `listBookableDepartures`, `createDeparture`, `getManifest`, `computeAmounts`, `getCurrentDepartureTax`, `balanceUsd` |
-| `counter` | Venta en la taquilla de la agencia | `lookupCounterHolder` (auditada), `listCounterOptions`, `quoteCounterSale`, `sellAtCounter` (cuenta, documentos, reserva y cobro en una transacción; emite el ticket) |
+| `counter` | Venta en la taquilla de la agencia | `lookupCounterHolder` (auditada; devuelve `hasProfilePhoto`), `listCounterOptions`, `quoteCounterSale`, `sellAtCounter` (cuenta, documentos, foto de perfil opcional, reserva y cobro en una transacción; emite el ticket) |
 | `messaging` | Mensajes con proveedor intercambiable | `enqueueMessage`, `deliverPendingMessages`, `getWhatsAppProvider`, `renderPreview`, `renderStoredPreview`, `listMessagesForPhone`, `messageRoute` ("Caracas → Mérida"), `reminderRecommendations` |
 | `notices` | Avisos derivados del estado del pasajero | `buildNotices` (pura; incluye `SALDO_PENDIENTE`), `listNoticesForAccount` |
 | `payments` | Abonos, comprobantes y efectivo | `submitProof`, `approveProof`, `rejectProof`, `registerCashPayment`, `registerCashPaymentInTx` (bloquea la reserva), `ALREADY_PAID_CASH_MESSAGE`, `proofCoverage`, `getProofReview`, `countPendingProofs` |
-| `reports` | Agregados de agencia y de terminal | `agencyDashboard`, `agencyFleetStatus`, `unitStateOf` (incluye `ATRASADO`), `isOverdueDeparture`, `listAgencyPassengers`, `listTerminalTrips` (por llegada), `listNewAccounts` y `getTripDetail` (auditadas), `describeActivity`, `listPendingProofQueue`, y más |
+| `reports` | Agregados de agencia y de terminal | `agencyDashboard`, `agencyFleetStatus`, `unitStateOf` (incluye `ATRASADO`), `isOverdueDeparture`, `listAgencyPassengers`, `listTerminalTrips` (por llegada), `listNewAccounts` y `getTripDetail` (auditadas), `getPassengerProfile` (auditada como `CONSULTA_PERFIL_PASAJERO`), `summarizeTravel` (pura), `listTravelHistoryByIdNumber` (sin auditar), `describeActivity`, `listPendingProofQueue`, y más |
 | `scheduler` | Ventanas y plazos | `dueForReminder24h`, `dueForRelease12h`, `dueForConfirmation2h`, `nextRetryDelayMinutes`, `paymentDeadline` y `cashCounterDeadline` (única fuente de la hora límite de pago para app, avisos y mensajes) |
 | `tickets` | PDF con QR firmado | `issueTicket` (PDF con el logo `public/brand/logo-morado-1200.png`, degrada sin él), `signTicketCode`, `verifyTicketQr`, `renderQrDataUrl` |
 | `trips` | Embarque, desembarque y abordaje | `startBoarding`, `registerDeparture`, `registerArrival`, `findForBoarding`, `confirmBoarding`, `availableTripActions` |

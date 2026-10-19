@@ -209,6 +209,22 @@ export function StepHolder({
           ) : null}
         </div>
       ) : null}
+
+      {result ? (
+        <FileField
+          name="profilePhoto"
+          label="Foto del pasajero (opcional)"
+          hint={
+            result.found && result.hasProfilePhoto
+              ? "Ya tiene foto de perfil. Toma otra solo si cambió su aspecto."
+              : "Tómale una foto de frente. Queda en su perfil del terminal."
+          }
+          accept="image/jpeg,image/png,image/webp"
+          capture="user"
+          maxSizeMb={5}
+          buttonLabel="Tomar o elegir la foto"
+        />
+      ) : null}
     </div>
   );
 }

@@ -18,6 +18,7 @@ export type DocumentosVolver = z.infer<typeof volverSchema>;
 export const DOCUMENT_OK_CODES = {
   CEDULA: "cedula",
   PERMISO_VIAJE: "permiso",
+  FOTO_PERFIL: "perfil",
 } as const;
 
 export type DocumentOkCode = (typeof DOCUMENT_OK_CODES)[keyof typeof DOCUMENT_OK_CODES];
@@ -31,6 +32,7 @@ export const documentCodeSchema = z.enum(OK_CODES).optional().catch(undefined);
 export const DOCUMENT_OK_MESSAGES: Record<DocumentOkCode, string> = {
   cedula: "Guardamos la foto de tu cédula.",
   permiso: "Guardamos el permiso de viaje.",
+  perfil: "Guardamos tu foto de perfil.",
 };
 
 export const DOCUMENT_ERROR_CODES = ["tipo", "vacio", "formato", "tamano", "revisar"] as const;

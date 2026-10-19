@@ -63,6 +63,31 @@ describe("lookupCounterHolder", () => {
     expect(resultado.missingDocuments).toEqual(["CEDULA"]);
   });
 
+  it("hasProfilePhoto es false sin foto de perfil y true cuando existe, sin exigirla", async () => {
+    const agencia = await createAgencyFixture();
+    const operador = await createPanelUserFixture({ agencyId: agencia.id });
+    const cuenta = await createAccountFixture();
+    const panelUser = { id: operador.id, agencyId: agencia.id };
+
+    const antes = await lookupCounterHolder(cuenta.idNumber, panelUser);
+    if (!antes.found) throw new Error("se esperaba found=true");
+    expect(antes.hasProfilePhoto).toBe(false);
+
+    await prisma.passengerDocument.create({
+      data: {
+        accountId: cuenta.id,
+        type: "FOTO_PERFIL",
+        filePath: `documentos/${cuenta.id}/perfil.png`,
+        originalName: "perfil.png",
+      },
+    });
+
+    const despues = await lookupCounterHolder(cuenta.idNumber, panelUser);
+    if (!despues.found) throw new Error("se esperaba found=true");
+    expect(despues.hasProfilePhoto).toBe(true);
+    expect(despues.missingDocuments).toEqual([]);
+  });
+
   it("cuenta no encontrada", async () => {
     const agencia = await createAgencyFixture();
     const operador = await createPanelUserFixture({ agencyId: agencia.id });

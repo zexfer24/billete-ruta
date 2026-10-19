@@ -56,6 +56,7 @@ enum ProofStatus {
 enum DocumentType {
   CEDULA
   PERMISO_VIAJE
+  FOTO_PERFIL
 }
 
 enum MessageStatus {

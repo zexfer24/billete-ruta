@@ -222,17 +222,39 @@ export function PanelTabs({ label, tabs }: { label: string; tabs: PanelTab[] }) 
  * son `position: absolute` y, sin él, se escapan del desplazamiento interno y
  * ensanchan la página entera.
  */
-export function TableShell({ children, mobile }: { children: ReactNode; mobile?: ReactNode }) {
+export function TableShell({
+  children,
+  mobile,
+  cardsUntil = "md",
+}: {
+  children: ReactNode;
+  mobile?: ReactNode;
+  /**
+   * Hasta qué punto se muestran las tarjetas en vez de la tabla. Por defecto
+   * `md`. Una tabla con varias columnas usa `lg`, y una muy ancha (como el
+   * historial de ocho columnas) usa `xl`, para no desplazarse dentro de su
+   * tarjeta aunque la barra lateral reste ancho.
+   */
+  cardsUntil?: "md" | "lg" | "xl";
+}) {
   const table = (
     <div className="relative overflow-x-auto rounded-tarjeta border border-borde bg-superficie shadow-1">{children}</div>
   );
 
   if (!mobile) return table;
 
+  // Clases explícitas para que Tailwind las conserve al compilar.
+  const WRAPS = {
+    md: ["hidden md:block", "md:hidden"],
+    lg: ["hidden lg:block", "lg:hidden"],
+    xl: ["hidden xl:block", "xl:hidden"],
+  } as const;
+  const [tableWrap, mobileWrap] = WRAPS[cardsUntil];
+
   return (
     <>
-      <div className="hidden md:block">{table}</div>
-      <div className="md:hidden">{mobile}</div>
+      <div className={tableWrap}>{table}</div>
+      <div className={mobileWrap}>{mobile}</div>
     </>
   );
 }
